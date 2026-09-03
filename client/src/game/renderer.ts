@@ -354,44 +354,44 @@ export class Renderer {
     // ------- etykieta: nazwa + pastylka HP (stały rozmiar na ekranie) -------
     const s = 1 / inp.camera.zoom;
     ctx.save();
-    ctx.translate(w.x, w.y - ry - 12);
+    ctx.translate(w.x, w.y - ry - 14);
     ctx.scale(s, s);
-    const barW = 46;
+    const barW = 56;
     const hp = Math.max(0, Math.min(1, w.hp / WORM_MAX_HP));
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
 
-    ctx.font = "800 12px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 14px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "alphabetic";
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(6,10,16,0.85)";
-    ctx.strokeText(w.name, 0, -13);
+    ctx.strokeText(w.name, 0, -15);
     ctx.fillStyle = col;
-    ctx.fillText(w.name, 0, -13);
+    ctx.fillText(w.name, 0, -15);
 
     // tło pastylki
     ctx.fillStyle = "rgba(8,12,18,0.55)";
-    roundRect(ctx, -barW / 2, -10, barW, 10, 5);
+    roundRect(ctx, -barW / 2, -12, barW, 12, 6);
     ctx.fill();
     if (hp > 0) {
       ctx.fillStyle = hp > 0.35 ? col : hp > 0.18 ? "#ffb020" : "#ff4d4d";
       const fw = Math.max(6, barW * hp);
-      roundRect(ctx, -barW / 2, -10, fw, 10, 5);
+      roundRect(ctx, -barW / 2, -12, fw, 12, 6);
       ctx.fill();
     }
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 1.4;
-    roundRect(ctx, -barW / 2, -10, barW, 10, 5);
+    roundRect(ctx, -barW / 2, -12, barW, 12, 6);
     ctx.stroke();
 
-    ctx.font = "800 8.5px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 2.4;
     ctx.strokeStyle = "rgba(6,10,16,0.55)";
     const hpTxt = String(Math.max(0, Math.round(w.hp)));
-    ctx.strokeText(hpTxt, 0, -4.6);
+    ctx.strokeText(hpTxt, 0, -5.8);
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(hpTxt, 0, -4.6);
+    ctx.fillText(hpTxt, 0, -5.8);
     ctx.restore();
 
     // ------- strzałka nad aktywnym robakiem -------

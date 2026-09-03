@@ -2,14 +2,16 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
 import { viewportZoom } from "./viewport";
 
 /** Ile świata nad `y = 0` wolno pokazać (nieba starcza, teren zaczyna się niżej). */
-const SKY_MARGIN = 200;
+const SKY_MARGIN = 120;
 /** Maksymalne zbliżenie: min(MAX_ZOOM_FACTOR × fitZoom, MAX_ZOOM_ABS). */
 const MAX_ZOOM_FACTOR = 3;
 const MAX_ZOOM_ABS = 2.5;
-/** Zbliżenie na aktywnego robaka względem widoku całej mapy. */
-const FOCUS_ZOOM_FACTOR = 1.6;
+/** Zbliżenie na aktywnego robaka: co najmniej FOCUS_ZOOM_ABS (1 px świata = 1 px CSS),
+ *  a na dużych ekranach lekko ponad widok całej mapy – robak ma zawsze podobny rozmiar na ekranie. */
+const FOCUS_ZOOM_FACTOR = 1.05;
+const FOCUS_ZOOM_ABS = 1.0;
 /** Gdzie na ekranie trzymamy aktywnego robaka (0 = góra, 1 = dół). */
-const FOCUS_SCREEN_Y = 0.62;
+const FOCUS_SCREEN_Y = 0.56;
 /** Domyślny margines świata dookoła kadrowanych punktów. */
 const DEFAULT_FRAME_MARGIN = 150;
 /** Stałe czasowe wygładzania (sekundy) – niezależne od fps. */
@@ -87,7 +89,7 @@ export class Camera {
 
   /** Zbliżenie na aktywnego robaka (widać celownik i szczegóły). */
   get focusZoom(): number {
-    return clamp(this.fitZoom * FOCUS_ZOOM_FACTOR, this.minZoom, this.maxZoom);
+    return clamp(Math.max(this.fitZoom * FOCUS_ZOOM_FACTOR, FOCUS_ZOOM_ABS), this.minZoom, this.maxZoom);
   }
 
   setViewport(w: number, h: number): void {

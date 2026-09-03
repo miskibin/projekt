@@ -419,10 +419,26 @@ function ridge(
     ys[k] = k % 2 === 0 ? H * (valLo + rnd() * (valHi - valLo)) : H * (peakLo + rnd() * (peakHi - peakLo));
   }
   ys[n] = ys[0];
+
+  // stoki nie są idealnie proste – dokładamy punkty pośrednie z lekkim ugięciem
+  const px: number[] = [];
+  const py: number[] = [];
+  const sag = H * 0.05;
+  for (let k = 0; k < n; k++) {
+    px.push(xs[k]);
+    py.push(ys[k]);
+    for (const t of [0.36, 0.68]) {
+      px.push(xs[k] + (xs[k + 1] - xs[k]) * t);
+      py.push(ys[k] + (ys[k + 1] - ys[k]) * t + (0.25 + rnd() * 0.75) * sag * Math.sin(Math.PI * t));
+    }
+  }
+  px.push(xs[n]);
+  py.push(ys[n]);
+
   g.fillStyle = color;
   g.beginPath();
   g.moveTo(0, H);
-  for (let k = 0; k <= n; k++) g.lineTo(xs[k], ys[k]);
+  for (let k = 0; k < px.length; k++) g.lineTo(px[k], py[k]);
   g.lineTo(W, H);
   g.closePath();
   g.fill();

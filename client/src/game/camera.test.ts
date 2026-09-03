@@ -51,14 +51,14 @@ describe("kamera", () => {
     const camera = landscape();
     camera.overview(undefined, undefined, true);
     const before = camera.zoom;
-    camera.focus(900, 800);
+    camera.focus(900, 700);
     settle(camera);
-    expect(camera.zoom).toBeGreaterThan(before * 1.4);
+    expect(camera.zoom).toBeGreaterThan(before * 1.15);
     expect(camera.zoom).toBeCloseTo(camera.focusZoom, 3);
-    const s = camera.worldToScreen(900, 800);
+    const s = camera.worldToScreen(900, 700);
     expect(s.x).toBeCloseTo(camera.viewW / 2, 1);
-    expect(s.y).toBeGreaterThan(camera.viewH * 0.55);
-    expect(s.y).toBeLessThan(camera.viewH * 0.7);
+    expect(s.y).toBeGreaterThan(camera.viewH * 0.5);
+    expect(s.y).toBeLessThan(camera.viewH * 0.65);
   });
 
   it("kadrowanie dwóch odległych punktów oddala tak, żeby oba były widoczne", () => {

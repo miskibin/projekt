@@ -350,8 +350,11 @@ export class GameClient {
       } else if (active && turn.phase === "active") {
         this.camera.focus(active.x, active.y - 20);
       } else {
-        // między turami / w odwrocie / gdy fizyka się uspokaja wracamy do przeglądu mapy
-        this.camera.overview(active?.x);
+        // między turami / w odwrocie / gdy fizyka się uspokaja: widok całej mapy,
+        // wycentrowany pionowo na żywych robakach (ekran bywa niższy niż świat)
+        const alive = state.worms.filter((w) => w.alive);
+        if (alive.length > 0) this.camera.frame(alive, { maxZoom: this.camera.fitZoom, margin: 60 });
+        else this.camera.overview(active?.x);
       }
       this.waterShown += (turn.waterLevel - this.waterShown) * Math.min(1, dt * 2.5);
       this.input.setContext({

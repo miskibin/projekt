@@ -91,8 +91,8 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [158, 110, 65],
     stoneB: [100, 67, 40],
     mortar: [58, 37, 22],
-    pebble: 14,
-    tufts: 0.55,
+    pebble: 24,
+    tufts: 0.3,
     bgStyle: "mountains",
     bgFar: "#8fb0cd",
     bgPeak: "#d6e6f4",
@@ -123,11 +123,11 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     topHi: [255, 243, 206],
     topEdge: [168, 130, 76],
     outline: [88, 58, 32],
-    stoneA: [204, 164, 106],
-    stoneB: [152, 116, 72],
+    stoneA: [190, 148, 92],
+    stoneB: [138, 102, 60],
     mortar: [104, 74, 44],
-    pebble: 17,
-    tufts: 0.14,
+    pebble: 28,
+    tufts: 0.06,
     bgStyle: "dunes",
     bgFar: "#d1a179",
     bgPeak: "#f0cda3",
@@ -161,7 +161,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [134, 154, 180],
     stoneB: [86, 106, 134],
     mortar: [46, 60, 82],
-    pebble: 16,
+    pebble: 26,
     tufts: 0.08,
     bgStyle: "peaks",
     bgFar: "#42597c",
@@ -196,13 +196,13 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [68, 52, 58],
     stoneB: [38, 28, 34],
     mortar: [16, 10, 14],
-    pebble: 13,
+    pebble: 22,
     tufts: 0.22,
     bgStyle: "spires",
-    bgFar: "#5c2018",
+    bgFar: "#6d2619",
     bgPeak: "#8f3220",
-    bgMid: "#3c1210",
-    bgNear: "#1d0a0a",
+    bgMid: "#48160f",
+    bgNear: "#250d0b",
     horizon: 0.7,
     sun: "rgba(255, 120, 50, 0.5)",
   },
@@ -223,7 +223,7 @@ const FAR = 60;
 /** Ile pikseli poza przemalowywany prostokąt liczymy pola pomocnicze. */
 const MARGIN = 30;
 /** Maksymalna wysokość kępki trawy nad powierzchnią. */
-const TUFT_MAX = 7;
+const TUFT_MAX = 4;
 /** Zasięg miękkiego cienia wewnątrz krateru. */
 const SHADOW_REACH = 11;
 
@@ -327,8 +327,8 @@ export class TerrainRenderer {
 
   /** Zgłoś obszar zmieniony przez eksplozję / belkę – przerysujemy tylko go. */
   markDirty(x: number, y: number, w: number, h: number): void {
-    // czapa + kępki + kontur sięgają dalej niż sama dziura
-    const pad = this.pal.topDepth + TUFT_MAX + 4;
+    // czapa (do 1.2x grubości) + kępki + cień w kraterze sięgają dalej niż sama dziura
+    const pad = Math.ceil(this.pal.topDepth * 1.2) + TUFT_MAX + SHADOW_REACH + 2;
     this.dirty.push({
       x0: Math.max(0, Math.floor(x - pad)),
       y0: Math.max(0, Math.floor(y - pad)),
@@ -459,7 +459,9 @@ export class TerrainRenderer {
       }
     }
 
-    // przebieg w dół/w prawo
+    // Danielsson 4SED: dwa przebiegi pionowe, w każdym dodatkowy przelot poziomy
+    // w przeciwną stronę – bez niego odległości bywają zawyżone i wynik zależy od
+    // odległych fragmentów mapy (czapa trawy „migałaby” po wybuchach gdzie indziej).
     for (let y = ry0; y <= ry1; y++) {
       const row = y * w;
       for (let x = rx0; x <= rx1; x++) {
@@ -468,17 +470,6 @@ export class TerrainRenderer {
         let by = vy[i];
         if (bx === 0 && by === 0) continue;
         let bd = bx * bx + by * by;
-        if (x > rx0) {
-          const j = i - 1;
-          const cx = vx[j] - 1;
-          const cy = vy[j];
-          const cd = cx * cx + cy * cy;
-          if (cd < bd) {
-            bd = cd;
-            bx = cx;
-            by = cy;
-          }
-        }
         if (y > ry0) {
           const j = i - w;
           {
@@ -514,23 +505,9 @@ export class TerrainRenderer {
             }
           }
         }
-        vx[i] = bx;
-        vy[i] = by;
-      }
-    }
-
-    // przebieg w górę/w lewo
-    for (let y = ry1; y >= ry0; y--) {
-      const row = y * w;
-      for (let x = rx1; x >= rx0; x--) {
-        const i = row + x;
-        let bx = vx[i];
-        let by = vy[i];
-        if (bx === 0 && by === 0) continue;
-        let bd = bx * bx + by * by;
-        if (x < rx1) {
-          const j = i + 1;
-          const cx = vx[j] + 1;
+        if (x > rx0) {
+          const j = i - 1;
+          const cx = vx[j] - 1;
           const cy = vy[j];
           const cd = cx * cx + cy * cy;
           if (cd < bd) {
@@ -539,6 +516,32 @@ export class TerrainRenderer {
             by = cy;
           }
         }
+        vx[i] = bx;
+        vy[i] = by;
+      }
+      for (let x = rx1 - 1; x >= rx0; x--) {
+        const i = row + x;
+        const bx = vx[i];
+        const by = vy[i];
+        if (bx === 0 && by === 0) continue;
+        const j = i + 1;
+        const cx = vx[j] + 1;
+        const cy = vy[j];
+        if (cx * cx + cy * cy < bx * bx + by * by) {
+          vx[i] = cx;
+          vy[i] = cy;
+        }
+      }
+    }
+
+    for (let y = ry1; y >= ry0; y--) {
+      const row = y * w;
+      for (let x = rx1; x >= rx0; x--) {
+        const i = row + x;
+        let bx = vx[i];
+        let by = vy[i];
+        if (bx === 0 && by === 0) continue;
+        let bd = bx * bx + by * by;
         if (y < ry1) {
           const j = i + w;
           {
@@ -574,8 +577,32 @@ export class TerrainRenderer {
             }
           }
         }
+        if (x < rx1) {
+          const j = i + 1;
+          const cx = vx[j] + 1;
+          const cy = vy[j];
+          const cd = cx * cx + cy * cy;
+          if (cd < bd) {
+            bd = cd;
+            bx = cx;
+            by = cy;
+          }
+        }
         vx[i] = bx;
         vy[i] = by;
+      }
+      for (let x = rx0 + 1; x <= rx1; x++) {
+        const i = row + x;
+        const bx = vx[i];
+        const by = vy[i];
+        if (bx === 0 && by === 0) continue;
+        const j = i - 1;
+        const cx = vx[j] - 1;
+        const cy = vy[j];
+        if (cx * cx + cy * cy < bx * bx + by * by) {
+          vx[i] = cx;
+          vy[i] = cy;
+        }
       }
     }
 
@@ -667,7 +694,8 @@ export class TerrainRenderer {
               if (yy >= h) break;
               const kk = kind[i + s * w];
               if (kk === AIR) continue;
-              if (kk === GRASS) {
+              // kępki tylko na w miarę poziomej powierzchni – na stromych zboczach robiły „futro”
+              if (kk === GRASS && flatSurface(kind, w, h, x, yy)) {
                 const up = th > 1 ? (s - 1) / (th - 1) : 0;
                 const bl = 0.25 + 0.55 * up;
                 p[o] = taR + (thR - taR) * bl;
@@ -924,12 +952,24 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
       if (rr > 1) rr = 1;
       const inv = d1 > 0.001 ? 1 / d1 : 0;
       const lam = (x - fx[bj]) * inv * lx + (y - fy[bj]) * inv * ly;
-      const v = 128 + lam * rr * 60 - rr * rr * 12 - dark * 94;
+      const v = 128 + lam * rr * 52 - rr * rr * 10 - dark * 80;
       stone[row + x] = v < 0 ? 0 : v > 255 ? 255 : v | 0;
       tint[row + x] = ft[bj];
     }
   }
   return { stone, tint };
+}
+
+/** Czy powierzchnia w (x, yy) – pierwszy stały piksel pod powietrzem – jest lokalnie prawie pozioma. */
+function flatSurface(kind: Uint8Array, w: number, h: number, x: number, yy: number): boolean {
+  for (const dx of [-2, 2]) {
+    const xx = x + dx;
+    if (xx < 0 || xx >= w) return false;
+    if (yy + 1 >= h || yy - 2 < 0) return false;
+    if (kind[(yy + 1) * w + xx] === AIR) return false; // sąsiad niżej musi być stały
+    if (kind[(yy - 2) * w + xx] !== AIR) return false; // a 2 px wyżej – powietrze
+  }
+  return true;
 }
 
 /** Wysokość kępki trawy dla każdej kolumny (deterministycznie z seeda). */
@@ -1005,10 +1045,11 @@ export function renderTerrainPreview(
         g = pal.topA[1];
         b = pal.topA[2];
       } else {
-        const n = fine(x, y) / 255;
-        r = pal.stoneB[0] + (pal.stoneA[0] - pal.stoneB[0]) * n;
-        g = pal.stoneB[1] + (pal.stoneA[1] - pal.stoneB[1]) * n;
-        b = pal.stoneB[2] + (pal.stoneA[2] - pal.stoneB[2]) * n;
+        // delikatne ziarno – w tej skali pełny kontrast kamyków byłby szumem
+        const n = (fine(x >> 1, y >> 1) - 128) * 0.1;
+        r = pal.stoneB[0] * 0.42 + pal.stoneA[0] * 0.58 + n;
+        g = pal.stoneB[1] * 0.42 + pal.stoneA[1] * 0.58 + n;
+        b = pal.stoneB[2] * 0.42 + pal.stoneA[2] * 0.58 + n;
         // kontur na krawędziach próbkowanej bitmapy
         const edge =
           !terrain.isSolid(tx - (sx | 0) - 1, ty) ||
