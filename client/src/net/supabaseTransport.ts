@@ -36,13 +36,14 @@ export class SupabaseTransport implements Transport {
   private channel: RealtimeChannel | null = null;
   private host: RoomHost | null = null;
   private hostTimer: number | null = null;
+  private hostWorker: Worker | null = null;
   private hostPeers = new Map<string, Peer>();
   private outQueue: ClientMessage[] = [];
   private flushTimer: number | null = null;
   private hostOut = new Map<string, ServerMessage[]>();
   private hostFlushTimer: number | null = null;
-  private msgCb: (msg: ServerMessage) => void = () => {};
-  private statusCb: (s: TransportStatus) => void = () => {};
+  private msgCbs: ((msg: ServerMessage) => void)[] = [];
+  private statusCbs: ((s: TransportStatus) => void)[] = [];
   private lastHello: ClientMessage | null = null;
   private roomCode: string | null = null;
   readonly peerId = randomId();
@@ -60,10 +61,18 @@ export class SupabaseTransport implements Transport {
   }
 
   onMessage(cb: (msg: ServerMessage) => void): void {
-    this.msgCb = cb;
+    this.msgCbs.push(cb);
   }
   onStatus(cb: (s: TransportStatus) => void): void {
-    this.statusCb = cb;
+    this.statusCbs.push(cb);
+  }
+
+  private msgCb(msg: ServerMessage): void {
+    for (const cb of this.msgCbs) cb(msg);
+  }
+
+  private statusCb(s: TransportStatus): void {
+    for (const cb of this.statusCbs) cb(s);
   }
 
   send(msg: ClientMessage): void {
@@ -73,7 +82,10 @@ export class SupabaseTransport implements Transport {
       return;
     }
     if (msg.t === "joinRoom") {
-      void this.joinRoom(msg.code.toUpperCase().trim());
+      const code = msg.code.toUpperCase().trim();
+      // Jesteśmy hostem tego pokoju – „dołączenie” po reconnekcie nie może zburzyć pokoju.
+      if (this.host && this.roomCode === code) return;
+      void this.joinRoom(code);
       return;
     }
     if (msg.t === "leaveRoom") {
@@ -201,8 +213,25 @@ export class SupabaseTransport implements Transport {
       this.teardownRoom();
       return;
     }
-    this.hostTimer = window.setInterval(() => host.tick(performance.now()), 16);
+    this.startHostClock(() => host.tick(performance.now()));
     this.statusCb("open");
+  }
+
+  /**
+   * Zegar pętli hosta. Timery na głównym wątku są w tle karty dławione do 1 Hz,
+   * więc tykanie idzie z Web Workera (nie podlega temu dławieniu); fallback: setInterval.
+   */
+  private startHostClock(onTick: () => void): void {
+    try {
+      const src = "setInterval(() => postMessage(0), 16);";
+      const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+      const w = new Worker(url);
+      URL.revokeObjectURL(url);
+      w.onmessage = onTick;
+      this.hostWorker = w;
+    } catch {
+      this.hostTimer = window.setInterval(onTick, 16);
+    }
   }
 
   private localPeer(): Peer {
@@ -264,6 +293,9 @@ export class SupabaseTransport implements Transport {
           if (!done) {
             done = true;
             resolve(true);
+          } else {
+            // Kanał wrócił po zerwaniu – realtime-js sam się przepiął, więc znów jesteśmy „open”.
+            this.statusCb("open");
           }
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           if (!done) {
@@ -281,6 +313,10 @@ export class SupabaseTransport implements Transport {
   }
 
   private teardownRoom(): void {
+    if (this.hostWorker) {
+      this.hostWorker.terminate();
+      this.hostWorker = null;
+    }
     if (this.hostTimer !== null) {
       window.clearInterval(this.hostTimer);
       this.hostTimer = null;

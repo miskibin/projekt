@@ -109,6 +109,31 @@ export class GameClient {
     this.wireOverlays();
   }
 
+  // ---------------- diagnostyka (tryb ?debug=1 / demo) ----------------
+
+  /** Ostatni odebrany snapshot (bez interpolacji). */
+  get lastSnapshot(): GameSnapshot | null {
+    return this.buffer.latest;
+  }
+
+  /** Indeks mojej drużyny. */
+  get team(): number {
+    return this.myTeam;
+  }
+
+  /** Świat -> ekran (diagnostyka / testy automatyczne). */
+  worldToScreen(x: number, y: number): { x: number; y: number } {
+    return this.camera.worldToScreen(x, y);
+  }
+
+  /** Suma stałych pikseli terenu + wersja – do porównania terenu między klientami. */
+  terrainStats(): { version: number; solid: number; width: number; height: number } {
+    let solid = 0;
+    const d = this.terrain.data;
+    for (let i = 0; i < d.length; i++) solid += d[i];
+    return { version: this.terrain.version, solid, width: this.terrain.width, height: this.terrain.height };
+  }
+
   // ---------------- cykl życia ----------------
 
   start(config: GameConfig, players: PlayerInfo[], myTeam: number, demo = false): void {
@@ -166,7 +191,11 @@ export class GameClient {
     for (const w of s.worms) {
       this.lastPos.set(w.id, { x: w.x, y: w.y, team: w.team, name: w.name });
     }
-    if (s.turn.selectedWeapon) this.selectedWeapon = s.turn.selectedWeapon;
+    // `turn.selectedWeapon` dotyczy AKTYWNEJ drużyny – przejmujemy je tylko w swojej turze,
+    // inaczej panel/HUD pokazywałby broń przeciwnika (i kasował nasz lokalny wybór).
+    if (s.turn.selectedWeapon && (this.demo || s.turn.activeTeam === this.myTeam)) {
+      this.selectedWeapon = s.turn.selectedWeapon;
+    }
     this.refreshWeaponPanel();
   }
 
@@ -205,9 +234,16 @@ export class GameClient {
         );
       }
     }
+    const STAT_LABELS: Record<string, string> = {
+      round: "Rundy",
+      durationSec: "Czas gry",
+      ticks: "Kroki symulacji",
+    };
     for (const [k, v] of Object.entries(stats ?? {})) {
       if (typeof v === "number" || typeof v === "string") {
-        rows.push(`<div class="go-row"><span class="grow dim">${escapeHtml(k)}</span><b>${escapeHtml(String(v))}</b></div>`);
+        const label = STAT_LABELS[k] ?? k;
+        const val = k === "durationSec" ? formatDuration(Number(v)) : String(v);
+        rows.push(`<div class="go-row"><span class="grow dim">${escapeHtml(label)}</span><b>${escapeHtml(val)}</b></div>`);
       }
     }
     this.els.goStats.innerHTML = rows.join("");
@@ -510,6 +546,13 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Brak elementu #${id}`);
   return el as T;
+}
+
+/** 92.4 -> "1:32" */
+function formatDuration(sec: number): string {
+  if (!Number.isFinite(sec)) return "—";
+  const total = Math.max(0, Math.round(sec));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function escapeHtml(s: string): string {

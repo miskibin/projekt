@@ -70,6 +70,7 @@ type Screen = "menu" | "lobby" | "game";
 const params = new URLSearchParams(location.search);
 const DEMO = params.get("demo") === "1";
 const DEMO_LOBBY = params.get("demoLobby") === "1";
+const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 
 const el = {
@@ -102,6 +103,8 @@ let screen: Screen = "menu";
 let playerId = "";
 let roomCode = "";
 let inGame = false;
+/** Otwarty ekran wyników – wtedy NIE wracamy automatycznie do lobby po `roomState`. */
+let gameOverOpen = false;
 
 const sound = new Sound();
 
@@ -131,6 +134,7 @@ const lobby = new Lobby({
     net.send({ t: "leaveRoom" });
     roomCode = "";
     inGame = false;
+    gameOverOpen = false;
     game.stop();
     showScreen("menu");
   },
@@ -143,11 +147,13 @@ const game = new GameClient(sound, {
     net.send({ t: "leaveRoom" });
     roomCode = "";
     inGame = false;
+    gameOverOpen = false;
     game.stop();
     showScreen("menu");
   },
   backToLobby: () => {
     inGame = false;
+    gameOverOpen = false;
     game.stop();
     showScreen(roomCode ? "lobby" : "menu");
   },
@@ -206,9 +212,13 @@ function handle(msg: ServerMessage): void {
       roomCode = msg.room.code;
       lobby.setRoom(msg.room, playerId);
       if (msg.room.phase === "lobby") {
-        inGame = false;
-        game.stop();
-        showScreen("lobby");
+        // Po zakończonej grze host od razu przestawia pokój na "lobby"; nie wyrzucamy
+        // wtedy gracza z ekranu wyników – zrobi to przycisk „Wróć do lobby”.
+        if (!gameOverOpen) {
+          inGame = false;
+          game.stop();
+          showScreen("lobby");
+        }
       } else if (!inGame && screen !== "game") {
         showScreen("lobby");
       }
@@ -220,6 +230,7 @@ function handle(msg: ServerMessage): void {
     case "leftRoom":
       roomCode = "";
       inGame = false;
+      gameOverOpen = false;
       game.stop();
       history.replaceState(null, "", location.pathname);
       showScreen("menu");
@@ -232,6 +243,7 @@ function handle(msg: ServerMessage): void {
 
     case "gameStart": {
       inGame = true;
+      gameOverOpen = false;
       showScreen("game");
       game.start(msg.config, msg.players, msg.yourTeam);
       break;
@@ -250,6 +262,7 @@ function handle(msg: ServerMessage): void {
       break;
 
     case "gameOver":
+      gameOverOpen = true;
       game.onGameOver(msg.winnerTeam, msg.winnerName, msg.stats);
       break;
 
@@ -310,11 +323,27 @@ const DEMO_CONFIG: GameConfig = {
   theme: (params.get("theme") as GameConfig["theme"]) || "grass",
 };
 
+if (DEMO || DEBUG) {
+  // uchwyt dla podglądu deweloperskiego / testów wizualnych (?demo=1 lub ?debug=1)
+  (window as unknown as Record<string, unknown>).__game = game;
+  (window as unknown as Record<string, unknown>).__worms = {
+    game,
+    net,
+    get playerId() {
+      return playerId;
+    },
+    get roomCode() {
+      return roomCode;
+    },
+    get screen() {
+      return screen;
+    },
+  };
+}
+
 if (DEMO) {
   showScreen("game");
   game.start(DEMO_CONFIG, [], 0, true);
-  // uchwyt dla podglądu deweloperskiego / testów wizualnych
-  (window as unknown as Record<string, unknown>).__game = game;
 } else if (DEMO_LOBBY) {
   const d = demoRoom();
   playerId = d.playerId;

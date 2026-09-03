@@ -20,8 +20,10 @@ export interface InputContext {
   blocked: boolean;
 }
 
-const SEND_INTERVAL = 1 / 20;
-const RESEND_INTERVAL = 0.1;
+/** Maks. częstotliwość wysyłania ciągłego `input` (celowanie itp.) – 10 Hz. */
+const SEND_INTERVAL = 1 / 10;
+/** Podtrzymanie stanu, gdy nic się nie zmienia (na wypadek zgubionego pakietu). */
+const RESEND_INTERVAL = 0.5;
 
 /**
  * Klawiatura + mysz. Zamienia lokalny „pitch" (−π/2..π/2) i facing robaka na bezwzględny
@@ -74,11 +76,15 @@ export class InputController {
   }
 
   setContext(c: InputContext): void {
+    const turnStarted = c.myTurn && !this.ctxInfo.myTurn;
     this.ctxInfo = c;
     if (!c.myTurn && this.charging) {
       this.charging = false;
       this.state.charge = false;
     }
+    // Początek mojej tury: silnik ma zerowy input, więc od razu wysyłamy aktualne
+    // celowanie – inaczej pierwszy strzał poleciałby pod starym kątem.
+    if (turnStarted) this.lastSent = null;
   }
 
   private on<K extends keyof WindowEventMap>(
@@ -158,7 +164,11 @@ export class InputController {
         break;
       case "Space": {
         const w = this.ctxInfo.weapon;
-        if (NO_CHARGE.has(w)) {
+        if (this.jetpackOn()) {
+          // Plecak odrzutowy: spacja to ciąg w górę (silnik czyta `charge`), nie strzał.
+          this.state.charge = true;
+          this.flushInput();
+        } else if (NO_CHARGE.has(w)) {
           this.cb.sendAction({ kind: "fire", power: 1 });
         } else {
           this.charging = true;
@@ -180,8 +190,19 @@ export class InputController {
     }
   }
 
+  /** Czy aktywny robak lata plecakiem odrzutowym (spacja = ciąg, nie strzał). */
+  private jetpackOn(): boolean {
+    return this.ctxInfo.worm?.anim === "jetpack";
+  }
+
   private onKeyUp(e: KeyboardEvent): void {
     this.keys.delete(e.code);
+    if (e.code === "Space" && !this.charging && this.state.charge) {
+      // koniec ciągu jetpacka
+      this.state.charge = false;
+      this.flushInput();
+      return;
+    }
     if (e.code === "Space" && this.charging) {
       const power = this.chargePower;
       this.charging = false;
@@ -281,19 +302,40 @@ export class InputController {
     this.state.left = left;
     this.state.right = right;
     this.state.aim = aim;
-    this.state.charge = this.charging;
+    // ładowanie mocy albo ciąg jetpacka (obie rzeczy silnik czyta z `charge`)
+    this.state.charge = this.charging || (!blocked && this.jetpackOn() && this.keys.has("Space"));
+
+    if (blocked) {
+      // Poza swoją turą serwer i tak ignoruje `input` – nie zaśmiecamy kanału.
+      // Wysyłamy tylko jedno „wyzerowanie”, gdy tura się właśnie skończyła.
+      if (this.lastSent && (this.lastSent.left || this.lastSent.right || this.lastSent.charge)) {
+        this.flushInput();
+      }
+      this.acc = 0;
+      this.sinceSend = 0;
+      return;
+    }
 
     this.acc += dt;
     this.sinceSend += dt;
+
+    // Zmiana stanu klawiszy (ruch / ładowanie) leci natychmiast – to musi być responsywne.
+    // Sam ruch celownika i podtrzymanie stanu są dławione do SEND_RATE, żeby zmieścić się
+    // w limitach Supabase Realtime (~100 zdarzeń/s na projekt).
+    const boolChanged =
+      !this.lastSent ||
+      this.lastSent.left !== this.state.left ||
+      this.lastSent.right !== this.state.right ||
+      this.lastSent.charge !== this.state.charge;
+    if (boolChanged) {
+      this.acc = 0;
+      this.flushInput();
+      return;
+    }
     if (this.acc >= SEND_INTERVAL) {
       this.acc = 0;
-      const changed =
-        !this.lastSent ||
-        this.lastSent.left !== this.state.left ||
-        this.lastSent.right !== this.state.right ||
-        this.lastSent.charge !== this.state.charge ||
-        Math.abs(this.lastSent.aim - this.state.aim) > 0.01;
-      if (changed || this.sinceSend >= RESEND_INTERVAL) this.flushInput();
+      const aimChanged = !this.lastSent || Math.abs(this.lastSent.aim - this.state.aim) > 0.01;
+      if (aimChanged || this.sinceSend >= RESEND_INTERVAL) this.flushInput();
     }
   }
 

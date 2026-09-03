@@ -108,7 +108,10 @@ export function startServer(port = PORT) {
       host.handleDisconnect(peer, Date.now());
     };
     ws.on("close", () => {
-      console.log(`[ws] rozłączenie ${peer.id} (aktywnych: ${wss.clients.size - 1})`);
+      // `wss.clients` bywa już (albo jeszcze nie) posprzątane – liczymy bez tego gniazda.
+      let active = 0;
+      for (const c of wss.clients) if (c !== ws) active++;
+      console.log(`[ws] rozłączenie ${peer.id} (aktywnych: ${active})`);
       bye();
     });
     ws.on("error", bye);
