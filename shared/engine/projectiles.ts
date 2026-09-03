@@ -3,6 +3,7 @@ import { GRAVITY, WORM_RADIUS, WORLD_WIDTH } from "../constants";
 import { circleHits, clamp, pushOut, reflect, terrainNormal, wrapAngle } from "./physics";
 import { BANANALET, CLUSTERLET } from "./weapons";
 import type { EngineCtx, Projectile, ProjectileKind } from "./types";
+import type { ExplosionStyle } from "../protocol";
 
 const HOMING_TURN_RATE = 3.2; // rad/s
 const HOMING_ACCEL = 260;
@@ -48,7 +49,7 @@ export function makeProjectile(ctx: EngineCtx, init: Partial<Projectile> & { kin
 export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
   if (p.dead) return;
   p.dead = true;
-  ctx.explode(p.x, p.y, p.radius, p.damage, p.power);
+  ctx.explode(p.x, p.y, p.radius, p.damage, p.power, projectileExplosionStyle(p.kind));
   if (p.shards > 0 && p.shardKind) {
     const spec = p.shardKind === "bananalet" ? BANANALET : CLUSTERLET;
     for (let i = 0; i < p.shards; i++) {
@@ -71,6 +72,17 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
       });
     }
   }
+}
+
+function projectileExplosionStyle(kind: ProjectileKind): ExplosionStyle | undefined {
+  if (kind === "clusterlet") return "cluster";
+  if (kind === "bananalet") return "banana";
+  if (kind === "airstrikeBomb") return "airstrike";
+  if (
+    kind === "bazooka" || kind === "homing" || kind === "grenade" || kind === "cluster" ||
+    kind === "banana" || kind === "holy" || kind === "dynamite"
+  ) return kind;
+  return undefined;
 }
 
 function hitWorm(ctx: EngineCtx, p: Projectile, x: number, y: number): boolean {

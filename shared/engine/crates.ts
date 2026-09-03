@@ -184,7 +184,7 @@ export function stepMines(ctx: EngineCtx, dt: number): void {
       m.fuse -= dt;
       if (m.fuse <= 0) {
         m.dead = true;
-        ctx.explode(m.x, m.y, WEAPONS.mine.radius, WEAPONS.mine.damage, WEAPONS.mine.power);
+        ctx.explode(m.x, m.y, WEAPONS.mine.radius, WEAPONS.mine.damage, WEAPONS.mine.power, "mine");
       }
     }
   }

@@ -23,6 +23,7 @@ import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
 import { canvasResolution } from "./viewport";
 import { enterFullscreen } from "./display";
 import type { TouchControl } from "./input";
+import { clampJoystick, joystickControls } from "./joystick";
 
 export interface GameCallbacks {
   send(msg: ClientMessage): void;
@@ -83,6 +84,7 @@ export class GameClient {
   private pixelRatio = 1;
   private shownCharge = -1;
   private touchEnabled = matchMedia("(any-pointer: coarse)").matches;
+  private touchResetters: Array<() => void> = [];
   private readonly resizeObserver = new ResizeObserver(() => this.resize());
   private slots = new Map<WeaponId, { el: HTMLButtonElement; ammo: HTMLElement; count?: number; selected?: boolean }>();
   private onResize = (): void => this.resize();
@@ -444,7 +446,7 @@ export class GameClient {
       case "explosion": {
         this.terrain.carveCircle(ev.x, ev.y, ev.r);
         this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
-        this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38");
+        this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.camera.shake(Math.min(30, ev.r * 0.55));
         this.camera.glance(ev.x, ev.y, 0.25);
         break;
@@ -671,7 +673,10 @@ export class GameClient {
   private syncControls(): void {
     const blocked = this.panelOpen || this.escOpen || this.overOpen;
     byId("touch-controls").hidden = !this.touchEnabled || blocked;
-    if (blocked) this.input.cancelControls();
+    if (!this.touchEnabled || blocked) {
+      for (const reset of this.touchResetters) reset();
+      this.input.cancelControls();
+    }
   }
 
   private wireTouchControls(): void {
@@ -682,6 +687,62 @@ export class GameClient {
       this.input.cancelControls();
       this.syncControls();
     });
+
+    const joystick = byId("touch-joystick");
+    const knob = byId("touch-joystick-knob");
+    let joystickPointer: number | null = null;
+    let joystickActive = new Set<TouchControl>();
+
+    const updateJoystick = (clientX: number, clientY: number): void => {
+      const rect = joystick.getBoundingClientRect();
+      const radius = Math.max(1, Math.min(rect.width, rect.height) * 0.3);
+      const dx = clientX - (rect.left + rect.width / 2);
+      const dy = clientY - (rect.top + rect.height / 2);
+      const vector = clampJoystick(dx, dy, radius);
+      knob.style.transform = `translate(calc(-50% + ${vector.x.toFixed(1)}px), calc(-50% + ${vector.y.toFixed(1)}px))`;
+
+      const next = new Set(joystickControls(vector.x, vector.y, radius));
+      for (const control of joystickActive) {
+        if (!next.has(control)) this.input.releaseControl(control);
+      }
+      for (const control of next) {
+        if (!joystickActive.has(control)) this.input.pressControl(control);
+      }
+      joystickActive = next;
+    };
+
+    const resetJoystick = (): void => {
+      if (joystickPointer === null && joystickActive.size === 0) return;
+      joystickPointer = null;
+      for (const control of joystickActive) this.input.releaseControl(control, true);
+      joystickActive.clear();
+      joystick.dataset.active = "false";
+      knob.style.transform = "translate(-50%, -50%)";
+    };
+    this.touchResetters.push(resetJoystick);
+
+    joystick.addEventListener("pointerdown", (event) => {
+      if (joystickPointer !== null) return;
+      event.preventDefault();
+      joystickPointer = event.pointerId;
+      joystick.setPointerCapture(event.pointerId);
+      joystick.dataset.active = "true";
+      this.sound.unlock();
+      if (!this.autoFullscreenAttempted) void this.fullscreen();
+      updateJoystick(event.clientX, event.clientY);
+    });
+    joystick.addEventListener("pointermove", (event) => {
+      if (joystickPointer !== event.pointerId) return;
+      event.preventDefault();
+      updateJoystick(event.clientX, event.clientY);
+    });
+    for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
+      joystick.addEventListener(eventName, (event) => {
+        if (joystickPointer !== event.pointerId) return;
+        resetJoystick();
+      });
+    }
+
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-control]")) {
       const control = button.dataset.control as TouchControl;
       let pointer: number | null = null;
@@ -701,6 +762,12 @@ export class GameClient {
         button.dataset.pressed = "false";
         this.input.releaseControl(control, event.type !== "pointerup");
       };
+      this.touchResetters.push(() => {
+        if (pointer === null) return;
+        pointer = null;
+        button.dataset.pressed = "false";
+        this.input.releaseControl(control, true);
+      });
       button.addEventListener("pointerup", release);
       button.addEventListener("pointercancel", release);
       button.addEventListener("lostpointercapture", release);

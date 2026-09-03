@@ -28,6 +28,7 @@ import type {
   GameConfig,
   GameEvent,
   GameSnapshot,
+  ExplosionStyle,
   InputAction,
   InputState,
   MineSnapshot,
@@ -128,7 +129,7 @@ export class GameImpl implements Game, EngineCtx {
   private target: { x: number; y: number } | undefined;
   private burst: Burst | null = null;
 
-  private explosionQueue: { x: number; y: number; r: number; dmg: number; power: number }[] = [];
+  private explosionQueue: { x: number; y: number; r: number; dmg: number; power: number; style?: ExplosionStyle }[] = [];
   private processingExplosions = false;
 
   private winnerTeam: number | null = null;
@@ -438,26 +439,26 @@ export class GameImpl implements Game, EngineCtx {
     }
   }
 
-  explode(x: number, y: number, r: number, dmg: number, power: number): void {
-    this.explosionQueue.push({ x, y, r, dmg, power });
+  explode(x: number, y: number, r: number, dmg: number, power: number, style?: ExplosionStyle): void {
+    this.explosionQueue.push({ x, y, r, dmg, power, style });
     if (this.processingExplosions) return;
     this.processingExplosions = true;
     let guard = 0;
     while (this.explosionQueue.length > 0 && guard++ < 400) {
       const e = this.explosionQueue.shift();
       if (!e) break;
-      this.doExplode(e.x, e.y, e.r, e.dmg, e.power);
+      this.doExplode(e.x, e.y, e.r, e.dmg, e.power, e.style);
     }
     this.explosionQueue.length = 0;
     this.processingExplosions = false;
   }
 
-  private doExplode(x: number, y: number, r: number, dmg: number, power: number): void {
+  private doExplode(x: number, y: number, r: number, dmg: number, power: number, style?: ExplosionStyle): void {
     const xi = Math.round(x);
     const yi = Math.round(y);
     const ri = Math.max(1, Math.round(r));
     this.terrain.carveCircle(xi, yi, ri);
-    this.emit({ t: "explosion", x: xi, y: yi, r: ri, power: Math.round(power) });
+    this.emit({ t: "explosion", x: xi, y: yi, r: ri, power: Math.round(power), style });
     this.emit({ t: "sound", name: "explosion", x: xi, y: yi });
 
     const reach = ri * 1.5;
@@ -488,7 +489,7 @@ export class GameImpl implements Game, EngineCtx {
       if (d > reach) continue;
       const wasWeapon = c.kind === "weapon";
       c.amount = -1;
-      if (wasWeapon) this.explode(c.x, c.y, 25, 30, 240);
+      if (wasWeapon) this.explode(c.x, c.y, 25, 30, 240, "dynamite");
     }
 
     for (const m of this.mines) {
@@ -496,7 +497,7 @@ export class GameImpl implements Game, EngineCtx {
       const d = Math.hypot(m.x - xi, m.y - yi);
       if (d > reach) continue;
       m.dead = true;
-      this.explode(m.x, m.y, WEAPONS.mine.radius, WEAPONS.mine.damage, WEAPONS.mine.power);
+      this.explode(m.x, m.y, WEAPONS.mine.radius, WEAPONS.mine.damage, WEAPONS.mine.power, "mine");
     }
 
     for (const p of this.projectiles) {
@@ -977,7 +978,7 @@ export class GameImpl implements Game, EngineCtx {
       }
       case "shotgun": {
         this.emitShot(id, w);
-        this.hitscan(w, dirX, dirY, def);
+        this.hitscan(w, dirX, dirY, def, "shotgun");
         break;
       }
       case "uzi": {
@@ -1052,7 +1053,7 @@ export class GameImpl implements Game, EngineCtx {
     this.emit({ t: "sound", name: "shot", x: w.x, y: w.y });
   }
 
-  private hitscan(w: Worm, dirX: number, dirY: number, def: WeaponDef): void {
+  private hitscan(w: Worm, dirX: number, dirY: number, def: WeaponDef, style: "shotgun" | "uzi"): void {
     let px = w.x + dirX * (WORM_RADIUS + 2);
     let py = w.y + dirY * (WORM_RADIUS + 2);
     let target: Worm | null = null;
@@ -1087,13 +1088,14 @@ export class GameImpl implements Game, EngineCtx {
         y: Math.round(py),
         r: Math.max(1, Math.round(def.radius)),
         power: Math.round(def.power),
+        style,
       });
       target.vx += dirX * def.power * 0.6;
       target.vy += dirY * def.power * 0.6 - 40;
       target.onGround = false;
       this.damageWorm(target, def.damage, "explosion");
     } else if (terrainHit && def.radius > 0) {
-      this.explode(px, py, def.radius, def.damage, def.power);
+      this.explode(px, py, def.radius, def.damage, def.power, style);
     }
   }
 
@@ -1148,7 +1150,7 @@ export class GameImpl implements Game, EngineCtx {
         const dirY = Math.sin(a);
         this.emit({ t: "shot", weapon: "uzi", x: Math.round(w.x), y: Math.round(w.y) });
         this.emit({ t: "sound", name: "shot", x: w.x, y: w.y });
-        this.hitscan(w, dirX, dirY, WEAPONS.uzi);
+        this.hitscan(w, dirX, dirY, WEAPONS.uzi, "uzi");
       }
     }
     if (b.remaining <= 0) this.burst = null;

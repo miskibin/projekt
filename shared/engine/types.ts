@@ -1,6 +1,6 @@
 // Wewnętrzne typy encji silnika. Nie są częścią kontraktu sieciowego (patrz ../protocol.ts),
 // ale są eksportowane, żeby moduły silnika mogły się nimi wymieniać.
-import type { GameEvent, WeaponId } from "../protocol";
+import type { ExplosionStyle, GameEvent, WeaponId } from "../protocol";
 import type { Terrain } from "./terrain";
 import type { Rng } from "./rng";
 
@@ -118,6 +118,6 @@ export interface EngineCtx {
   waterLevel: number;
   nextId(): number;
   emit(e: GameEvent): void;
-  explode(x: number, y: number, r: number, dmg: number, power: number): void;
+  explode(x: number, y: number, r: number, dmg: number, power: number, style?: ExplosionStyle): void;
   damageWorm(w: Worm, amount: number, reason: DeathReason): void;
 }

@@ -526,17 +526,17 @@ export class Renderer {
         const flick = 0.75 + Math.sin(inp.time * 40 + p.id) * 0.25;
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = "rgba(255,140,30,0.35)";
+        ctx.fillStyle = p.kind === "homing" ? "rgba(40,218,255,0.42)" : "rgba(255,140,30,0.35)";
         ctx.beginPath();
         ctx.ellipse(-13 - flick * 3, 0, 8 + flick * 3, 4, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "rgba(255,230,150,0.65)";
+        ctx.fillStyle = p.kind === "homing" ? "rgba(215,250,255,0.78)" : "rgba(255,230,150,0.65)";
         ctx.beginPath();
         ctx.ellipse(-10.5, 0, 4 + flick * 1.6, 2.3, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
         // stateczniki
-        ctx.fillStyle = "#8fa0b8";
+        ctx.fillStyle = p.kind === "homing" ? "#ecf6ff" : "#8b8e68";
         ctx.beginPath();
         ctx.moveTo(-6, -3);
         ctx.lineTo(-12, -6.5);
@@ -547,7 +547,7 @@ export class Renderer {
         ctx.fill();
         // korpus
         const bodyG = ctx.createLinearGradient(0, -4, 0, 4);
-        const base = p.kind === "homing" ? "#c0392b" : "#6b7688";
+        const base = p.kind === "homing" ? "#d82f49" : "#687343";
         bodyG.addColorStop(0, lighten(base, 0.4));
         bodyG.addColorStop(0.5, base);
         bodyG.addColorStop(1, darken(base, 0.4));
@@ -558,15 +558,30 @@ export class Renderer {
         ctx.lineWidth = 0.9;
         ctx.stroke();
         // pasek
-        ctx.fillStyle = "rgba(255,255,255,0.35)";
-        ctx.fillRect(-2, -3.4, 2.4, 6.8);
+        ctx.fillStyle = p.kind === "homing" ? "rgba(235,250,255,0.92)" : "rgba(241,225,158,0.42)";
+        ctx.fillRect(p.kind === "homing" ? -3 : -2, -3.4, p.kind === "homing" ? 4 : 2.4, 6.8);
         // głowica
-        ctx.fillStyle = "#e05a3a";
+        ctx.fillStyle = p.kind === "homing" ? "#6ceaff" : "#a74a2f";
         ctx.beginPath();
         ctx.moveTo(8.4, -3.6);
         ctx.quadraticCurveTo(15.5, 0, 8.4, 3.6);
         ctx.closePath();
         ctx.fill();
+        if (p.kind === "homing") {
+          const pulse = 5.5 + Math.sin(inp.time * 9 + p.id) * 1.3;
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = "rgba(105,235,255,0.85)";
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.arc(11, 0, pulse, -0.75, 0.75);
+          ctx.stroke();
+          ctx.fillStyle = "#e9fdff";
+          ctx.beginPath();
+          ctx.arc(11.2, 0, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         ctx.fillStyle = "rgba(255,255,255,0.28)";
         ctx.beginPath();
         ctx.ellipse(10, -1.4, 2.2, 0.7, -0.3, 0, Math.PI * 2);
@@ -576,20 +591,47 @@ export class Renderer {
       case "grenade":
       case "cluster": {
         ctx.rotate(ang * 0.4 + inp.time * 4);
-        const base = p.kind === "cluster" ? "#2f5f4a" : "#3f7a3a";
-        const g = ctx.createRadialGradient(-2, -2.5, 0.5, 0, 0, 7.5);
-        g.addColorStop(0, lighten(base, 0.45));
-        g.addColorStop(1, darken(base, 0.3));
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#1e3a24";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(-5, -1.5); ctx.lineTo(5, -1.5);
-        ctx.moveTo(-5, 2); ctx.lineTo(5, 2);
-        ctx.stroke();
+        if (p.kind === "cluster") {
+          const g = ctx.createLinearGradient(-7, -7, 7, 7);
+          g.addColorStop(0, "#73f2dc");
+          g.addColorStop(0.48, "#177e91");
+          g.addColorStop(1, "#153f69");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const a = i * Math.PI / 3 - Math.PI / 6;
+            const px = Math.cos(a) * 7.2;
+            const py = Math.sin(a) * 7.2;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#b9fff0";
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+          ctx.fillStyle = "#ffe75e";
+          ctx.fillRect(-6.2, -1.3, 12.4, 2.6);
+          ctx.fillStyle = Math.sin(inp.time * 12 + p.id) > 0 ? "#fff" : "#32ffc8";
+          ctx.beginPath();
+          ctx.arc(0, 3.8, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const g = ctx.createRadialGradient(-2, -2.5, 0.5, 0, 0, 7.5);
+          g.addColorStop(0, "#8fc36a");
+          g.addColorStop(1, "#31582a");
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#1e3a24";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(-5, -1.5); ctx.lineTo(5, -1.5);
+          ctx.moveTo(-5, 2); ctx.lineTo(5, 2);
+          ctx.moveTo(-1.7, -5.5); ctx.lineTo(-1.7, 5.5);
+          ctx.moveTo(2, -5.5); ctx.lineTo(2, 5.5);
+          ctx.stroke();
+        }
         ctx.fillStyle = "#9aa0a8";
         roundRect(ctx, -1.7, -9, 3.4, 4, 1);
         ctx.fill();

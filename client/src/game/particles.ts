@@ -1,4 +1,5 @@
 import { GRAVITY } from "@shared/constants";
+import type { ExplosionStyle } from "@shared/protocol";
 
 type Kind = "smoke" | "spark" | "debris" | "water" | "feather" | "ember";
 
@@ -50,6 +51,7 @@ interface Fireball {
   r: number;
   life: number;
   max: number;
+  colors: FireColors;
 }
 
 /** Pierścień uderzeniowy / fala na wodzie. */
@@ -73,6 +75,42 @@ const MAX_FLASHES = 24;
 const MAX_FIREBALLS = 16;
 const MAX_RINGS = 24;
 
+type FireColors = readonly [string, string, string, string];
+
+interface ExplosionVisual {
+  flash: string;
+  ring: string;
+  embers: readonly string[];
+  smoke: readonly [string, string];
+  fire: FireColors;
+  fireballs: number;
+  extraRings: number;
+}
+
+const DEFAULT_EXPLOSION: ExplosionVisual = {
+  flash: "#fff3cf",
+  ring: "rgba(255,242,210,1)",
+  embers: ["#fff0b8", "#ffc255", "#ff8a2a"],
+  smoke: ["rgba(122,110,100,1)", "rgba(70,63,58,1)"],
+  fire: ["#fffce8", "#ffe082", "#ff962c", "#c63a10"],
+  fireballs: 1,
+  extraRings: 0,
+};
+
+const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
+  bazooka: { ...DEFAULT_EXPLOSION, flash: "#fff0c4", ring: "rgba(255,176,76,1)", fire: ["#fff8d8", "#ffd05a", "#ff7a20", "#a9280c"] },
+  homing: { ...DEFAULT_EXPLOSION, flash: "#c9f8ff", ring: "rgba(77,224,255,1)", embers: ["#edfdff", "#70eaff", "#ff557c"], fire: ["#effeff", "#82efff", "#2e9fff", "#7833b8"], extraRings: 1 },
+  grenade: { ...DEFAULT_EXPLOSION, flash: "#efffc0", ring: "rgba(183,238,102,1)", embers: ["#f7ffc5", "#c7eb58", "#ffb137"], fire: ["#ffffdc", "#d9ed73", "#e68d26", "#75561a"] },
+  cluster: { ...DEFAULT_EXPLOSION, flash: "#c9fff5", ring: "rgba(65,255,207,1)", embers: ["#effffb", "#63f4ce", "#4aa8ff"], fire: ["#edfffb", "#61f0ca", "#3397d8", "#135172"], extraRings: 2 },
+  banana: { ...DEFAULT_EXPLOSION, flash: "#fff86a", ring: "rgba(255,226,45,1)", embers: ["#fffbd0", "#fff12f", "#ff9d1f"], smoke: ["rgba(170,147,55,1)", "rgba(93,76,32,1)"], fire: ["#ffffe0", "#fff22f", "#ffad18", "#c76b08"], fireballs: 2, extraRings: 1 },
+  holy: { ...DEFAULT_EXPLOSION, flash: "#fffde8", ring: "rgba(255,245,158,1)", embers: ["#ffffff", "#fff8bb", "#ffd75a"], smoke: ["rgba(236,228,192,1)", "rgba(153,137,106,1)"], fire: ["#ffffff", "#fffbc2", "#ffd85d", "#b78622"], fireballs: 2, extraRings: 3 },
+  dynamite: { ...DEFAULT_EXPLOSION, flash: "#ffd0bd", ring: "rgba(255,78,44,1)", embers: ["#fff2cf", "#ff704a", "#e42020"], smoke: ["rgba(112,76,70,1)", "rgba(54,43,43,1)"], fire: ["#fff5df", "#ffad58", "#ff3e24", "#8b0710"], fireballs: 2 },
+  mine: { ...DEFAULT_EXPLOSION, flash: "#e6edf2", ring: "rgba(205,220,229,1)", embers: ["#ffffff", "#d5dde3", "#ff9138"], smoke: ["rgba(105,113,119,1)", "rgba(45,50,54,1)"], fire: ["#ffffff", "#dce4e8", "#ff9138", "#4c4643"] },
+  airstrike: { ...DEFAULT_EXPLOSION, flash: "#ffe0cf", ring: "rgba(255,95,52,1)", embers: ["#fff2d5", "#ff883d", "#ff3428"], smoke: ["rgba(97,86,84,1)", "rgba(36,35,39,1)"], fire: ["#fff4d2", "#ff9a48", "#e62d22", "#68121b"], fireballs: 2, extraRings: 1 },
+  shotgun: { ...DEFAULT_EXPLOSION, flash: "#fff9dc", ring: "rgba(255,232,171,1)", embers: ["#ffffff", "#ffe1a1", "#d8c39b"], fire: ["#ffffff", "#ffe7ae", "#d29c62", "#75553c"], fireballs: 0 },
+  uzi: { ...DEFAULT_EXPLOSION, flash: "#d9f5ff", ring: "rgba(137,217,255,1)", embers: ["#f5fdff", "#8fddff", "#9ea9b8"], fire: ["#f2fcff", "#9ee5ff", "#7798b8", "#3b4c62"], fireballs: 0 },
+};
+
 /**
  * System cząsteczek: kule ognia, fale uderzeniowe, odłamki, dym, iskry,
  * bryzgi wody i napisy. Rysuje w koordynatach świata.
@@ -86,7 +124,7 @@ export class Particles {
 
   /** pre-renderowane sprity (żeby nie tworzyć gradientów co klatkę) */
   private soft = new Map<string, HTMLCanvasElement | null>();
-  private fireSprite: HTMLCanvasElement | null | undefined;
+  private fireSprites = new Map<string, HTMLCanvasElement | null>();
 
   get count(): number {
     return this.ps.length + this.flashes.length + this.fireballs.length + this.rings.length;
@@ -108,12 +146,24 @@ export class Particles {
   // ---------------- publiczne efekty ----------------
 
   /** Wybuch: rozbłysk, kula ognia, fala, odłamki, dym i żarzące się iskry. */
-  explosion(x: number, y: number, r: number, debrisColor: string): void {
+  explosion(x: number, y: number, r: number, debrisColor: string, style?: ExplosionStyle): void {
     const k = Math.max(0.35, r / 30); // skala względem "typowej" bazooki
+    const visual = style ? EXPLOSION_VISUALS[style] : DEFAULT_EXPLOSION;
 
     // jasny rdzeń + kula ognia + fala uderzeniowa
-    this.flash(x, y, r * 1.7, "#fff3cf", 0.16);
-    this.pushFireball({ x, y, r: r * 1.5, life: 0, max: 0.3 + k * 0.16 });
+    this.flash(x, y, r * 1.7, visual.flash, 0.16);
+    for (let i = 0; i < visual.fireballs; i++) {
+      const offset = i === 0 ? 0 : r * 0.22;
+      const angle = i * 2.4;
+      this.pushFireball({
+        x: x + Math.cos(angle) * offset,
+        y: y + Math.sin(angle) * offset,
+        r: r * (i === 0 ? 1.5 : 1.05),
+        life: 0,
+        max: 0.3 + k * 0.16 + i * 0.04,
+        colors: visual.fire,
+      });
+    }
     this.pushRing({
       x,
       y,
@@ -121,11 +171,25 @@ export class Particles {
       r1: r * 2.0,
       life: 0,
       max: 0.22,
-      color: "rgba(255,242,210,1)",
+      color: visual.ring,
       width: 2.0 + k * 1.2,
       flat: false,
       additive: true,
     });
+    for (let i = 0; i < visual.extraRings; i++) {
+      this.pushRing({
+        x,
+        y,
+        r0: r * (0.2 + i * 0.18),
+        r1: r * (1.45 + i * 0.34),
+        life: 0,
+        max: 0.28 + i * 0.07,
+        color: visual.ring,
+        width: 1.4 + k,
+        flat: false,
+        additive: true,
+      });
+    }
 
     // bryły ziemi
     const dark = shade(debrisColor, -0.28);
@@ -168,7 +232,7 @@ export class Particles {
         max: 0.18 + Math.random() * 0.5,
         size: 1 + Math.random() * 2.2,
         grow: -1.2,
-        color: Math.random() < 0.45 ? "#fff0b8" : Math.random() < 0.6 ? "#ffc255" : "#ff8a2a",
+        color: visual.embers[Math.floor(Math.random() * visual.embers.length)],
         kind: "ember",
         grav: 0.35,
         drag: 1.9,
@@ -192,7 +256,7 @@ export class Particles {
         max: 1.0 + Math.random() * 1.4,
         size: r * (0.22 + Math.random() * 0.3),
         grow: r * 0.6,
-        color: i % 3 === 0 ? "rgba(122,110,100,1)" : "rgba(70,63,58,1)",
+        color: i % 3 === 0 ? visual.smoke[0] : visual.smoke[1],
         kind: "smoke",
         grav: -0.07,
         drag: 1.0,
@@ -509,8 +573,8 @@ export class Particles {
     ctx.globalAlpha = 1;
 
     // 3) kule ognia (nad dymem – jasny rdzeń ma być widoczny)
-    const fire = this.getFireSprite();
     for (const f of this.fireballs) {
+      const fire = this.getFireSprite(f.colors);
       const t = f.life / f.max;
       const r = f.r * (0.42 + t * 0.85);
       ctx.globalAlpha = Math.min(1, (1 - t) * 1.35);
@@ -651,8 +715,10 @@ export class Particles {
   }
 
   /** Sprite kuli ognia: żółty rdzeń → pomarańcz → ciemna czerwień. */
-  private getFireSprite(): HTMLCanvasElement | null {
-    if (this.fireSprite !== undefined) return this.fireSprite;
+  private getFireSprite(colors: FireColors): HTMLCanvasElement | null {
+    const key = colors.join("|");
+    const cached = this.fireSprites.get(key);
+    if (cached !== undefined) return cached;
     let cv: HTMLCanvasElement | null = null;
     if (typeof document !== "undefined") {
       cv = document.createElement("canvas");
@@ -661,16 +727,16 @@ export class Particles {
       const c = cv.getContext("2d");
       if (c) {
         const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
-        g.addColorStop(0, "rgba(255,252,232,1)");
-        g.addColorStop(0.22, "rgba(255,224,130,0.98)");
-        g.addColorStop(0.46, "rgba(255,150,44,0.9)");
-        g.addColorStop(0.72, "rgba(198,58,16,0.55)");
-        g.addColorStop(1, "rgba(96,16,6,0)");
+        g.addColorStop(0, withAlpha(colors[0], 1));
+        g.addColorStop(0.22, withAlpha(colors[1], 0.98));
+        g.addColorStop(0.48, withAlpha(colors[2], 0.9));
+        g.addColorStop(0.76, withAlpha(colors[3], 0.55));
+        g.addColorStop(1, withAlpha(colors[3], 0));
         c.fillStyle = g;
         c.fillRect(0, 0, 128, 128);
       } else cv = null;
     }
-    this.fireSprite = cv;
+    this.fireSprites.set(key, cv);
     return cv;
   }
 }

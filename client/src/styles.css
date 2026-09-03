@@ -226,7 +226,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .game-tools .game-tool { width: 48px; padding: 0; }
 .game-tool:hover, .game-tool[aria-pressed=true] { background: var(--hud-bg-hi); border-color: var(--hud-line-hi); }
 .game-tool:active { background: var(--hud-bg-hi); }
-.game-tool:focus-visible, .touch-key:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.game-tool:focus-visible, .touch-key:focus-visible, .touch-joystick:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* --- pigułka aktualnej broni w lewym górnym rogu --- */
 .weapon-tool {
@@ -243,9 +243,33 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 /* --- sterowanie dotykowe --- */
 .touch-controls { position: absolute; inset: 0; pointer-events: none; z-index: 11; }
 .touch-controls[hidden] { display: none; }
-.touch-move, .touch-aim { position: absolute; bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 10px; }
-.touch-move { left: max(14px, env(safe-area-inset-left)); }
-.touch-aim { right: max(146px, calc(env(safe-area-inset-right) + 134px)); }
+.touch-joystick {
+  position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
+  width: 138px; height: 138px; border-radius: 50%; pointer-events: auto; touch-action: none;
+  border: 2px solid rgba(160,205,255,.42);
+  background: radial-gradient(circle, rgba(62,99,140,.35) 0 34%, rgba(14,28,45,.78) 36% 100%);
+  box-shadow: inset 0 0 0 12px rgba(125,176,232,.06), 0 8px 30px rgba(0,0,0,.24);
+  -webkit-touch-callout: none;
+}
+.joystick-arrows {
+  position: absolute; inset: 14px; display: flex; align-items: center; justify-content: space-between;
+  color: rgba(220,238,255,.42); font: 800 24px var(--font); pointer-events: none;
+}
+.joystick-arrows::after { content: "﹀"; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); }
+.joystick-knob {
+  position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none;
+  border: 2px solid rgba(217,237,255,.82);
+  background: radial-gradient(circle at 36% 30%, rgba(190,222,255,.72), rgba(48,86,128,.92) 55%, rgba(21,41,66,.96));
+  box-shadow: 0 5px 14px rgba(0,0,0,.4), inset 0 1px 2px rgba(255,255,255,.35);
+  transition: transform 70ms ease-out;
+}
+.touch-joystick[data-active=true] { border-color: rgba(177,220,255,.85); background-color: rgba(44,83,124,.35); }
+.touch-joystick[data-active=true] .joystick-knob { transition: none; }
+.touch-actions {
+  position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
+  display: flex; align-items: flex-end; gap: 14px; pointer-events: none;
+}
 .touch-key {
   pointer-events: auto; width: 64px; height: 64px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -254,13 +278,18 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   font: 700 26px var(--font); line-height: 1;
   touch-action: none; -webkit-touch-callout: none;
 }
+.touch-key small { display: block; font: 800 9px var(--font); letter-spacing: .7px; opacity: .78; pointer-events: none; }
 .touch-key svg { width: 26px; height: 26px; display: block; pointer-events: none; }
 .touch-key[data-pressed=true] { background: var(--hud-bg-hi); border-color: var(--hud-line-hi); }
 .touch-fire {
-  position: absolute; bottom: max(10px, env(safe-area-inset-bottom)); right: max(14px, env(safe-area-inset-right));
-  width: 110px; height: 110px; border-radius: 50%; font-size: 46px;
+  width: 110px; height: 110px; border-radius: 50%; font-size: 42px; flex-direction: column; gap: 1px;
   border: 3px solid rgba(240,190,110,.8);
 }
+.touch-jump {
+  width: 76px; height: 76px; border-radius: 50%; flex-direction: column; gap: 2px;
+  border: 2px solid rgba(126,211,151,.8); background: rgba(25,64,53,.78); color: #d8ffe3;
+}
+.touch-jump[data-pressed=true] { background: rgba(66,170,99,.52); border-color: rgba(177,255,199,.95); transform: scale(.96); }
 .touch-fire[data-pressed=true] { background: rgba(255,198,92,.3); border-color: rgba(255,214,140,.95); }
 .touch-fire[data-charging=true] { background: conic-gradient(#ffc65c var(--charge), rgba(20,35,55,.78) 0); color: #0a1220; }
 
@@ -269,13 +298,13 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .game-tools { gap: 6px; top: max(8px, env(safe-area-inset-top)); }
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
   .weapon-tool { height: 40px; padding: 0 12px; gap: 8px; font-size: 12.5px; max-width: min(150px, calc((100vw - 170px) / 2)); }
-  .touch-aim { flex-direction: column; }
 }
 @media (max-height: 460px), (max-width: 430px) {
-  .touch-key:not(.touch-fire) { width: 54px; height: 54px; border-radius: 12px; font-size: 22px; }
-  .touch-key svg { width: 22px; height: 22px; }
-  .touch-fire { width: 88px; height: 88px; font-size: 36px; }
-  .touch-aim { right: max(118px, calc(env(safe-area-inset-right) + 106px)); }
+  .touch-joystick { width: 112px; height: 112px; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); }
+  .joystick-knob { width: 52px; height: 52px; }
+  .touch-actions { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 10px; }
+  .touch-jump { width: 62px; height: 62px; font-size: 24px; }
+  .touch-fire { width: 88px; height: 88px; font-size: 34px; }
 }
 
 .overlay {

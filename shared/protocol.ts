@@ -172,8 +172,21 @@ export interface GameSnapshot {
   turn: TurnInfo;
 }
 
+export type ExplosionStyle =
+  | "bazooka"
+  | "homing"
+  | "grenade"
+  | "cluster"
+  | "banana"
+  | "holy"
+  | "dynamite"
+  | "mine"
+  | "airstrike"
+  | "shotgun"
+  | "uzi";
+
 export type GameEvent =
-  | { t: "explosion"; x: number; y: number; r: number; power: number } // niszczy teren okręgiem o promieniu r (int)
+  | { t: "explosion"; x: number; y: number; r: number; power: number; style?: ExplosionStyle } // niszczy teren okręgiem o promieniu r (int)
   | { t: "carveRect"; x: number; y: number; w: number; h: number; angle: number; add: boolean } // girder (add=true) lub wycięcie
   | { t: "damage"; wormId: number; amount: number; x: number; y: number }
   | { t: "wormDied"; wormId: number; reason: "explosion" | "drown" | "fall" | "surrender" }
