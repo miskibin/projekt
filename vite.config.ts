@@ -4,6 +4,7 @@ import path from "node:path";
 
 export default defineConfig({
   root: "client",
+  envDir: path.resolve(__dirname),
   publicDir: "public",
   resolve: { alias: { "@shared": path.resolve(__dirname, "shared") } },
   build: { outDir: "../dist/client", emptyOutDir: true },
@@ -11,5 +12,5 @@ export default defineConfig({
     port: 5173,
     proxy: { "/ws": { target: "ws://localhost:3000", ws: true } },
   },
-  test: { include: ["shared/**/*.test.ts", "server/**/*.test.ts"] },
+  test: { include: ["shared/**/*.test.ts", "server/**/*.test.ts"], environment: "node" },
 });

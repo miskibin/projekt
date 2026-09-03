@@ -36,3 +36,19 @@ klienci w przeglądarce (Canvas 2D). Wszystko w TypeScript, jeden pakiet npm.
 - Snapshot ma być mały (pozycje, hp, prędkości, pociski, wiatr, stan tury) – teren NIE jest wysyłany
   w snapshotach (tylko przy `gameStart` seed, a opcjonalnie pełna bitmapa RLE przy `terrainSync`
   gdy gracz dołącza w trakcie / do resynchronizacji).
+
+## Wdrożenie bez własnego serwera (Vercel + Supabase) – tryb domyślny
+
+Vercel serwuje tylko statycznego klienta (`dist/client`), więc nie ma trwałego procesu serwera.
+Zamiast tego:
+
+- logika pokoju i pętla gry są w `shared/host/` (czysty TS, bez Node) i uruchamia je w przeglądarce
+  gracz, który tworzy pokój (**host**). `server/index.ts` to tylko cienka warstwa Node (ws + express)
+  wokół tego samego `RoomHost` dla trybu self-host (`VITE_TRANSPORT=ws`).
+- transportem jest Supabase Realtime (`client/src/net/supabaseTransport.ts`): kanał `worms:<KOD>`,
+  broadcast `c2s` (gość → host, `{from, msgs[]}`) i `s2c` (host → gość, `{to|"*", msgs[]}`),
+  presence do wykrywania rozłączeń. Wiadomości są batchowane co 50 ms, żeby zmieścić się w limitach
+  Realtime (domyślnie 100 zdarzeń/s na projekt).
+- host gra lokalnie przez pętlę zwrotną (bez sieci), więc ma zerowe opóźnienie; goście widzą snapshoty
+  z interpolacją. Gdy host wyjdzie, pokój znika.
+- klucze w `.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) to klucze publiczne.
