@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Worms Online</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐛</text></svg>" />
+  </head>
+  <body>
+    <!-- ============ MENU ============ -->
+    <section id="screen-menu" class="screen">
+      <div class="menu-bg"><i class="hill h1"></i><i class="hill h2"></i><i class="hill h3"></i></div>
+      <div class="menu-card">
+        <h1 class="logo">WORMS <span>ONLINE</span></h1>
+        <p class="tagline">Turowa gra artyleryjska • multiplayer</p>
+
+        <label class="field">
+          <span>Twój nick</span>
+          <input id="nick" type="text" maxlength="16" placeholder="np. Robaczek" autocomplete="off" />
+        </label>
+
+        <button id="btn-create" class="btn btn-primary btn-lg">Stwórz pokój</button>
+
+        <div class="sep"><span>albo</span></div>
+
+        <div class="join-row">
+          <input id="join-code" type="text" maxlength="4" placeholder="KOD" autocomplete="off" spellcheck="false" />
+          <button id="btn-join" class="btn btn-lg">Dołącz</button>
+        </div>
+
+        <div class="conn-row">
+          <span id="conn-dot" class="dot"></span>
+          <span id="conn-text">Łączenie…</span>
+        </div>
+        <p class="hint">Sterowanie: A/D – ruch, W/S – celowanie, SPACJA – strzał (przytrzymaj), Enter – skok, Tab – bronie</p>
+      </div>
+    </section>
+
+    <!-- ============ LOBBY ============ -->
+    <section id="screen-lobby" class="screen">
+      <div class="menu-bg"><i class="hill h1"></i><i class="hill h2"></i><i class="hill h3"></i></div>
+      <div class="lobby">
+        <header class="lobby-head">
+          <div class="code-box">
+            <span class="code-label">Kod pokoju</span>
+            <div class="code-row">
+              <span id="room-code" class="code">----</span>
+              <button id="btn-copy" class="btn btn-sm" title="Kopiuj link zaproszenia">Kopiuj link</button>
+            </div>
+          </div>
+          <div class="lobby-head-right">
+            <span id="lobby-conn" class="pill">połączono</span>
+            <button id="btn-leave" class="btn btn-sm btn-ghost">Opuść pokój</button>
+          </div>
+        </header>
+
+        <div class="lobby-grid">
+          <div class="panel">
+            <h2>Gracze</h2>
+            <ul id="player-list" class="player-list"></ul>
+            <div class="lobby-actions">
+              <button id="btn-ready" class="btn btn-primary">Gotowy</button>
+              <button id="btn-start" class="btn btn-go" hidden>Start gry</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2>Ustawienia</h2>
+            <div id="settings" class="settings">
+              <label class="set"><span>Robaki na drużynę</span>
+                <input id="set-worms" type="range" min="1" max="6" step="1" /><b id="val-worms">3</b></label>
+              <label class="set"><span>Czas tury (s)</span>
+                <input id="set-turntime" type="range" min="15" max="90" step="5" /><b id="val-turntime">45</b></label>
+              <label class="set"><span>Rundy do sudden death</span>
+                <input id="set-sd" type="range" min="3" max="30" step="1" /><b id="val-sd">10</b></label>
+              <label class="set"><span>Gęstość terenu</span>
+                <input id="set-density" type="range" min="0.3" max="1.5" step="0.05" /><b id="val-density">1.0</b></label>
+              <label class="set"><span>Motyw</span>
+                <select id="set-theme">
+                  <option value="grass">Łąka</option>
+                  <option value="desert">Pustynia</option>
+                  <option value="snow">Śnieg</option>
+                  <option value="hell">Piekło</option>
+                </select><b></b></label>
+            </div>
+            <div class="preview-wrap">
+              <canvas id="map-preview" width="320" height="180"></canvas>
+              <button id="btn-reroll" class="btn btn-sm">Losuj mapę</button>
+            </div>
+            <p id="settings-note" class="note">Tylko host może zmieniać ustawienia.</p>
+          </div>
+
+          <div class="panel panel-chat">
+            <h2>Czat</h2>
+            <div id="chat-log" class="chat-log"></div>
+            <form id="chat-form" class="chat-form" autocomplete="off">
+              <input id="chat-input" type="text" maxlength="200" placeholder="Napisz wiadomość…" />
+              <button class="btn btn-sm" type="submit">Wyślij</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GRA ============ -->
+    <section id="screen-game" class="screen">
+      <canvas id="game-canvas"></canvas>
+
+      <div id="weapon-panel" class="weapon-panel" hidden>
+        <div class="wp-head">Bronie <span class="wp-hint">Tab / prawy przycisk myszy zamyka</span></div>
+        <div id="weapon-grid" class="weapon-grid"></div>
+      </div>
+
+      <div id="esc-menu" class="overlay" hidden>
+        <div class="dialog">
+          <h2>Menu</h2>
+          <div class="dlg-row"><span>Głośność</span><input id="volume" type="range" min="0" max="100" step="1" /></div>
+          <details class="help">
+            <summary>Pomoc – sterowanie</summary>
+            <table class="keys">
+              <tr><td>A / D lub ← / →</td><td>chodzenie</td></tr>
+              <tr><td>W / S lub ↑ / ↓</td><td>celowanie (albo myszą)</td></tr>
+              <tr><td>SPACJA (przytrzymaj)</td><td>ładowanie mocy i strzał</td></tr>
+              <tr><td>Enter</td><td>skok</td></tr>
+              <tr><td>Backspace</td><td>salto w tył</td></tr>
+              <tr><td>1 – 5</td><td>zapalnik (sekundy)</td></tr>
+              <tr><td>Tab / PPM</td><td>panel broni</td></tr>
+              <tr><td>LPM na mapie</td><td>cel (nalot, teleport, belka, homing)</td></tr>
+              <tr><td>R</td><td>obrót belki</td></tr>
+              <tr><td>F1</td><td>pomiń turę</td></tr>
+              <tr><td>Kółko myszy</td><td>zoom, przeciąganie = kamera</td></tr>
+            </table>
+          </details>
+          <div class="dlg-actions">
+            <button id="btn-resume" class="btn btn-primary">Wróć do gry</button>
+            <button id="btn-surrender" class="btn btn-danger">Poddaj się</button>
+            <button id="btn-quit" class="btn btn-ghost">Opuść pokój</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="gameover" class="overlay" hidden>
+        <div class="dialog dialog-wide">
+          <h2 id="go-title">Koniec gry</h2>
+          <div id="go-stats" class="go-stats"></div>
+          <div class="dlg-actions">
+            <button id="btn-back-lobby" class="btn btn-primary">Wróć do lobby</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="toasts" class="toasts"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
