@@ -68,7 +68,7 @@ export function createTransport(): Transport {
 type Screen = "menu" | "lobby" | "game";
 
 const params = new URLSearchParams(location.search);
-const DEMO = params.get("demo") === "1";
+let DEMO = params.get("demo") === "1";
 const DEMO_LOBBY = params.get("demoLobby") === "1";
 const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -190,6 +190,7 @@ net.onStatus((s: ConnStatus) => {
 });
 
 net.onReady = (reconnected) => {
+  if (DEMO) return;
   const name = nick();
   if (name) net.send({ t: "hello", name });
   if (reconnected) {
@@ -207,6 +208,7 @@ net.onReady = (reconnected) => {
 net.on((msg: ServerMessage) => handle(msg));
 
 function handle(msg: ServerMessage): void {
+  if (DEMO) return;
   switch (msg.t) {
     case "welcome":
       playerId = msg.playerId;
@@ -325,6 +327,16 @@ const DEMO_CONFIG: GameConfig = {
   terrainDensity: 1,
   theme: (params.get("theme") as GameConfig["theme"]) || "grass",
 };
+
+byId("btn-demo").addEventListener("click", (event) => {
+  event.preventDefault();
+  DEMO = true;
+  net.close();
+  history.replaceState(null, "", `${location.pathname}?demo=1`);
+  showScreen("game");
+  game.start(DEMO_CONFIG, [], 0, true);
+  void game.fullscreen();
+});
 
 if (DEMO || DEBUG) {
   // uchwyt dla podglądu deweloperskiego / testów wizualnych (?demo=1 lub ?debug=1)

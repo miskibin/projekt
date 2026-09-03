@@ -24,8 +24,17 @@ To pełny lokalny mecz: sterujesz na zmianę Graczem 1 i Graczem 2, bez drugiej 
 połączenia z Supabase ani drugiej osoby. Działają normalne bronie, fizyka, obrażenia i tury.
 
 Sterowanie automatycznie przechodzi na aktywną drużynę. **F1 / „Pomiń turę”** kończy turę,
-**„Nowa gra”** resetuje mecz i losuje mapę, a **„Wyjdź”** wraca do menu.
-Menu pod **Esc** wstrzymuje lokalną symulację. Lobby multiplayer zawiera graczy i ustawienia, bez czatu.
+**„Nowa gra”** resetuje mecz i losuje mapę. Te opcje oraz wyjście są w menu **☰ / Esc**,
+które wstrzymuje lokalną symulację. Lobby multiplayer zawiera graczy i ustawienia, bez czatu.
+
+Gra wypełnia okno i dopasowuje kamerę do jego wymiarów. Przycisk **⛶ / F** uruchamia pełny ekran;
+wejście do demo z menu również go uruchamia, jeśli przeglądarka obsługuje tę funkcję.
+Canvas korzysta z rozdzielczości ekranu (DPR, do 8 megapikseli). Mapa jest dostępna pod **▧ / M**.
+
+Na telefonie przyciski ruchu i celowania są przy krawędziach. Przytrzymaj **◎**, żeby zwiększać moc,
+i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, po czym strzał pada automatycznie.
+Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
+a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
 
 ## Własny serwer (opcjonalnie)
 
@@ -71,6 +80,7 @@ Otwórz http://localhost:5173 w dwóch kartach, w jednej „Stwórz pokój”, w
 | Lewy przycisk myszy na mapie | cel dla nalotu, teleportu, belki i rakiety naprowadzanej |
 | `R` | obrót belki (girder) |
 | `F1` | pomiń turę |
+| `F` / `M` | pełny ekran / mapa |
 | `Esc` | menu (poddanie, wyjście, głośność, pomoc) |
 | Kółko myszy, przeciąganie, `Shift`+strzałki | zoom i kamera |
 

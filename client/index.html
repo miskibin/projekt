@@ -2,7 +2,7 @@
 <html lang="pl">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Worms Online</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🐛</text></svg>" />
   </head>
@@ -32,7 +32,7 @@
           <span id="conn-dot" class="dot"></span>
           <span id="conn-text">Łączenie…</span>
         </div>
-        <a href="?demo=1" class="btn btn-go btn-lg demo-link">Demo — steruj 2 graczami</a>
+        <a id="btn-demo" href="?demo=1" class="btn btn-go btn-lg demo-link">Demo — steruj 2 graczami</a>
         <p class="hint">Jeden ekran, dwie drużyny. Bez drugiego gracza.</p>
         <p class="hint">Sterowanie: A/D – ruch, W/S – celowanie, SPACJA – strzał (przytrzymaj), Enter – skok, Tab – bronie</p>
       </div>
@@ -98,32 +98,52 @@
 
     <!-- ============ GRA ============ -->
     <section id="screen-game" class="screen">
-      <canvas id="game-canvas"></canvas>
-      <aside id="demo-controls" class="demo-controls" aria-label="Sterowanie demo" hidden>
-        <strong>Demo · sterujesz obiema drużynami</strong>
-        <span id="demo-team" role="status" aria-live="polite"></span>
-        <div class="demo-actions">
-          <button id="btn-demo-skip" class="btn btn-sm">Pomiń turę (F1)</button>
-          <button id="btn-demo-restart" class="btn btn-sm">Nowa gra</button>
-          <a href="./" class="btn btn-sm">Wyjdź</a>
+      <canvas id="game-canvas" tabindex="0" aria-label="Pole gry"></canvas>
+      <button id="btn-weapons" class="game-tool weapon-tool" aria-label="Wybierz broń" aria-expanded="false">
+        <span id="current-weapon">Bazooka</span><span id="current-ammo">∞</span>
+      </button>
+      <nav class="game-tools" aria-label="Opcje gry">
+        <button id="btn-fullscreen" class="game-tool" aria-label="Pełny ekran" title="Pełny ekran (F)">⛶</button>
+        <button id="btn-map" class="game-tool" aria-label="Pokaż mapę" aria-pressed="false" title="Mapa (M)">▧</button>
+        <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
+      </nav>
+      <div id="touch-controls" class="touch-controls" aria-label="Sterowanie dotykowe">
+        <div class="touch-move">
+          <button class="touch-key" data-control="left" aria-label="Idź w lewo">◀</button>
+          <button class="touch-key" data-control="right" aria-label="Idź w prawo">▶</button>
+          <button class="touch-key" data-control="jump" aria-label="Skocz">↥</button>
         </div>
-      </aside>
+        <div class="touch-aim">
+          <button class="touch-key" data-control="aimUp" aria-label="Celuj wyżej">⌃</button>
+          <button class="touch-key" data-control="aimDown" aria-label="Celuj niżej">⌄</button>
+        </div>
+        <button id="touch-fire" class="touch-key touch-fire" data-control="fire" aria-label="Przytrzymaj, aby ładować strzał; puść, aby strzelić">◎</button>
+      </div>
 
       <div id="weapon-panel" class="weapon-panel" hidden>
-        <div class="wp-head">Bronie <span class="wp-hint">Tab / prawy przycisk myszy zamyka</span></div>
+        <div class="wp-head">Bronie <button id="btn-close-weapons" class="game-tool" aria-label="Zamknij wybór broni">×</button></div>
         <div id="weapon-grid" class="weapon-grid"></div>
       </div>
 
       <div id="esc-menu" class="overlay" hidden>
         <div class="dialog">
           <h2>Menu</h2>
+          <aside id="demo-controls" class="demo-controls" aria-label="Sterowanie demo" hidden>
+            <span id="demo-team" role="status" aria-live="polite"></span>
+            <div class="demo-actions">
+              <button id="btn-demo-skip" class="btn btn-sm">Pomiń turę (F1)</button>
+              <button id="btn-demo-restart" class="btn btn-sm">Nowa gra</button>
+            </div>
+          </aside>
           <div class="dlg-row"><span>Głośność</span><input id="volume" type="range" min="0" max="100" step="1" /></div>
+          <label class="dlg-row"><span>Przyciski dotykowe</span><input id="touch-enabled" type="checkbox" /></label>
           <details class="help">
             <summary>Pomoc – sterowanie</summary>
             <table class="keys">
               <tr><td>A / D lub ← / →</td><td>chodzenie</td></tr>
               <tr><td>W / S lub ↑ / ↓</td><td>celowanie (albo myszą)</td></tr>
-              <tr><td>SPACJA (przytrzymaj)</td><td>ładowanie mocy i strzał</td></tr>
+              <tr><td>SPACJA / ◎</td><td>przytrzymaj: ładuj, puść: strzel</td></tr>
+              <tr><td>F / M</td><td>pełny ekran / mapa</td></tr>
               <tr><td>Enter</td><td>skok</td></tr>
               <tr><td>Backspace</td><td>salto w tył</td></tr>
               <tr><td>1 – 5</td><td>zapalnik (sekundy)</td></tr>

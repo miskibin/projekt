@@ -10,7 +10,11 @@ export interface InputCallbacks {
   closeWeaponPanel(): void;
   toggleEscMenu(): void;
   gesture(): void;
+  toggleMap(): void;
+  fullscreen(): void;
 }
+
+export type TouchControl = "left" | "right" | "aimUp" | "aimDown" | "jump" | "fire";
 
 export interface InputContext {
   myTurn: boolean;
@@ -26,8 +30,8 @@ const SEND_INTERVAL = 1 / 10;
 const RESEND_INTERVAL = 0.5;
 
 /**
- * Klawiatura + mysz. Zamienia lokalny „pitch" (−π/2..π/2) i facing robaka na bezwzględny
- * kąt `aim` z protokołu (0 = w prawo, ujemny = w górę).
+ * Klawiatura, mysz i dotyk. Kąt wejścia jest nachyleniem względem kierunku robaka;
+ * silnik uwzględnia facing przy wyznaczaniu kierunku strzału.
  */
 export class InputController {
   private keys = new Set<string>();
@@ -38,6 +42,9 @@ export class InputController {
   private sinceSend = 0;
   private chargeStart = 0;
   private charging = false;
+  private fireHeld = false;
+  private touchKeys = new Set<TouchControl>();
+  private pointers = new Map<number, { x: number; y: number }>();
   private ctxInfo: InputContext = { myTurn: false, worm: null, weapon: "bazooka", blocked: false };
 
   /** pozycja myszy w koordynatach ekranu i świata */
@@ -77,14 +84,64 @@ export class InputController {
 
   setContext(c: InputContext): void {
     const turnStarted = c.myTurn && (!this.ctxInfo.myTurn || c.worm?.id !== this.ctxInfo.worm?.id);
+    if (turnStarted || !c.myTurn || c.blocked) this.cancelControls();
     this.ctxInfo = c;
-    if ((!c.myTurn || turnStarted) && this.charging) {
-      this.charging = false;
-      this.state.charge = false;
+    if (turnStarted) {
+      this.lastSent = null;
+      if (c.worm) this.pitch = c.worm.aim;
     }
-    // Początek mojej tury: silnik ma zerowy input, więc od razu wysyłamy aktualne
-    // celowanie – inaczej pierwszy strzał poleciałby pod starym kątem.
-    if (turnStarted) this.lastSent = null;
+  }
+
+  pressControl(control: TouchControl): void {
+    if (this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    this.touchKeys.add(control);
+    if (control === "fire") this.beginFire();
+    if (control === "jump") this.cb.sendAction({ kind: "jump" });
+  }
+
+  releaseControl(control: TouchControl, cancelled = false): void {
+    this.touchKeys.delete(control);
+    if (control === "fire") this.endFire(cancelled);
+  }
+
+  cancelControls(): void {
+    this.keys.clear();
+    this.touchKeys.clear();
+    this.charging = false;
+    this.fireHeld = false;
+    const changed = this.state.left || this.state.right || this.state.charge;
+    this.state = { left: false, right: false, aim: this.pitch, charge: false };
+    if (changed) this.flushInput();
+  }
+
+  private beginFire(): void {
+    if (this.fireHeld || this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    this.fireHeld = true;
+    if (this.jetpackOn()) {
+      this.state.charge = true;
+    } else if (NO_CHARGE.has(this.ctxInfo.weapon)) {
+      this.state.aim = this.pitch;
+      this.flushInput();
+      this.cb.sendAction({ kind: "fire", power: 1 });
+      return;
+    } else {
+      this.charging = true;
+      this.chargeStart = performance.now();
+      this.state.charge = true;
+    }
+    this.state.aim = this.pitch;
+    this.flushInput();
+  }
+
+  private endFire(cancelled = false): void {
+    const power = this.chargePower;
+    const shouldFire = this.charging && !cancelled && this.ctxInfo.myTurn && !this.ctxInfo.blocked;
+    this.charging = false;
+    this.fireHeld = false;
+    this.state.charge = false;
+    this.state.aim = this.pitch;
+    this.flushInput();
+    if (shouldFire) this.cb.sendAction({ kind: "fire", power: Math.max(0.05, power) });
   }
 
   private on<K extends keyof WindowEventMap>(
@@ -101,14 +158,36 @@ export class InputController {
   private bind(): void {
     this.on(window, "keydown", (e) => this.onKeyDown(e));
     this.on(window, "keyup", (e) => this.onKeyUp(e));
-    this.on(window, "blur", () => {
-      this.keys.clear();
-      this.charging = false;
-      this.state.left = this.state.right = this.state.charge = false;
+    this.on(window, "blur", () => this.cancelControls());
+    this.on(this.canvas, "pointerdown", (e) => {
+      this.canvas.focus({ preventScroll: true });
+      this.canvas.setPointerCapture(e.pointerId);
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.onMouseDown(e);
+      if (this.pointers.size > 1) { this.dragging = false; this.dragMoved = 10; }
     });
-    this.on(this.canvas, "mousemove", (e) => this.onMouseMove(e));
-    this.on(this.canvas, "mousedown", (e) => this.onMouseDown(e));
-    this.on(window, "mouseup", (e) => this.onMouseUp(e));
+    this.on(this.canvas, "pointermove", (e) => {
+      if (this.pointers.size === 2 && this.pointers.has(e.pointerId)) {
+        const points = [...this.pointers.values()];
+        const before = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+        this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const after = [...this.pointers.values()];
+        const distance = Math.hypot(after[0].x - after[1].x, after[0].y - after[1].y);
+        if (before > 0) this.camera.zoomBy(distance / before);
+        return;
+      }
+      if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      this.onMouseMove(e);
+    });
+    this.on(this.canvas, "pointerup", (e) => {
+      this.pointers.delete(e.pointerId);
+      this.onMouseUp(e);
+    });
+    this.on(this.canvas, "pointercancel", (e) => {
+      this.pointers.delete(e.pointerId);
+      this.dragging = false;
+      this.cancelControls();
+    });
     this.on(this.canvas, "mouseenter", () => (this.mouseOnCanvas = true));
     this.on(this.canvas, "mouseleave", () => {
       this.mouseOnCanvas = false;
@@ -125,20 +204,22 @@ export class InputController {
   }
 
   private onKeyDown(e: KeyboardEvent): void {
-    const tag = (e.target as HTMLElement | null)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    this.cb.gesture();
-
     if (e.code === "Escape") {
       e.preventDefault();
-      this.cb.toggleEscMenu();
+      if (!e.repeat) this.cb.toggleEscMenu();
       return;
     }
+    const tag = (e.target as HTMLElement | null)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || tag === "A") return;
+    this.cb.gesture();
+
     if (e.code === "Tab") {
       e.preventDefault();
       if (!e.repeat) this.cb.toggleWeaponPanel();
       return;
     }
+    if (e.code === "KeyF") { e.preventDefault(); this.cb.fullscreen(); return; }
+    if (e.code === "KeyM") { e.preventDefault(); this.cb.toggleMap(); return; }
     if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "F1"].includes(e.code)) {
       e.preventDefault();
     }
@@ -163,19 +244,7 @@ export class InputController {
         if (this.ctxInfo.weapon === "girder") this.cb.sendAction({ kind: "girderRotate" });
         break;
       case "Space": {
-        const w = this.ctxInfo.weapon;
-        if (this.jetpackOn()) {
-          // Plecak odrzutowy: spacja to ciąg w górę (silnik czyta `charge`), nie strzał.
-          this.state.charge = true;
-          this.flushInput();
-        } else if (NO_CHARGE.has(w)) {
-          this.cb.sendAction({ kind: "fire", power: 1 });
-        } else {
-          this.charging = true;
-          this.chargeStart = performance.now();
-          this.state.charge = true;
-          this.flushInput();
-        }
+        this.beginFire();
         break;
       }
       case "Digit1":
@@ -197,21 +266,7 @@ export class InputController {
 
   private onKeyUp(e: KeyboardEvent): void {
     this.keys.delete(e.code);
-    if (e.code === "Space" && !this.charging && this.state.charge) {
-      // koniec ciągu jetpacka
-      this.state.charge = false;
-      this.flushInput();
-      return;
-    }
-    if (e.code === "Space" && this.charging) {
-      const power = this.chargePower;
-      this.charging = false;
-      this.state.charge = false;
-      if (this.ctxInfo.myTurn && !this.ctxInfo.blocked) {
-        this.cb.sendAction({ kind: "fire", power: Math.max(0.05, power) });
-      }
-      this.flushInput();
-    }
+    if (e.code === "Space" && this.fireHeld) this.endFire();
   }
 
   private updateMouseWorld(e: MouseEvent): void {
@@ -286,24 +341,24 @@ export class InputController {
       if (dx || dy) this.camera.panBy(dx, dy);
     }
 
-    const left = !blocked && !shift && (this.keys.has("KeyA") || this.keys.has("ArrowLeft"));
-    const right = !blocked && !shift && (this.keys.has("KeyD") || this.keys.has("ArrowRight"));
+    const left = !blocked && !shift && (this.keys.has("KeyA") || this.keys.has("ArrowLeft") || this.touchKeys.has("left"));
+    const right = !blocked && !shift && (this.keys.has("KeyD") || this.keys.has("ArrowRight") || this.touchKeys.has("right"));
     if (!blocked && !shift) {
-      const up = this.keys.has("KeyW") || this.keys.has("ArrowUp");
-      const down = this.keys.has("KeyS") || this.keys.has("ArrowDown");
+      const up = this.keys.has("KeyW") || this.keys.has("ArrowUp") || this.touchKeys.has("aimUp");
+      const down = this.keys.has("KeyS") || this.keys.has("ArrowDown") || this.touchKeys.has("aimDown");
       const rate = 1.6 * dt;
       if (up) this.pitch = clamp(this.pitch - rate, -Math.PI / 2, Math.PI / 2);
       if (down) this.pitch = clamp(this.pitch + rate, -Math.PI / 2, Math.PI / 2);
     }
 
-    const facing = this.ctxInfo.worm?.facing ?? 1;
-    const aim = normalize(facing === 1 ? this.pitch : Math.PI - this.pitch);
+    const aim = this.pitch;
 
     this.state.left = left;
     this.state.right = right;
     this.state.aim = aim;
     // ładowanie mocy albo ciąg jetpacka (obie rzeczy silnik czyta z `charge`)
-    this.state.charge = this.charging || (!blocked && this.jetpackOn() && this.keys.has("Space"));
+    this.state.charge = !blocked && (this.charging || (this.jetpackOn() && this.fireHeld));
+    if (this.charging && this.chargePower >= 1) this.endFire();
 
     if (blocked) {
       // Poza swoją turą serwer i tak ignoruje `input` – nie zaśmiecamy kanału.
@@ -346,9 +401,10 @@ export class InputController {
   }
 
   destroy(): void {
+    this.cancelControls();
     for (const off of this.listeners) off();
     this.listeners.length = 0;
-    this.keys.clear();
+    this.pointers.clear();
   }
 }
 

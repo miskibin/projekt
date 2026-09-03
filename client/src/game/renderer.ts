@@ -1,4 +1,4 @@
-import { MAX_SHOT_POWER, TEAM_COLORS, WORLD_HEIGHT, WORLD_WIDTH, WORM_MAX_HP } from "@shared/constants";
+import { TEAM_COLORS, WORLD_HEIGHT, WORLD_WIDTH, WORM_MAX_HP } from "@shared/constants";
 import type { CrateSnapshot, MineSnapshot, ProjectileSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { Particles } from "./particles";
@@ -106,7 +106,8 @@ export class Renderer {
     ctx.lineWidth = 2 / camera.zoom;
     ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(inp.terrainTex, 0, 0);
     ctx.imageSmoothingEnabled = true;
 
@@ -444,8 +445,8 @@ export class Renderer {
     if (!inp.myTurn) return;
     if (st.turn.phase !== "active" && st.turn.phase !== "retreat") return;
 
-    const aim = worm.aim;
-    const dirX = Math.cos(aim);
+    const aim = inp.aimPitch;
+    const dirX = Math.cos(aim) * worm.facing;
     const dirY = Math.sin(aim);
     const col = teamColor(worm.team);
 
@@ -455,15 +456,15 @@ export class Renderer {
     ctx.lineWidth = 1.6 * s;
     ctx.strokeStyle = "rgba(255,255,255,0.5)";
     ctx.beginPath();
-    ctx.moveTo(worm.x + dirX * 16, worm.y + dirY * 16);
-    ctx.lineTo(worm.x + dirX * 74, worm.y + dirY * 74);
+    ctx.moveTo(worm.x + dirX * 16 * s, worm.y + dirY * 16 * s);
+    ctx.lineTo(worm.x + dirX * 92 * s, worm.y + dirY * 92 * s);
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
 
     // krzyżyk na końcu
-    const cx = worm.x + dirX * 86;
-    const cy = worm.y + dirY * 86;
+    const cx = worm.x + dirX * 106 * s;
+    const cy = worm.y + dirY * 106 * s;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(s, s);
@@ -478,28 +479,34 @@ export class Renderer {
     ctx.stroke();
     ctx.restore();
 
-    // pasek mocy przy ładowaniu
-    const power = Math.max(st.turn.chargePower, inp.localCharge);
+    // Pasek siły rośnie w kierunku strzału, jak w klasycznej artylerii.
+    const power = inp.localCharge;
     if (power > 0.001) {
+      const segments = 18;
+      for (let i = 0; i < segments; i++) {
+        const fraction = (i + 1) / segments;
+        const distance = (19 + i * 4) * s;
+        const radius = (2 + fraction * 1.8) * s;
+        ctx.beginPath();
+        ctx.arc(worm.x + dirX * distance, worm.y + dirY * distance, radius, 0, Math.PI * 2);
+        ctx.fillStyle = fraction <= power
+          ? fraction < 0.55 ? "#8fea57" : fraction < 0.8 ? "#ffd24d" : "#ff5d46"
+          : "rgba(5,12,20,.5)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,.55)";
+        ctx.lineWidth = s;
+        ctx.stroke();
+      }
       ctx.save();
-      ctx.translate(worm.x, worm.y + 20);
+      ctx.translate(worm.x, worm.y + 24 * s);
       ctx.scale(s, s);
-      const w = 54;
-      ctx.fillStyle = "rgba(0,0,0,0.65)";
-      roundRect(ctx, -w / 2 - 1, -1, w + 2, 9, 4);
-      ctx.fill();
-      const g = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
-      g.addColorStop(0, "#57d977");
-      g.addColorStop(0.55, "#ffd24d");
-      g.addColorStop(1, "#ff4d4d");
-      ctx.fillStyle = g;
-      roundRect(ctx, -w / 2, 0, w * power, 7, 3);
-      ctx.fill();
-      ctx.font = "700 9px ui-sans-serif, system-ui, sans-serif";
-      ctx.fillStyle = "#fff";
+      ctx.font = "800 11px ui-sans-serif, system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.textBaseline = "top";
-      ctx.fillText(`${Math.round(power * MAX_SHOT_POWER)}`, 0, 10);
+      ctx.strokeStyle = "#07111c";
+      ctx.lineWidth = 3;
+      ctx.strokeText(Math.round(power * 100) + "%", 0, 0);
+      ctx.fillStyle = "#fff";
+      ctx.fillText(Math.round(power * 100) + "%", 0, 0);
       ctx.restore();
     }
   }

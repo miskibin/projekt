@@ -20,6 +20,9 @@ import type { Sound } from "./sound";
 import { INTERP_DELAY_MS, SnapshotBuffer } from "./state";
 import { TerrainRenderer } from "./terrainRenderer";
 import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
+import { canvasResolution } from "./viewport";
+import { enterFullscreen } from "./display";
+import type { TouchControl } from "./input";
 
 export interface GameCallbacks {
   send(msg: ClientMessage): void;
@@ -41,6 +44,9 @@ interface Els {
   demoControls: HTMLElement;
   demoTeam: HTMLElement;
   demoSkip: HTMLButtonElement;
+  fire: HTMLButtonElement;
+  currentWeapon: HTMLElement;
+  currentAmmo: HTMLElement;
 }
 
 /** Spina render, wejście, dźwięk i sieć w jedną pętlę gry. */
@@ -72,7 +78,13 @@ export class GameClient {
   private panelOpen = false;
   private escOpen = false;
   private overOpen = false;
-  private slots = new Map<WeaponId, { el: HTMLElement; ammo: HTMLElement }>();
+  private showMap = false;
+  private autoFullscreenAttempted = false;
+  private pixelRatio = 1;
+  private shownCharge = -1;
+  private touchEnabled = matchMedia("(any-pointer: coarse)").matches;
+  private readonly resizeObserver = new ResizeObserver(() => this.resize());
+  private slots = new Map<WeaponId, { el: HTMLButtonElement; ammo: HTMLElement; count?: number; selected?: boolean }>();
   private onResize = (): void => this.resize();
 
   constructor(
@@ -91,6 +103,9 @@ export class GameClient {
       demoControls: byId("demo-controls"),
       demoTeam: byId("demo-team"),
       demoSkip: byId<HTMLButtonElement>("btn-demo-skip"),
+      fire: byId<HTMLButtonElement>("touch-fire"),
+      currentWeapon: byId("current-weapon"),
+      currentAmmo: byId("current-ammo"),
     };
     const ctx = this.els.canvas.getContext("2d");
     if (!ctx) throw new Error("Brak kontekstu 2D");
@@ -110,11 +125,18 @@ export class GameClient {
       toggleWeaponPanel: () => this.toggleWeapons(),
       closeWeaponPanel: () => this.setWeapons(false),
       toggleEscMenu: () => this.toggleEsc(),
-      gesture: () => this.sound.unlock(),
+      gesture: () => {
+        this.sound.unlock();
+        if (this.running && !this.autoFullscreenAttempted) void this.fullscreen();
+      },
+      toggleMap: () => this.toggleMap(),
+      fullscreen: () => { void this.fullscreen(); },
     });
 
     this.buildWeaponPanel();
     this.wireOverlays();
+    this.wireTouchControls();
+    document.addEventListener("fullscreenchange", this.onResize);
   }
 
   // ---------------- diagnostyka (tryb ?debug=1 / demo) ----------------
@@ -156,6 +178,8 @@ export class GameClient {
     this.hud.clear();
     this.selectedWeapon = "bazooka";
     this.waterShown = WATER_LEVEL_START;
+    this.showMap = false;
+    byId("btn-map").setAttribute("aria-pressed", "false");
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.terrainTex = new TerrainRenderer(this.terrain, config.theme, config.seed);
     this.renderer.regen(config.seed);
@@ -178,9 +202,10 @@ export class GameClient {
       this.onTerrainSync(this.demo.terrainSync());
       this.onSnapshot(this.demo.snapshot);
     }
-    this.hud.banner(demo ? "Sterujesz obydwoma graczami" : "Do boju!", 2.2);
 
     window.addEventListener("resize", this.onResize);
+    window.visualViewport?.addEventListener("resize", this.onResize);
+    this.resizeObserver.observe(this.els.canvas);
     this.resize();
     if (!this.running) {
       this.running = true;
@@ -193,6 +218,8 @@ export class GameClient {
     this.running = false;
     cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.onResize);
+    window.visualViewport?.removeEventListener("resize", this.onResize);
+    this.resizeObserver.disconnect();
     this.demo = null;
     this.els.demoControls.hidden = true;
     this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
@@ -201,6 +228,7 @@ export class GameClient {
   destroy(): void {
     this.stop();
     this.input.destroy();
+    document.removeEventListener("fullscreenchange", this.onResize);
   }
 
   // ---------------- wiadomości z serwera ----------------
@@ -238,6 +266,7 @@ export class GameClient {
 
   onGameOver(winnerTeam: number | null, winnerName: string | null, stats: Record<string, unknown>): void {
     this.overOpen = true;
+    this.syncControls();
     const title = this.els.goTitle;
     if (winnerTeam === null) {
       title.textContent = "Remis";
@@ -285,6 +314,7 @@ export class GameClient {
     const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     this.time += dt;
+    if (this.pixelRatio !== (window.devicePixelRatio || 1)) this.resize();
 
     if (this.demo && !this.overOpen && !this.escOpen) {
       this.demoAcc += dt;
@@ -306,7 +336,6 @@ export class GameClient {
 
     // 2) stan do wyrenderowania
     const state = this.buffer.sample(now);
-    this.input.update(dt);
     this.particles.update(dt);
     this.hud.update(dt);
 
@@ -327,6 +356,13 @@ export class GameClient {
         weapon: this.selectedWeapon,
         blocked: this.panelOpen || this.escOpen || this.overOpen,
       });
+    }
+    this.input.update(dt);
+    const charge = Math.round(this.input.chargePower * 360);
+    if (charge !== this.shownCharge) {
+      this.shownCharge = charge;
+      this.els.fire.style.setProperty("--charge", `${charge}deg`);
+      this.els.fire.dataset.charging = String(charge > 0);
     }
 
     this.camera.update(dt);
@@ -361,6 +397,8 @@ export class GameClient {
         time: this.time,
         weapon: this.selectedWeapon,
         demo: this.demo !== null,
+        showMap: this.showMap,
+        touch: this.touchEnabled,
       });
     } else {
       this.ctx.fillStyle = "#0a0e15";
@@ -476,14 +514,17 @@ export class GameClient {
   private buildWeaponPanel(): void {
     this.els.weaponGrid.innerHTML = "";
     for (const id of WEAPON_ORDER) {
-      const slot = document.createElement("div");
+      const slot = document.createElement("button");
+      slot.type = "button";
+      slot.setAttribute("aria-label", WEAPON_NAMES[id]);
       slot.className = "wslot";
       slot.title = WEAPON_NAMES[id];
       const c = document.createElement("canvas");
-      c.width = 40;
-      c.height = 40;
+      c.width = 120;
+      c.height = 120;
       const cx = c.getContext("2d");
       if (cx) {
+        cx.scale(3, 3);
         cx.translate(20, 20);
         drawWeaponIcon(cx, id, 34);
       }
@@ -510,11 +551,24 @@ export class GameClient {
     const my = this.buffer.latest?.teams.find((t) => t.team === this.myTeam);
     for (const [id, s] of this.slots) {
       const n = my?.ammo?.[id];
-      const infinite = n !== undefined && n < 0;
-      s.ammo.textContent = n === undefined ? "" : infinite ? "∞" : String(n);
-      s.el.classList.toggle("empty", n !== undefined && n === 0);
-      s.el.classList.toggle("sel", id === this.selectedWeapon);
+      if (n !== s.count) {
+        s.count = n;
+        s.ammo.textContent = n === undefined ? "" : n < 0 ? "∞" : String(n);
+        s.el.classList.toggle("empty", n === 0);
+        s.el.disabled = n === 0;
+      }
+      const selected = id === this.selectedWeapon;
+      if (s.selected !== selected) {
+        s.selected = selected;
+        s.el.classList.toggle("sel", selected);
+        s.el.setAttribute("aria-pressed", String(selected));
+      }
     }
+    const ammo = my?.ammo?.[this.selectedWeapon];
+    const label = WEAPON_NAMES[this.selectedWeapon];
+    if (this.els.currentWeapon.textContent !== label) this.els.currentWeapon.textContent = label;
+    const ammoLabel = ammo === undefined ? "" : ammo < 0 ? "∞" : String(ammo);
+    if (this.els.currentAmmo.textContent !== ammoLabel) this.els.currentAmmo.textContent = ammoLabel;
   }
 
   private toggleWeapons(): void {
@@ -524,7 +578,10 @@ export class GameClient {
   private setWeapons(open: boolean): void {
     this.panelOpen = open && !this.escOpen && !this.overOpen;
     this.els.weaponPanel.hidden = !this.panelOpen;
+    byId("btn-weapons").setAttribute("aria-expanded", String(this.panelOpen));
+    this.syncControls();
     if (this.panelOpen) this.refreshWeaponPanel();
+    else if (this.running && !this.escOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
   }
 
   private toggleEsc(): void {
@@ -535,7 +592,10 @@ export class GameClient {
   private setEsc(open: boolean): void {
     this.escOpen = open;
     this.setOverlay(this.els.escMenu, open);
+    byId("btn-menu").setAttribute("aria-expanded", String(open));
+    this.syncControls();
     if (open) this.setWeapons(false);
+    else if (this.running) this.els.canvas.focus({ preventScroll: true });
   }
 
   private setOverlay(el: HTMLElement, open: boolean): void {
@@ -543,7 +603,15 @@ export class GameClient {
   }
 
   private wireOverlays(): void {
-    this.els.demoSkip.addEventListener("click", () => this.demo?.applyAction({ kind: "skipTurn" }));
+    byId("btn-fullscreen").addEventListener("click", () => { void this.fullscreen(); });
+    byId("btn-menu").addEventListener("click", () => this.toggleEsc());
+    byId("btn-weapons").addEventListener("click", () => this.toggleWeapons());
+    byId("btn-close-weapons").addEventListener("click", () => this.setWeapons(false));
+    byId("btn-map").addEventListener("click", () => this.toggleMap());
+    this.els.demoSkip.addEventListener("click", () => {
+      this.demo?.applyAction({ kind: "skipTurn" });
+      this.setEsc(false);
+    });
     byId("btn-demo-restart").addEventListener("click", () => {
       if (this.demo && this.config) {
         this.start({ ...this.config, seed: (Math.random() * 0x7fffffff) | 0 }, [], 0, true);
@@ -571,13 +639,69 @@ export class GameClient {
 
   // ---------------- rozmiar ----------------
 
+  async fullscreen(): Promise<void> {
+    this.autoFullscreenAttempted = true;
+    await enterFullscreen();
+    this.resize();
+    if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
+  }
+
+  private toggleMap(): void {
+    this.showMap = !this.showMap;
+    byId("btn-map").setAttribute("aria-pressed", String(this.showMap));
+    if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
+  }
+
+  private syncControls(): void {
+    const blocked = this.panelOpen || this.escOpen || this.overOpen;
+    byId("touch-controls").hidden = !this.touchEnabled || blocked;
+    if (blocked) this.input.cancelControls();
+  }
+
+  private wireTouchControls(): void {
+    const toggle = byId<HTMLInputElement>("touch-enabled");
+    toggle.checked = this.touchEnabled;
+    toggle.addEventListener("change", () => {
+      this.touchEnabled = toggle.checked;
+      this.input.cancelControls();
+      this.syncControls();
+    });
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-control]")) {
+      const control = button.dataset.control as TouchControl;
+      let pointer: number | null = null;
+      button.addEventListener("pointerdown", (event) => {
+        if (pointer !== null) return;
+        event.preventDefault();
+        pointer = event.pointerId;
+        button.setPointerCapture(pointer);
+        button.dataset.pressed = "true";
+        this.sound.unlock();
+        if (!this.autoFullscreenAttempted) void this.fullscreen();
+        this.input.pressControl(control);
+      });
+      const release = (event: PointerEvent) => {
+        if (pointer !== event.pointerId) return;
+        pointer = null;
+        button.dataset.pressed = "false";
+        this.input.releaseControl(control, event.type !== "pointerup");
+      };
+      button.addEventListener("pointerup", release);
+      button.addEventListener("pointercancel", release);
+      button.addEventListener("lostpointercapture", release);
+    }
+    this.syncControls();
+  }
+
   private resize(): void {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.pixelRatio = window.devicePixelRatio || 1;
     const w = this.els.canvas.clientWidth || window.innerWidth;
     const h = this.els.canvas.clientHeight || window.innerHeight;
-    this.els.canvas.width = Math.round(w * dpr);
-    this.els.canvas.height = Math.round(h * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const resolution = canvasResolution(w, h, this.pixelRatio);
+    this.els.canvas.width = resolution.width;
+    this.els.canvas.height = resolution.height;
+    this.ctx.setTransform(resolution.width / w, 0, 0, resolution.height / h, 0, 0);
+    this.ctx.imageSmoothingEnabled = true;
+    this.ctx.imageSmoothingQuality = "high";
     this.camera.setViewport(w, h);
   }
 }

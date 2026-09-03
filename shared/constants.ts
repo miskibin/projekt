@@ -29,7 +29,7 @@ export const WORMS_PER_TEAM_DEFAULT = 3;
 export const MAX_PLAYERS = 4;
 export const MAX_WIND = 120; // px/s^2 poziomej siły dla pocisków wrażliwych na wiatr
 export const MAX_SHOT_POWER = 700; // px/s
-export const CHARGE_TIME = 1.2; // s do pełnej mocy
+export const CHARGE_TIME = 2; // s do pełnej mocy — przytrzymaj, aby precyzyjnie dobrać siłę
 
 export const TEAM_COLORS = ["#ff4d4d", "#4da6ff", "#66e066", "#ffd24d"] as const;
 export const TEAM_NAMES = ["Czerwoni", "Niebiescy", "Zieloni", "Żółci"] as const;

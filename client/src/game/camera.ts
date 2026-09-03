@@ -1,7 +1,8 @@
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
+import { viewportZoom } from "./viewport";
 
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 2;
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 3;
 
 /** Kamera 2D ze śledzeniem celu, wstrząsami, zoomem i ręcznym przesuwaniem. */
 export class Camera {
@@ -23,8 +24,12 @@ export class Camera {
   viewH = 720;
 
   setViewport(w: number, h: number): void {
+    const scale = viewportZoom(w, h) / viewportZoom(this.viewW, this.viewH);
     this.viewW = w;
     this.viewH = h;
+    this.zoom = clamp(this.zoom * scale, MIN_ZOOM, MAX_ZOOM);
+    this.targetZoom = clamp(this.targetZoom * scale, MIN_ZOOM, MAX_ZOOM);
+    this.clamp();
   }
 
   follow(x: number, y: number, snap = false): void {

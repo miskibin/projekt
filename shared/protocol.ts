@@ -49,7 +49,7 @@ export interface RoomState {
 export interface InputState {
   left: boolean;
   right: boolean;
-  /** kąt celowania w radianach: 0 = w prawo, ujemny = w górę; robak patrzy wg left/right */
+  /** Nachylenie względem kierunku robaka: -PI/2..PI/2, ujemny = w górę. */
   aim: number;
   /** trzymanie przycisku ładowania mocy */
   charge: boolean;
