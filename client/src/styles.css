@@ -72,6 +72,8 @@ button, input, select { font-family: inherit; font-size: inherit; color: inherit
   border: 1px solid var(--line);
   border-radius: 20px;
   padding: 28px 26px 22px;
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
   box-shadow: 0 30px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 .logo {
@@ -116,6 +118,9 @@ input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn-lg { width: 100%; padding: 13px 16px; font-size: 16px; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+a.btn { color: var(--text); text-decoration: none; text-align: center; }
+.demo-link { display: block; margin-top: 18px; }
 .btn-sm { padding: 6px 11px; font-size: 13px; border-radius: 8px; }
 .btn-primary { background: linear-gradient(180deg, #2f80ed, #1c5fc0); border-color: #3f8fef; }
 .btn-go { background: linear-gradient(180deg, #35c05a, #1f8f42); border-color: #46d06d; }
@@ -148,7 +153,7 @@ input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba
 .pill { font-size: 12px; padding: 5px 11px; border-radius: 999px; background: #16351f; color: #7ee787; border: 1px solid #2c5b39; }
 .pill.bad { background: #3a1b1b; color: #ff9a93; border-color: #6a2f2c; }
 
-.lobby-grid { display: grid; grid-template-columns: 1.1fr 1.25fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+.lobby-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; flex: 1; min-height: 0; }
 .panel {
   background: linear-gradient(180deg, rgba(24,31,46,.94), rgba(18,24,36,.94));
   border: 1px solid var(--line);
@@ -185,16 +190,14 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 #map-preview { width: 100%; height: auto; aspect-ratio: 16/9; border-radius: 10px; border: 1px solid var(--line); background: #0a0e15; display: block; }
 .note { font-size: 11.5px; color: #6d7a92; margin: 10px 0 0; }
 
-.panel-chat { min-height: 0; }
-.chat-log { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; padding-right: 4px; }
-.chat-log .cm { line-height: 1.45; word-break: break-word; }
-.chat-log .cm b { color: var(--accent); }
-.chat-log .cm.sys { color: var(--muted); font-style: italic; }
-.chat-form { display: flex; gap: 8px; margin-top: 10px; }
-.chat-form input { flex: 1; padding: 9px 11px; background: #0d1220; border: 1px solid var(--line); border-radius: 9px; outline: none; }
-
 /* ---------------- GRA ---------------- */
 #game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; background: #05070c; }
+.demo-controls { position: absolute; top: 12px; left: 12px; z-index: 10; display: flex; flex-direction: column; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); font-size: 12px; max-width: calc(100vw - 24px); }
+.demo-controls[hidden] { display: none; }
+.demo-controls > span { color: var(--accent2); }
+.demo-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.demo-actions .btn { font-size: 11px; }
+@media (max-width: 760px) { .demo-controls { top: 110px; } }
 
 .overlay {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;

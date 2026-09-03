@@ -147,8 +147,8 @@ describe("API dla transportu", () => {
     a.send({ t: "createRoom" });
     const code = host.roomCodes()[0]!;
     const clone: Peer = { id: a.peer.id, send: (m) => a.received.push(m) };
-    host.handleMessage(clone, { t: "chat", text: "cześć" });
-    expect(a.last("chat")!.text).toBe("cześć");
+    host.handleMessage(clone, { t: "ping", ts: 123 });
+    expect(a.last("pong")!.ts).toBe(123);
     host.handleDisconnect(clone);
     expect(roomOf(code)).toBeUndefined();
   });
@@ -348,14 +348,13 @@ describe("rozłączenia i reconnect", () => {
     expect(a.last("roomState")!.room.players).toHaveLength(1);
   });
 
-  it("w grze rozłączenie oznacza connected=false i informuje na czacie", () => {
+  it("w grze rozłączenie oznacza connected=false w stanie pokoju", () => {
     const { a, b, room } = startedGame();
     b.disconnect();
 
     expect(room.players[1]!.connected).toBe(false);
     expect(room.players).toHaveLength(2);
     expect(a.last("roomState")!.room.players[1]!.connected).toBe(false);
-    expect(a.last("chat")!.text).toContain("rozłączył");
   });
 
   it("gracz wraca do swojej drużyny i dostaje gameStart + terrainSync + snapshot", () => {
@@ -394,7 +393,7 @@ describe("rozłączenia i reconnect", () => {
     host.tick(1000 + RECONNECT_GRACE_MS + 1);
     expect(roomOf(code)!.players).toHaveLength(1);
     expect(hooks.removed).toContain(1);
-    expect(a.last("chat")!.text).toContain("nie wrócił");
+    expect(a.last("roomState")!.room.players).toHaveLength(1);
   });
 
   it("wyjście z trwającej gry usuwa drużynę z silnika", () => {
@@ -412,20 +411,7 @@ describe("rozłączenia i reconnect", () => {
   });
 });
 
-describe("czat, ping i odporność na śmieci", () => {
-  it("czat idzie do wszystkich i jest ucinany do 200 znaków", () => {
-    const a = client("A");
-    a.send({ t: "createRoom" });
-    const code = host.roomCodes()[0]!;
-    const b = client("B");
-    b.send({ t: "joinRoom", code });
-
-    a.send({ t: "chat", text: "x".repeat(500) });
-    expect(b.last("chat")!.from).toBe("A");
-    expect(b.last("chat")!.text).toHaveLength(200);
-    expect(a.last("chat")).toBeDefined();
-  });
-
+describe("ping i odporność na śmieci", () => {
   it("ping wraca jako pong z tym samym ts", () => {
     const a = client("A");
     a.send({ t: "ping", ts: 12345 });
@@ -446,7 +432,7 @@ describe("czat, ping i odporność na śmieci", () => {
       ok: true,
       msg: { t: "ping", ts: 1 },
     });
-    const huge = JSON.stringify({ t: "chat", text: "x".repeat(MAX_MESSAGE_BYTES) });
+    const huge = JSON.stringify({ t: "hello", name: "x".repeat(MAX_MESSAGE_BYTES) });
     expect(parseClientMessage(huge)).toEqual({ ok: false, error: "Wiadomość za duża." });
   });
 

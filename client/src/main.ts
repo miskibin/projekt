@@ -144,6 +144,10 @@ const lobby = new Lobby({
 const game = new GameClient(sound, {
   send: (m) => net.send(m),
   leaveRoom: () => {
+    if (DEMO) {
+      location.assign(location.pathname);
+      return;
+    }
     net.send({ t: "leaveRoom" });
     roomCode = "";
     inGame = false;
@@ -152,6 +156,10 @@ const game = new GameClient(sound, {
     showScreen("menu");
   },
   backToLobby: () => {
+    if (DEMO) {
+      location.assign(location.pathname);
+      return;
+    }
     inGame = false;
     gameOverOpen = false;
     game.stop();
@@ -234,11 +242,6 @@ function handle(msg: ServerMessage): void {
       game.stop();
       history.replaceState(null, "", location.pathname);
       showScreen("menu");
-      break;
-
-    case "chat":
-      lobby.addChat(msg.from, msg.text);
-      if (screen === "game") toast(`${msg.from}: ${msg.text}`);
       break;
 
     case "gameStart": {
@@ -349,9 +352,6 @@ if (DEMO) {
   playerId = d.playerId;
   roomCode = d.room.code;
   lobby.setRoom(d.room, d.playerId);
-  lobby.addChat("Kasia", "siema, gramy?");
-  lobby.addChat("", "Bartek dołączył do pokoju", true);
-  lobby.addChat("Michał", "sekunda, ustawiam mapę");
   showScreen("lobby");
 } else {
   showScreen("menu");

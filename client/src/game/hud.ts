@@ -88,7 +88,7 @@ export class Hud {
     ctx.font = `600 11px ${FONT}`;
     ctx.textAlign = "right";
     ctx.fillStyle = inp.demo ? "#ffd24d" : inp.rtt > 160 ? "#ff9a93" : "#7f8ea8";
-    ctx.fillText(inp.demo ? "TRYB DEMO" : `${inp.rtt} ms`, W - 14, H - 12);
+    ctx.fillText(inp.demo ? "DEMO · 2 GRACZY" : `${inp.rtt} ms`, W - 14, H - 12);
 
     void turn;
     ctx.restore();

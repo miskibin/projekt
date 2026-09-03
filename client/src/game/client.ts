@@ -1,10 +1,11 @@
-import { TEAM_NAMES, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
+import { FIXED_DT, TEAM_NAMES, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
 import { generateTerrain, Terrain } from "@shared/engine/terrain";
 import type {
   ClientMessage,
   GameConfig,
   GameEvent,
   GameSnapshot,
+  InputAction,
   PlayerInfo,
   TerrainSync,
   WeaponId,
@@ -37,6 +38,9 @@ interface Els {
   goTitle: HTMLElement;
   goStats: HTMLElement;
   volume: HTMLInputElement;
+  demoControls: HTMLElement;
+  demoTeam: HTMLElement;
+  demoSkip: HTMLButtonElement;
 }
 
 /** Spina render, wejście, dźwięk i sieć w jedną pętlę gry. */
@@ -84,6 +88,9 @@ export class GameClient {
       goTitle: byId("go-title"),
       goStats: byId("go-stats"),
       volume: byId<HTMLInputElement>("volume"),
+      demoControls: byId("demo-controls"),
+      demoTeam: byId("demo-team"),
+      demoSkip: byId<HTMLButtonElement>("btn-demo-skip"),
     };
     const ctx = this.els.canvas.getContext("2d");
     if (!ctx) throw new Error("Brak kontekstu 2D");
@@ -91,11 +98,12 @@ export class GameClient {
 
     this.input = new InputController(this.els.canvas, this.camera, {
       sendInput: (state) => {
-        if (!this.demo) this.cb.send({ t: "input", state });
+        if (this.demo) this.demo.applyInput(state);
+        else this.cb.send({ t: "input", state });
       },
       sendAction: (action) => {
         if (action.kind === "selectWeapon") this.selectedWeapon = action.weapon;
-        if (!this.demo) this.cb.send({ t: "action", action });
+        this.sendAction(action);
         if (action.kind === "fire") this.sound.play("shot");
         if (action.kind === "jump" || action.kind === "backflip") this.sound.play("jump");
       },
@@ -160,8 +168,17 @@ export class GameClient {
     this.setEsc(false);
     this.els.volume.value = String(Math.round(this.sound.volume * 100));
 
-    this.demo = demo ? new DemoDriver(this.terrain) : null;
-    this.hud.banner(demo ? "TRYB DEMO" : "Do boju!", 2.2);
+    this.demo = demo ? new DemoDriver(config) : null;
+    this.demoAcc = 0;
+    this.els.demoControls.hidden = !demo;
+    byId("btn-back-lobby").textContent = demo ? "Wróć do menu" : "Wróć do lobby";
+    this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
+    if (this.demo) {
+      // Oddzielny teren renderera: zdarzenia wizualne nie mogą zmieniać fizyki.
+      this.onTerrainSync(this.demo.terrainSync());
+      this.onSnapshot(this.demo.snapshot);
+    }
+    this.hud.banner(demo ? "Sterujesz obydwoma graczami" : "Do boju!", 2.2);
 
     window.addEventListener("resize", this.onResize);
     this.resize();
@@ -177,6 +194,8 @@ export class GameClient {
     cancelAnimationFrame(this.raf);
     window.removeEventListener("resize", this.onResize);
     this.demo = null;
+    this.els.demoControls.hidden = true;
+    this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
   }
 
   destroy(): void {
@@ -188,6 +207,13 @@ export class GameClient {
 
   onSnapshot(s: GameSnapshot): void {
     this.buffer.push(s);
+    if (this.demo) {
+      this.myTeam = s.turn.activeTeam;
+      const team = s.teams.find((t) => t.team === this.myTeam);
+      const label = `Sterujesz: ${team?.name ?? "—"} · ${TEAM_NAMES[this.myTeam] ?? ""}`;
+      if (this.els.demoTeam.textContent !== label) this.els.demoTeam.textContent = label;
+      this.els.demoSkip.disabled = s.turn.phase !== "active";
+    }
     for (const w of s.worms) {
       this.lastPos.set(w.id, { x: w.x, y: w.y, team: w.team, name: w.name });
     }
@@ -260,14 +286,18 @@ export class GameClient {
     this.last = now;
     this.time += dt;
 
-    if (this.demo) {
+    if (this.demo && !this.overOpen && !this.escOpen) {
       this.demoAcc += dt;
-      const step = 1 / 20;
-      while (this.demoAcc >= step) {
-        this.demoAcc -= step;
-        const { snapshot, events } = this.demo.update(step);
+      while (this.demoAcc >= FIXED_DT) {
+        this.demoAcc -= FIXED_DT;
+        const { snapshot, events } = this.demo.update();
         this.onSnapshot(snapshot);
         if (events.length) this.onEvents(events);
+        if (this.demo.isOver) {
+          const winner = this.demo.winner;
+          this.onGameOver(winner.team, winner.name, { round: snapshot.turn.round, durationSec: snapshot.time });
+          break;
+        }
       }
     }
 
@@ -343,8 +373,12 @@ export class GameClient {
   };
 
   private isMyTurn(activeTeam: number, phase: string): boolean {
-    if (this.demo) return true;
     return activeTeam === this.myTeam && (phase === "active" || phase === "retreat");
+  }
+
+  private sendAction(action: InputAction): void {
+    if (this.demo) this.demo.applyAction(action);
+    else this.cb.send({ t: "action", action });
   }
 
   // ---------------- zdarzenia ----------------
@@ -462,7 +496,7 @@ export class GameClient {
       slot.addEventListener("click", () => {
         if (slot.classList.contains("empty")) return;
         this.selectedWeapon = id;
-        if (!this.demo) this.cb.send({ t: "action", action: { kind: "selectWeapon", weapon: id } });
+        this.sendAction({ kind: "selectWeapon", weapon: id });
         this.sound.play("tick");
         this.setWeapons(false);
         this.refreshWeaponPanel();
@@ -509,10 +543,16 @@ export class GameClient {
   }
 
   private wireOverlays(): void {
+    this.els.demoSkip.addEventListener("click", () => this.demo?.applyAction({ kind: "skipTurn" }));
+    byId("btn-demo-restart").addEventListener("click", () => {
+      if (this.demo && this.config) {
+        this.start({ ...this.config, seed: (Math.random() * 0x7fffffff) | 0 }, [], 0, true);
+      }
+    });
     byId("btn-resume").addEventListener("click", () => this.setEsc(false));
     byId("btn-surrender").addEventListener("click", () => {
       if (!confirm("Na pewno chcesz się poddać? Twoje robaki zginą.")) return;
-      if (!this.demo) this.cb.send({ t: "action", action: { kind: "surrender" } });
+      this.sendAction({ kind: "surrender" });
       this.setEsc(false);
     });
     byId("btn-quit").addEventListener("click", () => {

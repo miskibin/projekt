@@ -76,9 +76,9 @@ export class InputController {
   }
 
   setContext(c: InputContext): void {
-    const turnStarted = c.myTurn && !this.ctxInfo.myTurn;
+    const turnStarted = c.myTurn && (!this.ctxInfo.myTurn || c.worm?.id !== this.ctxInfo.worm?.id);
     this.ctxInfo = c;
-    if (!c.myTurn && this.charging) {
+    if ((!c.myTurn || turnStarted) && this.charging) {
       this.charging = false;
       this.state.charge = false;
     }

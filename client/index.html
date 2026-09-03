@@ -32,6 +32,8 @@
           <span id="conn-dot" class="dot"></span>
           <span id="conn-text">Łączenie…</span>
         </div>
+        <a href="?demo=1" class="btn btn-go btn-lg demo-link">Demo — steruj 2 graczami</a>
+        <p class="hint">Jeden ekran, dwie drużyny. Bez drugiego gracza.</p>
         <p class="hint">Sterowanie: A/D – ruch, W/S – celowanie, SPACJA – strzał (przytrzymaj), Enter – skok, Tab – bronie</p>
       </div>
     </section>
@@ -90,14 +92,6 @@
             <p id="settings-note" class="note">Tylko host może zmieniać ustawienia.</p>
           </div>
 
-          <div class="panel panel-chat">
-            <h2>Czat</h2>
-            <div id="chat-log" class="chat-log"></div>
-            <form id="chat-form" class="chat-form" autocomplete="off">
-              <input id="chat-input" type="text" maxlength="200" placeholder="Napisz wiadomość…" />
-              <button class="btn btn-sm" type="submit">Wyślij</button>
-            </form>
-          </div>
         </div>
       </div>
     </section>
@@ -105,6 +99,15 @@
     <!-- ============ GRA ============ -->
     <section id="screen-game" class="screen">
       <canvas id="game-canvas"></canvas>
+      <aside id="demo-controls" class="demo-controls" aria-label="Sterowanie demo" hidden>
+        <strong>Demo · sterujesz obiema drużynami</strong>
+        <span id="demo-team" role="status" aria-live="polite"></span>
+        <div class="demo-actions">
+          <button id="btn-demo-skip" class="btn btn-sm">Pomiń turę (F1)</button>
+          <button id="btn-demo-restart" class="btn btn-sm">Nowa gra</button>
+          <a href="./" class="btn btn-sm">Wyjdź</a>
+        </div>
+      </aside>
 
       <div id="weapon-panel" class="weapon-panel" hidden>
         <div class="wp-head">Bronie <span class="wp-hint">Tab / prawy przycisk myszy zamyka</span></div>

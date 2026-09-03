@@ -16,7 +16,7 @@ const THEME_LABELS: Record<ThemeId, string> = {
   hell: "Piekło",
 };
 
-/** Ekran lobby: gracze, ustawienia, podgląd mapy i czat. */
+/** Ekran lobby: gracze, ustawienia i podgląd mapy. */
 export class Lobby {
   private room: RoomState | null = null;
   private myId = "";
@@ -43,9 +43,6 @@ export class Lobby {
     preview: byId<HTMLCanvasElement>("map-preview"),
     reroll: byId<HTMLButtonElement>("btn-reroll"),
     note: byId("settings-note"),
-    chatLog: byId("chat-log"),
-    chatForm: byId<HTMLFormElement>("chat-form"),
-    chatInput: byId<HTMLInputElement>("chat-input"),
   };
 
   constructor(private readonly cb: LobbyCallbacks) {
@@ -92,13 +89,6 @@ export class Lobby {
     this.el.density.addEventListener("input", () => push({ terrainDensity: Number(this.el.density.value) }));
     this.el.theme.addEventListener("change", () => push({ theme: this.el.theme.value as ThemeId }));
 
-    this.el.chatForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const text = this.el.chatInput.value.trim();
-      if (!text) return;
-      this.cb.send({ t: "chat", text });
-      this.el.chatInput.value = "";
-    });
   }
 
   private me() {
@@ -115,11 +105,9 @@ export class Lobby {
   }
 
   setRoom(room: RoomState, myId: string): void {
-    const codeChanged = this.room?.code !== room.code;
     this.room = room;
     this.myId = myId;
     this.el.code.textContent = room.code;
-    if (codeChanged) this.el.chatLog.innerHTML = "";
 
     // gracze
     this.el.list.innerHTML = "";
@@ -189,22 +177,6 @@ export class Lobby {
     this.el.vTurn.textContent = this.el.turnTime.value;
     this.el.vSd.textContent = this.el.sd.value;
     this.el.vDensity.textContent = Number(this.el.density.value).toFixed(2);
-  }
-
-  addChat(from: string, text: string, system = false): void {
-    const div = document.createElement("div");
-    div.className = system ? "cm sys" : "cm";
-    if (system) div.textContent = text;
-    else {
-      const b = document.createElement("b");
-      b.textContent = `${from}: `;
-      const p = this.room?.players.find((x) => x.name === from);
-      if (p) b.style.color = TEAM_COLORS[p.team % TEAM_COLORS.length];
-      div.append(b, document.createTextNode(text));
-    }
-    this.el.chatLog.appendChild(div);
-    this.el.chatLog.scrollTop = this.el.chatLog.scrollHeight;
-    while (this.el.chatLog.childElementCount > 120) this.el.chatLog.firstElementChild?.remove();
   }
 
   /** Podgląd mapy z aktualnego seeda – generowany z opóźnieniem, żeby nie blokować UI. */

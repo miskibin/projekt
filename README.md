@@ -17,6 +17,16 @@ uruchamia logikę gry u siebie w przeglądarce. Komunikacja idzie przez **Supaba
 
 Potem: otwórz stronę, wpisz nick, „Stwórz pokój”, wyślij kolegom link z kodem.
 
+## Demo — jedna osoba, dwie drużyny
+
+W menu wybierz **„Demo — steruj 2 graczami”** albo otwórz stronę z `?demo=1`.
+To pełny lokalny mecz: sterujesz na zmianę Graczem 1 i Graczem 2, bez drugiej karty,
+połączenia z Supabase ani drugiej osoby. Działają normalne bronie, fizyka, obrażenia i tury.
+
+Sterowanie automatycznie przechodzi na aktywną drużynę. **F1 / „Pomiń turę”** kończy turę,
+**„Nowa gra”** resetuje mecz i losuje mapę, a **„Wyjdź”** wraca do menu.
+Menu pod **Esc** wstrzymuje lokalną symulację. Lobby multiplayer zawiera graczy i ustawienia, bez czatu.
+
 ## Własny serwer (opcjonalnie)
 
 ```bash

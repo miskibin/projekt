@@ -14,7 +14,6 @@
 
 export {
   HOST_TICK_MS,
-  MAX_CHAT_LENGTH,
   MAX_MESSAGE_BYTES,
   RECONNECT_GRACE_MS,
   RoomHost,

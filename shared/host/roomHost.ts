@@ -19,7 +19,6 @@ import {
 import type { Peer, Room, RoomPlayer } from "./rooms";
 
 export const MAX_MESSAGE_BYTES = 64 * 1024;
-export const MAX_CHAT_LENGTH = 200;
 /** Ile czasu rozłączony gracz ma na powrót do trwającej gry. */
 export const RECONNECT_GRACE_MS = 60_000;
 /** Zalecany odstęp wołania `RoomHost.tick` (ms). */
@@ -138,7 +137,6 @@ export class RoomHost {
       player.disconnectedAt = this.nowMs;
       this.log(`[pokój] ${player.name} rozłączył się z ${room.code}`);
       broadcastRoomState(room);
-      broadcast(room, { t: "chat", from: "System", text: `${player.name} się rozłączył.` });
       this.checkAbandoned(room);
       return;
     }
@@ -212,8 +210,6 @@ export class RoomHost {
         return this.onInput(s, msg.state);
       case "action":
         return this.onAction(s, msg.action);
-      case "chat":
-        return this.onChat(s, msg.text);
       case "ping":
         s.peer.send({ t: "pong", ts: typeof msg.ts === "number" && Number.isFinite(msg.ts) ? msg.ts : this.nowMs });
         return;
@@ -323,7 +319,6 @@ export class RoomHost {
       }
     }
     broadcastRoomState(room);
-    broadcast(room, { t: "chat", from: "System", text: `${player.name} wrócił do gry.` });
   }
 
   private onLeaveRoom(s: HostSession): void {
@@ -345,7 +340,6 @@ export class RoomHost {
     const alive = this.rooms.removePlayer(room, player.id);
     s.peer.send({ t: "leftRoom" });
     if (!alive) return;
-    broadcast(room, { t: "chat", from: "System", text: `${player.name} opuścił pokój.` });
     broadcastRoomState(room);
     this.checkAbandoned(room);
   }
@@ -475,18 +469,6 @@ export class RoomHost {
     if (!room.loop.applyAction(player.team, action)) this.error(s, "Nieprawidłowa akcja.");
   }
 
-  private onChat(s: HostSession, text: unknown): void {
-    const { room, player } = s;
-    if (!room || !player) {
-      this.error(s, "Nie jesteś w pokoju.");
-      return;
-    }
-    if (typeof text !== "string") return;
-    const clean = text.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, MAX_CHAT_LENGTH);
-    if (!clean) return;
-    broadcast(room, { t: "chat", from: player.name, text: clean });
-  }
-
   private onRequestTerrainSync(s: HostSession): void {
     const loop = s.room?.loop;
     if (!loop) {
@@ -516,7 +498,6 @@ export class RoomHost {
     }
     const alive = this.rooms.removePlayer(room, player.id);
     if (!alive) return;
-    broadcast(room, { t: "chat", from: "System", text: `${player.name} nie wrócił – drużyna wyeliminowana.` });
     broadcastRoomState(room);
     this.checkAbandoned(room);
   }

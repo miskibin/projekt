@@ -76,7 +76,6 @@ export type ClientMessage =
   | { t: "startGame" } // tylko host
   | { t: "input"; state: InputState }
   | { t: "action"; action: InputAction }
-  | { t: "chat"; text: string }
   | { t: "ping"; ts: number }
   | { t: "requestTerrainSync" };
 
@@ -198,7 +197,6 @@ export type ServerMessage =
   | { t: "error"; message: string }
   | { t: "roomState"; room: RoomState }
   | { t: "leftRoom" }
-  | { t: "chat"; from: string; text: string }
   | { t: "pong"; ts: number }
   | { t: "gameStart"; config: GameConfig; players: PlayerInfo[]; yourTeam: number }
   | { t: "snapshot"; snapshot: GameSnapshot }
