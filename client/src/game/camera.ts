@@ -6,19 +6,18 @@ const SKY_MARGIN = 120;
 /** Maksymalne zbliżenie: min(MAX_ZOOM_FACTOR × fitZoom, MAX_ZOOM_ABS). */
 const MAX_ZOOM_FACTOR = 3;
 const MAX_ZOOM_ABS = 2.5;
-/** Zbliżenie na aktywnego robaka: co najmniej FOCUS_ZOOM_ABS (1 px świata = 1 px CSS),
- *  a na dużych ekranach lekko ponad widok całej mapy – robak ma zawsze podobny rozmiar na ekranie. */
-const FOCUS_ZOOM_FACTOR = 1.05;
-const FOCUS_ZOOM_ABS = 1.0;
+/** Zbliżenie na aktywnego robaka: kadr o stałej szerokości świata (px), niezależnie od ekranu –
+ *  kamera realnie podąża za robakiem, a jednocześnie widać sporo otoczenia. */
+const FOCUS_VIEW_WIDTH = 1300;
 /** Gdzie na ekranie trzymamy aktywnego robaka (0 = góra, 1 = dół). */
 const FOCUS_SCREEN_Y = 0.56;
 /** Domyślny margines świata dookoła kadrowanych punktów. */
 const DEFAULT_FRAME_MARGIN = 150;
 /** Stałe czasowe wygładzania (sekundy) – niezależne od fps. */
-const POS_TAU = 0.22;
-const ZOOM_IN_TAU = 0.8;
+const POS_TAU = 0.14;
+const ZOOM_IN_TAU = 0.5;
 /** Oddalanie jest szybsze niż zbliżanie, żeby lecący pocisk nie uciekł z ekranu. */
-const ZOOM_OUT_TAU = 0.45;
+const ZOOM_OUT_TAU = 0.3;
 /** Jak długo „zerkamy” w stronę eksplozji. */
 const GLANCE_TIME = 0.6;
 /** Ile wstrząs może wyjść poza dozwolony obszar kamery (świat, px). */
@@ -89,7 +88,7 @@ export class Camera {
 
   /** Zbliżenie na aktywnego robaka (widać celownik i szczegóły). */
   get focusZoom(): number {
-    return clamp(Math.max(this.fitZoom * FOCUS_ZOOM_FACTOR, FOCUS_ZOOM_ABS), this.minZoom, this.maxZoom);
+    return clamp(this.viewW / FOCUS_VIEW_WIDTH, this.minZoom, this.maxZoom);
   }
 
   setViewport(w: number, h: number): void {

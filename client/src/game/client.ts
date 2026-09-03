@@ -347,8 +347,9 @@ export class GameClient {
         const points = state.projectiles.map((p) => ({ x: p.x, y: p.y }));
         if (active) points.push({ x: active.x, y: active.y });
         this.camera.frame(points);
-      } else if (active && turn.phase === "active") {
-        this.camera.focus(active.x, active.y - 20);
+      } else if (active && (turn.phase === "active" || turn.phase === "retreat")) {
+        // śledzimy robaka z lekkim wyprzedzeniem w kierunku, w którym patrzy
+        this.camera.focus(active.x + active.facing * 40, active.y - 20);
       } else {
         // między turami / w odwrocie / gdy fizyka się uspokaja: widok całej mapy,
         // wycentrowany pionowo na żywych robakach (ekran bywa niższy niż świat)
