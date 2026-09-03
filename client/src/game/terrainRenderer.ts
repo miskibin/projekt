@@ -874,7 +874,7 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
       fx[j] = (gx - 1 + 0.18 + rng.next() * 0.64) * cell;
       fy[j] = (gy - 1 + 0.18 + rng.next() * 0.64) * cell;
       ft[j] = (rng.next() * 255) | 0;
-      fr[j] = cell * (0.44 + rng.next() * 0.2);
+      fr[j] = cell * (0.4 + rng.next() * 0.28);
     }
   }
   const stone = new Uint8Array(w * h);
