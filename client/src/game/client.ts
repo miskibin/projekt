@@ -458,9 +458,11 @@ export class GameClient {
         const w = this.lastPos.get(ev.wormId);
         const col = w ? teamColor(w.team) : "#ff6a6a";
         this.particles.floatText(ev.x, ev.y - 18, `-${Math.round(ev.amount)}`, col, 19);
+        this.renderer.onDamage(ev.wormId, ev.amount);
         break;
       }
       case "wormDied": {
+        this.renderer.onKill(ev.wormId);
         const w = this.lastPos.get(ev.wormId);
         if (w) {
           if (ev.reason === "drown") {
@@ -477,6 +479,8 @@ export class GameClient {
       }
       case "shot": {
         this.particles.sparks(ev.x, ev.y, 8, "#ffe07a");
+        const shooter = this.buffer.latest?.turn.activeWormId;
+        if (shooter !== undefined) this.renderer.onShot(shooter);
         break;
       }
       case "crateSpawn": {
@@ -484,6 +488,7 @@ export class GameClient {
         break;
       }
       case "cratePickup": {
+        this.renderer.onPickup(ev.wormId);
         const w = this.lastPos.get(ev.wormId);
         if (w) {
           const label =
@@ -497,6 +502,7 @@ export class GameClient {
         break;
       }
       case "turnStart": {
+        this.renderer.onTurnStart(ev.team);
         this.camera.resetManual();
         const name = this.buffer.latest?.teams.find((t) => t.team === ev.team)?.name;
         this.hud.banner(`${name ?? TEAM_NAMES[ev.team % TEAM_NAMES.length]} – twoja kolej`, 1.7);

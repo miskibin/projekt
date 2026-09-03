@@ -16,6 +16,16 @@ import { Background } from "./background";
 import type { Terrain } from "@shared/engine/terrain";
 import { TARGETED } from "./weapons";
 import { raycast, simulateTrajectory } from "./trajectory";
+import {
+  darken,
+  drawWormCharacter,
+  lighten,
+  roundRect,
+  WormAnimator,
+  WormSkins,
+  WORM_RY,
+  type AnimThreat,
+} from "./wormRenderer";
 
 export interface Grave {
   x: number;
@@ -60,6 +70,14 @@ const DEFAULT_PREVIEW_POWER = 0.6;
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
 export class Renderer {
   private background: Background;
+  /** stan animacji postaci (per robak) */
+  private readonly animator = new WormAnimator();
+  /** cache barw/gradientów per kolor drużyny */
+  private readonly skins = new WormSkins();
+  /** `RenderInput` ma `time`, nie `dt` – liczymy różnicę sami */
+  private lastTime = -1;
+  /** bufor zagrożeń (pociski + tykające miny) – bez alokacji co klatkę */
+  private readonly threats: AnimThreat[] = [];
   private theme: ThemeId = "grass";
   /** ostatnio użyta moc – do podglądu toru zanim gracz zacznie ładować */
   private lastPower = DEFAULT_PREVIEW_POWER;
@@ -74,6 +92,29 @@ export class Renderer {
 
   regen(seed: number): void {
     this.background.regen(seed);
+    this.animator.reset();
+    this.lastTime = -1;
+  }
+
+  // --- zdarzenia gry -> reakcje postaci (wołane z client.ts) ---
+  onDamage(wormId: number, amount: number): void {
+    this.animator.onDamage(wormId, amount);
+  }
+
+  onShot(wormId: number): void {
+    this.animator.onShot(wormId);
+  }
+
+  onKill(wormId: number): void {
+    this.animator.onKill(wormId);
+  }
+
+  onPickup(wormId: number): void {
+    this.animator.onPickup(wormId);
+  }
+
+  onTurnStart(team: number): void {
+    this.animator.onTurnStart(team);
   }
 
   setTheme(t: ThemeId): void {
@@ -102,6 +143,7 @@ export class Renderer {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(inp.terrainTex, 0, 0);
 
+    this.updateAnimator(inp);
     this.drawGraves(ctx, inp);
     this.drawMines(ctx, inp.state.mines, inp.time);
     this.drawCrates(ctx, inp.state.crates, inp.time);
@@ -182,176 +224,86 @@ export class Renderer {
   }
 
   // ---------------- robaki ----------------
+
+  /** Krok maszyny stanów animacji: raz na klatkę, przed rysowaniem robaków. */
+  private updateAnimator(inp: RenderInput): void {
+    const dt = this.lastTime < 0 ? 1 / 60 : inp.time - this.lastTime;
+    this.lastTime = inp.time;
+
+    // zagrożenia w pobliżu (reakcja "strach"): lecące pociski i tykające miny
+    this.threats.length = 0;
+    for (const p of inp.state.projectiles) this.threats.push(p);
+    for (const m of inp.state.mines) {
+      if (m.fuse !== undefined && m.fuse > 0) this.threats.push(m);
+    }
+
+    const turn = inp.state.turn;
+    this.animator.update(dt, {
+      worms: inp.state.worms,
+      threats: this.threats,
+      activeWormId: turn.activeWormId,
+      activeTeam: turn.activeTeam,
+      phase: turn.phase,
+      charge: inp.myTurn ? inp.localCharge : turn.chargePower,
+    });
+  }
+
   private drawWorms(ctx: CanvasRenderingContext2D, inp: RenderInput): void {
     const active = inp.state.turn.activeWormId;
     for (const w of inp.state.worms) {
-      if (!w.alive) continue;
+      // martwe rysujemy jeszcze przez chwilę – krótkie zgniecenie przed grobem
+      if (!w.alive) {
+        const pose = this.animator.pose(w.id);
+        if (!pose || pose.state !== "dead" || pose.alpha <= 0.02) continue;
+      }
       this.drawWorm(ctx, w, inp, w.id === active);
     }
   }
 
   private drawWorm(ctx: CanvasRenderingContext2D, w: WormSnapshot, inp: RenderInput, isActive: boolean): void {
+    const pose = this.animator.pose(w.id);
+    if (!pose) return;
     const col = teamColor(w.team);
-    const rx = 8.6;
-    const ry = 10.2;
-    const t = inp.time;
-    const vx = w.vx ?? 0;
-    const vy = w.vy ?? 0;
-    const grounded = w.onGround !== false;
-
-    // squash & stretch: w locie rozciąga w pionie, na ziemi oddycha / podskakuje
-    let sx = 1;
-    let sy = 1;
-    let bob = 0;
-    if (!grounded) {
-      const k = Math.max(-1, Math.min(1, vy / 620));
-      sy = 1 + 0.2 * k;
-      sx = 1 / sy;
-    } else if (Math.abs(vx) > 6) {
-      const b = Math.abs(Math.sin(t * 13 + w.id));
-      sy = 1 + 0.09 * b;
-      sx = 1 - 0.07 * b;
-      bob = -1.6 * b;
-    } else {
-      const br = Math.sin(t * 2.3 + w.id * 1.7) * 0.04;
-      sy = 1 + br;
-      sx = 1 - br * 0.75;
-    }
+    const skin = this.skins.get(ctx, col);
+    const ry = WORM_RY;
+    const jet = w.anim === "jetpack";
 
     // cień na podłożu (nie skaluje się razem z ciałem)
-    ctx.globalAlpha = 0.28;
+    ctx.globalAlpha = 0.26 * pose.alpha;
     ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.ellipse(w.x, w.y + ry + 1.5, rx * 0.95, 2.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(w.x, w.y + ry + 1, 8.4, 2.6, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    ctx.save();
-    ctx.translate(w.x, w.y + bob);
+    if (jet) inp.particles.jetFlame(w.x + (Math.random() - 0.5) * 6, w.y + ry);
 
-    if (w.anim === "jetpack") {
-      inp.particles.jetFlame(w.x + (Math.random() - 0.5) * 6, w.y + ry);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = "rgba(255,186,70,0.32)";
-      ctx.beginPath();
-      ctx.arc(0, ry + 7, 12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,236,170,0.5)";
-      ctx.beginPath();
-      ctx.arc(0, ry + 4, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      // plecak
-      ctx.fillStyle = "#4b5563";
-      roundRect(ctx, -w.facing * 11, -6, 5, 12, 2);
-      ctx.fill();
-      ctx.fillStyle = "#2f3742";
-      roundRect(ctx, -w.facing * 11, -1, 5, 3, 1);
-      ctx.fill();
+    // broń w rękach tylko dla aktywnego robaka; lokalny wybór ma pierwszeństwo
+    const weapon: WeaponId | null = isActive ? (inp.myTurn ? inp.weapon : inp.state.turn.selectedWeapon) : null;
+    // lokalne celowanie jest bardziej responsywne niż `aim` ze snapshotu
+    if (isActive && inp.myTurn && pose.hold !== null) {
+      pose.hold = inp.aimPitch;
+      pose.pupilX = Math.cos(inp.aimPitch) * w.facing;
+      pose.pupilY = Math.sin(inp.aimPitch);
     }
 
     ctx.save();
-    ctx.scale(sx, sy);
-
-    // ciałko: pękata kropla / jajko
-    bodyPath(ctx, rx, ry);
-    const bg = ctx.createLinearGradient(0, -ry, 0, ry);
-    bg.addColorStop(0, lighten(col, 0.42));
-    bg.addColorStop(0.45, lighten(col, 0.05));
-    bg.addColorStop(1, darken(col, 0.4));
-    ctx.fillStyle = bg;
-    ctx.fill();
-    ctx.strokeStyle = darken(col, 0.58);
-    ctx.lineWidth = 1.3;
-    ctx.lineJoin = "round";
-    ctx.stroke();
-
-    // czułek / kosmyk na czubku
-    const wig = Math.sin(t * 3.4 + w.id) * 1.1;
-    ctx.strokeStyle = darken(col, 0.55);
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(w.facing * 0.6, -ry + 0.6);
-    ctx.quadraticCurveTo(w.facing * 1.6, -ry - 3.2, w.facing * 3.4 + wig * 0.4, -ry - 5.4 + wig * 0.2);
-    ctx.stroke();
-    ctx.fillStyle = darken(col, 0.5);
-    ctx.beginPath();
-    ctx.arc(w.facing * 3.4 + wig * 0.4, -ry - 5.4 + wig * 0.2, 1.25, 0, Math.PI * 2);
-    ctx.fill();
-
-    // połysk
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.ellipse(-w.facing * 3.1, -ry * 0.62, 2.5, 1.7, -0.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // bandaż przy niskim hp
-    if (w.hp > 0 && w.hp < 35) {
-      ctx.save();
-      bodyPath(ctx, rx, ry);
-      ctx.clip();
-      ctx.fillStyle = "#f2ece0";
-      ctx.translate(0, 1.2);
-      ctx.rotate(-0.42);
-      ctx.fillRect(-rx - 3, -2.4, (rx + 3) * 2, 4.8);
-      ctx.strokeStyle = "rgba(0,0,0,0.12)";
-      ctx.lineWidth = 0.8;
-      ctx.strokeRect(-rx - 3, -2.4, (rx + 3) * 2, 4.8);
-      ctx.restore();
-    }
-
-    // oczy
-    const eyeY = -ry * 0.3;
-    const cx0 = w.facing * 1.3;
-    for (const sgn of [-1, 1]) {
-      const ex = cx0 + sgn * 2.9;
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath();
-      ctx.ellipse(ex, eyeY, 2.85, 3.25, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(20,24,32,0.28)";
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
-      const px = ex + w.facing * 1.0;
-      ctx.fillStyle = "#141a24";
-      ctx.beginPath();
-      ctx.arc(px, eyeY + 0.4, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.beginPath();
-      ctx.arc(px - w.facing * 0.5, eyeY - 0.5, 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // uśmiech
-    ctx.strokeStyle = darken(col, 0.62);
-    ctx.lineWidth = 1;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.arc(cx0, eyeY + 4.4, 2.1, 0.35, Math.PI - 0.35);
-    ctx.stroke();
-
-    ctx.restore(); // skala
-
-    if (w.anim === "bat") {
-      ctx.save();
-      ctx.rotate(w.facing * (-0.9 + Math.sin(t * 22) * 0.7));
-      ctx.fillStyle = "#b5793a";
-      roundRect(ctx, 0, -2, w.facing * 20, 4, 2);
-      ctx.fill();
-      ctx.fillStyle = "#8a5a28";
-      roundRect(ctx, 0, -1.6, w.facing * 6, 3.2, 1.5);
-      ctx.fill();
-      ctx.restore();
-    }
-
+    ctx.translate(w.x, w.y);
+    drawWormCharacter(ctx, pose, {
+      skin,
+      facing: w.facing,
+      weapon,
+      hp: w.hp,
+      time: inp.time,
+      jetpack: jet,
+      bat: w.anim === "bat",
+    });
     ctx.restore();
 
+    if (!w.alive) return;
+
     // ------- etykieta: nazwa + pastylka HP (stały rozmiar na ekranie) -------
+    const t = inp.time;
     const s = 1 / inp.camera.zoom;
     ctx.save();
     ctx.translate(w.x, w.y - ry - 14);
@@ -1171,53 +1123,6 @@ function waveB(x: number, t: number, level: number): number {
   return level + 3 + Math.sin(x * 0.017 - t * 1.35) * 5 + Math.sin(x * 0.041 + t * 2.1) * 2;
 }
 
-/** Pękata kropla/jajko: węższa u góry, szeroka u dołu. */
-function bodyPath(ctx: CanvasRenderingContext2D, rx: number, ry: number): void {
-  ctx.beginPath();
-  ctx.moveTo(0, -ry);
-  ctx.bezierCurveTo(rx * 0.92, -ry * 0.98, rx * 1.1, ry * 0.3, rx * 0.62, ry * 0.86);
-  ctx.bezierCurveTo(rx * 0.32, ry * 1.14, -rx * 0.32, ry * 1.14, -rx * 0.62, ry * 0.86);
-  ctx.bezierCurveTo(-rx * 1.1, ry * 0.3, -rx * 0.92, -ry * 0.98, 0, -ry);
-  ctx.closePath();
-}
-
-export function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  const rr = Math.max(0, Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
-export function lighten(hex: string, amt: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  return `rgb(${mix(r, 255, amt)},${mix(g, 255, amt)},${mix(b, 255, amt)})`;
-}
-
-export function darken(hex: string, amt: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  return `rgb(${mix(r, 0, amt)},${mix(g, 0, amt)},${mix(b, 0, amt)})`;
-}
-
-function mix(a: number, b: number, t: number): number {
-  return Math.round(a + (b - a) * t);
-}
-
-export function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace("#", "");
-  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
-  const n = parseInt(full, 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
+export { darken, hexToRgb, lighten, roundRect } from "./wormRenderer";
 
 export { teamColor };
