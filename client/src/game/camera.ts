@@ -8,7 +8,11 @@ const MAX_ZOOM_FACTOR = 3;
 const MAX_ZOOM_ABS = 2.5;
 /** Zbliżenie na aktywnego robaka: kadr o stałej szerokości świata (px), niezależnie od ekranu –
  *  kamera realnie podąża za robakiem, a jednocześnie widać sporo otoczenia. */
-const FOCUS_VIEW_WIDTH = 1300;
+const FOCUS_VIEW_WIDTH = 1550;
+/** Kadr śledzący pojedynczy pocisk jest trochę szerszy niż kadr ruchu robaka. */
+const PROJECTILE_VIEW_WIDTH = 1720;
+/** Maksymalne wyprzedzenie kamery przed lecącym pociskiem (px świata). */
+const PROJECTILE_LEAD = 150;
 /** Gdzie na ekranie trzymamy aktywnego robaka (0 = góra, 1 = dół). */
 const FOCUS_SCREEN_Y = 0.56;
 /** Domyślny margines świata dookoła kadrowanych punktów. */
@@ -46,7 +50,7 @@ interface Range {
  * Zoom bazowy (`fitZoom`) dopasowuje całą szerokość mapy do ekranu – to zarazem
  * minimalne zbliżenie, więc poza krawędziami świata nigdy nie widać pustki.
  * W trybie automatycznym (`manual === false`) kamera sama kadruje akcję:
- * `focus()` na aktywnym robaku, `frame()` na strzelcu + pociskach,
+ * `focus()` na aktywnym robaku, `trackProjectile()` na pojedynczym pocisku i `frame()` na salwie,
  * `overview()` między turami.
  */
 export class Camera {
@@ -91,6 +95,10 @@ export class Camera {
     return clamp(this.viewW / FOCUS_VIEW_WIDTH, this.minZoom, this.maxZoom);
   }
 
+  get projectileZoom(): number {
+    return clamp(this.viewW / PROJECTILE_VIEW_WIDTH, this.minZoom, this.focusZoom);
+  }
+
   setViewport(w: number, h: number): void {
     // zachowujemy względny poziom zbliżenia (zoom / fitZoom), żeby obrót telefonu nie „skakał”
     const prevFit = this.fitZoom;
@@ -131,6 +139,14 @@ export class Camera {
     const z = clamp(zoom, this.minZoom, this.maxZoom);
     const offsetY = (FOCUS_SCREEN_Y - 0.5) * (this.viewH / z);
     this.setAuto(x, y - offsetY, z, snap);
+  }
+
+  /** Prowadzi kadr za pociskiem, lekko patrząc przed niego zgodnie z prędkością. */
+  trackProjectile(x: number, y: number, vx: number, vy: number, snap = false): void {
+    if (this.manual) return;
+    const speed = Math.hypot(vx, vy);
+    const lead = speed > 0.001 ? Math.min(PROJECTILE_LEAD, speed * 0.22) / speed : 0;
+    this.setAuto(x + vx * lead, y + vy * lead, this.projectileZoom, snap);
   }
 
   /** Kadr obejmujący wszystkie punkty (strzelec + pociski) z marginesem. */

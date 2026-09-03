@@ -255,7 +255,6 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   position: absolute; inset: 14px; display: flex; align-items: center; justify-content: space-between;
   color: rgba(220,238,255,.42); font: 800 24px var(--font); pointer-events: none;
 }
-.joystick-arrows::after { content: "﹀"; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%); }
 .joystick-knob {
   position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; border-radius: 50%;
   transform: translate(-50%, -50%); pointer-events: none;
@@ -266,10 +265,17 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 }
 .touch-joystick[data-active=true] { border-color: rgba(177,220,255,.85); background-color: rgba(44,83,124,.35); }
 .touch-joystick[data-active=true] .joystick-knob { transition: none; }
-.touch-actions {
+.touch-right {
   position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
-  display: flex; align-items: flex-end; gap: 14px; pointer-events: none;
+  display: flex; align-items: flex-end; gap: 12px; pointer-events: none;
 }
+.touch-aim { display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.touch-actions { display: flex; align-items: flex-end; gap: 12px; pointer-events: none; }
+.touch-aim-key {
+  width: 58px; height: 58px; border-radius: 18px; flex-direction: column; gap: 1px;
+  border: 2px solid rgba(113,190,255,.72); background: rgba(23,52,80,.82); color: #d9f1ff; font-size: 19px;
+}
+.touch-aim-key[data-pressed=true] { background: rgba(61,143,209,.55); border-color: rgba(190,229,255,.95); transform: scale(.96); }
 .touch-key {
   pointer-events: auto; width: 64px; height: 64px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -302,7 +308,10 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 @media (max-height: 460px), (max-width: 430px) {
   .touch-joystick { width: 112px; height: 112px; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .joystick-knob { width: 52px; height: 52px; }
-  .touch-actions { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 10px; }
+  .touch-right { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }
+  .touch-actions { gap: 8px; }
+  .touch-aim { gap: 6px; }
+  .touch-aim-key { width: 48px; height: 48px; border-radius: 15px; font-size: 16px; }
   .touch-jump { width: 62px; height: 62px; font-size: 24px; }
   .touch-fire { width: 88px; height: 88px; font-size: 34px; }
 }

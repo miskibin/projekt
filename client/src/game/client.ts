@@ -346,11 +346,13 @@ export class GameClient {
     if (state) {
       const turn = state.turn;
       const active = state.worms.find((w) => w.id === turn.activeWormId && w.alive);
-      // kamera: kadr na pociskach + strzelcu > zbliżenie na aktywnego robaka > widok całej mapy
-      if (state.projectiles.length > 0) {
+      // kamera: prowadzenie pojedynczego pocisku / kadr salwy > aktywny robak > widok całej mapy
+      if (state.projectiles.length === 1) {
+        const p = state.projectiles[0];
+        this.camera.trackProjectile(p.x, p.y, p.vx, p.vy);
+      } else if (state.projectiles.length > 1) {
         const points = state.projectiles.map((p) => ({ x: p.x, y: p.y }));
-        if (active) points.push({ x: active.x, y: active.y });
-        this.camera.frame(points);
+        this.camera.frame(points, { maxZoom: this.camera.projectileZoom, margin: 100 });
       } else if (active && (turn.phase === "active" || turn.phase === "retreat")) {
         // śledzimy robaka z lekkim wyprzedzeniem w kierunku, w którym patrzy
         this.camera.focus(active.x + active.facing * 40, active.y - 20);
@@ -693,15 +695,14 @@ export class GameClient {
     let joystickPointer: number | null = null;
     let joystickActive = new Set<TouchControl>();
 
-    const updateJoystick = (clientX: number, clientY: number): void => {
+    const updateJoystick = (clientX: number): void => {
       const rect = joystick.getBoundingClientRect();
       const radius = Math.max(1, Math.min(rect.width, rect.height) * 0.3);
       const dx = clientX - (rect.left + rect.width / 2);
-      const dy = clientY - (rect.top + rect.height / 2);
-      const vector = clampJoystick(dx, dy, radius);
-      knob.style.transform = `translate(calc(-50% + ${vector.x.toFixed(1)}px), calc(-50% + ${vector.y.toFixed(1)}px))`;
+      const x = clampJoystick(dx, radius);
+      knob.style.transform = `translate(calc(-50% + ${x.toFixed(1)}px), -50%)`;
 
-      const next = new Set(joystickControls(vector.x, vector.y, radius));
+      const next = new Set(joystickControls(x, radius));
       for (const control of joystickActive) {
         if (!next.has(control)) this.input.releaseControl(control);
       }
@@ -729,12 +730,12 @@ export class GameClient {
       joystick.dataset.active = "true";
       this.sound.unlock();
       if (!this.autoFullscreenAttempted) void this.fullscreen();
-      updateJoystick(event.clientX, event.clientY);
+      updateJoystick(event.clientX);
     });
     joystick.addEventListener("pointermove", (event) => {
       if (joystickPointer !== event.pointerId) return;
       event.preventDefault();
-      updateJoystick(event.clientX, event.clientY);
+      updateJoystick(event.clientX);
     });
     for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
       joystick.addEventListener(eventName, (event) => {

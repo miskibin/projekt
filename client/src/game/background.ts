@@ -186,6 +186,15 @@ export class Background {
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
 
+    // miękkie pasma atmosfery przełamują płaski gradient nieba
+    const atmosphere = ctx.createLinearGradient(0, H * 0.18, 0, H * 0.82);
+    atmosphere.addColorStop(0, "rgba(255,255,255,0)");
+    atmosphere.addColorStop(0.48, "rgba(255,255,255,0.055)");
+    atmosphere.addColorStop(0.72, "rgba(255,218,174,0.045)");
+    atmosphere.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = atmosphere;
+    ctx.fillRect(0, 0, W, H);
+
     const cam = inp.camera;
     const z = cam.zoom;
     const view = cam.viewRect();
@@ -217,6 +226,32 @@ export class Background {
       ctx.beginPath();
       ctx.arc(sunX, sunY, rr, 0, Math.PI * 2);
       ctx.fill();
+
+      // wyraźna tarcza i bardzo subtelne promienie
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = pal.stars ? 0.32 : 0.48;
+      ctx.fillStyle = pal.sun;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, Math.max(9, H * 0.026), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, Math.max(13, H * 0.038), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha *= 0.13;
+      ctx.translate(sunX, sunY);
+      for (let i = 0; i < 8; i++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(H * 0.065, -H * 0.006);
+        ctx.lineTo(H * 0.24, 0);
+        ctx.lineTo(H * 0.065, H * 0.006);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
     }
 
     // --- gwiazdy ---
@@ -232,6 +267,15 @@ export class Background {
         ctx.beginPath();
         ctx.arc(sx, sy, st.r, 0, Math.PI * 2);
         ctx.fill();
+        if (st.r > 1.45) {
+          const ray = st.r * (2.2 + Math.sin(inp.time * 1.7 + st.tw));
+          ctx.strokeStyle = "rgba(220,238,255,0.55)";
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(sx - ray, sy); ctx.lineTo(sx + ray, sy);
+          ctx.moveTo(sx, sy - ray); ctx.lineTo(sx, sy + ray);
+          ctx.stroke();
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -322,7 +366,13 @@ export class Background {
       }
       // płaski spód: prostokąt spinający dolne części okręgów
       ctx.rect(minX, sy - minR * 1.02, maxX - minX, minR * 1.02);
+      ctx.shadowColor = "rgba(6,18,34,0.24)";
+      ctx.shadowBlur = Math.max(4, s * 0.22);
+      ctx.shadowOffsetY = Math.max(2, s * 0.09);
       ctx.fill();
+      ctx.shadowColor = "rgba(0,0,0,0)";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
     }
     ctx.globalAlpha = 1;
   }

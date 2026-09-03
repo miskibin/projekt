@@ -61,6 +61,19 @@ describe("kamera", () => {
     expect(s.y).toBeLessThan(camera.viewH * 0.65);
   });
 
+  it("śledzi pocisk z wyprzedzeniem i szerszym kadrem niż robaka", () => {
+    const camera = landscape();
+    camera.focus(600, 650, camera.focusZoom, true);
+    const wormZoom = camera.zoom;
+    camera.trackProjectile(800, 500, 400, -120, true);
+    expect(camera.zoom).toBeLessThan(wormZoom);
+    expect(camera.x).toBeGreaterThan(800);
+    expect(camera.y).toBeLessThan(500);
+    const projectile = camera.worldToScreen(800, 500);
+    expect(projectile.x).toBeLessThan(camera.viewW / 2);
+    expect(projectile.y).toBeGreaterThan(camera.viewH / 2);
+  });
+
   it("kadrowanie dwóch odległych punktów oddala tak, żeby oba były widoczne", () => {
     const camera = landscape();
     camera.focus(900, 800);

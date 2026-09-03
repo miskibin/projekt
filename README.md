@@ -30,9 +30,10 @@ które wstrzymuje lokalną symulację. Lobby multiplayer zawiera graczy i ustawi
 Gra wypełnia okno i dopasowuje kamerę do jego wymiarów. Przycisk **⛶ / F** uruchamia pełny ekran;
 wejście do demo z menu również go uruchamia, jeśli przeglądarka obsługuje tę funkcję.
 Canvas korzysta z rozdzielczości ekranu (DPR, do 8 megapikseli). Mapa jest dostępna pod **▧ / M**.
+Kamera miękko prowadzi aktywnego robaka podczas ruchu, a po strzale przejmuje lecący pocisk.
 
-Na telefonie lewy joystick steruje chodzeniem w poziomie i celowaniem w pionie. Po prawej są osobne
-przyciski **SKOK** i **◎ STRZAŁ**, więc można iść i skakać dwoma kciukami. Przytrzymaj **◎**, żeby
+Na telefonie lewy joystick steruje wyłącznie chodzeniem. Po prawej są osobne przyciski **▲/▼** do
+celowania oraz **SKOK** i **◎ STRZAŁ**, więc można iść i skakać dwoma kciukami. Przytrzymaj **◎**, żeby
 zwiększać moc, i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, po czym strzał pada automatycznie.
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.

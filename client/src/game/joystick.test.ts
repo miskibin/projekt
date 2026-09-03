@@ -3,18 +3,16 @@ import { clampJoystick, joystickControls } from "./joystick";
 
 describe("virtual joystick", () => {
   it("keeps the center inside a dead zone", () => {
-    expect(joystickControls(8, -9, 50)).toEqual([]);
+    expect(joystickControls(8, 50)).toEqual([]);
   });
 
-  it("allows movement and aiming at the same time", () => {
-    expect(joystickControls(30, -28, 50)).toEqual(["right", "aimUp"]);
-    expect(joystickControls(-30, 28, 50)).toEqual(["left", "aimDown"]);
+  it("only controls horizontal movement", () => {
+    expect(joystickControls(30, 50)).toEqual(["right"]);
+    expect(joystickControls(-30, 50)).toEqual(["left"]);
   });
 
-  it("clamps the knob to the circular base", () => {
-    const result = clampJoystick(80, 60, 50);
-    expect(result.x).toBeCloseTo(40);
-    expect(result.y).toBeCloseTo(30);
-    expect(Math.hypot(result.x, result.y)).toBeCloseTo(50);
+  it("clamps the knob to the horizontal track", () => {
+    expect(clampJoystick(80, 50)).toBe(50);
+    expect(clampJoystick(-80, 50)).toBe(-50);
   });
 });

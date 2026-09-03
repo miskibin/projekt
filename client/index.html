@@ -109,13 +109,19 @@
         <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
       </nav>
       <div id="touch-controls" class="touch-controls" aria-label="Sterowanie dotykowe">
-        <div id="touch-joystick" class="touch-joystick" role="application" tabindex="0" aria-label="Joystick: lewo i prawo porusza, góra i dół celuje">
-          <span class="joystick-arrows" aria-hidden="true">‹ ︿ ›</span>
+        <div id="touch-joystick" class="touch-joystick" role="application" tabindex="0" aria-label="Joystick chodzenia: lewo i prawo">
+          <span class="joystick-arrows" aria-hidden="true">‹ ›</span>
           <span id="touch-joystick-knob" class="joystick-knob" aria-hidden="true"></span>
         </div>
-        <div class="touch-actions">
-          <button class="touch-key touch-jump" data-control="jump" aria-label="Skocz">↑<small>SKOK</small></button>
-          <button id="touch-fire" class="touch-key touch-fire" data-control="fire" aria-label="Przytrzymaj, aby ładować strzał; puść, aby strzelić">◎<small>STRZAŁ</small></button>
+        <div class="touch-right">
+          <div class="touch-aim" aria-label="Celowanie">
+            <button class="touch-key touch-aim-key" data-control="aimUp" aria-label="Celuj wyżej">▲<small>CEL</small></button>
+            <button class="touch-key touch-aim-key" data-control="aimDown" aria-label="Celuj niżej">▼<small>CEL</small></button>
+          </div>
+          <div class="touch-actions">
+            <button class="touch-key touch-jump" data-control="jump" aria-label="Skocz">↑<small>SKOK</small></button>
+            <button id="touch-fire" class="touch-key touch-fire" data-control="fire" aria-label="Przytrzymaj, aby ładować strzał; puść, aby strzelić">◎<small>STRZAŁ</small></button>
+          </div>
         </div>
       </div>
 
@@ -142,7 +148,7 @@
               <tr><td>A / D lub ← / →</td><td>chodzenie</td></tr>
               <tr><td>W / S lub ↑ / ↓</td><td>celowanie (albo myszą)</td></tr>
               <tr><td>SPACJA / ◎</td><td>przytrzymaj: ładuj, puść: strzel</td></tr>
-              <tr><td>Joystick / SKOK</td><td>ruch i celowanie / skok prawym kciukiem</td></tr>
+              <tr><td>Joystick / ▲▼</td><td>chodzenie / osobne celowanie po prawej</td></tr>
               <tr><td>F / M</td><td>pełny ekran / mapa</td></tr>
               <tr><td>Enter</td><td>skok</td></tr>
               <tr><td>Backspace</td><td>salto w tył</td></tr>
