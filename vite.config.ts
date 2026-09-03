@@ -4,6 +4,7 @@ import path from "node:path";
 
 export default defineConfig({
   root: "client",
+  base: "./",
   envDir: path.resolve(__dirname),
   publicDir: "public",
   resolve: { alias: { "@shared": path.resolve(__dirname, "shared") } },

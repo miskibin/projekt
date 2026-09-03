@@ -3,12 +3,26 @@
 Turowa gra artyleryjska w stylu Worms z multiplayerem przez sieć (2–4 graczy, każdy z własną drużyną robaków).
 Całość w TypeScript: autorytatywny serwer Node + klient w przeglądarce (Canvas 2D), bez żadnych plików assetów.
 
-## Szybki start
+## Szybki start (bez własnego serwera – Vercel/GitHub Pages + Supabase)
+
+Domyślnie gra nie potrzebuje serwera: klient jest statyczną stroną, a gracz tworzący pokój
+uruchamia logikę gry u siebie w przeglądarce. Komunikacja idzie przez **Supabase Realtime**
+(klucze publiczne w `.env`, projekt `worms-online`). Wystarczy więc hostować `dist/client`:
+
+- **Vercel**: *Add New → Project → Import* `miskibin/projekt`. `vercel.json` ustawia build
+  (`npm run build`, katalog `dist/client`). Jeśli nie mergujesz na `main`, w *Settings → Git*
+  ustaw *Production Branch* na `claude/worms-multiplayer-game-4rpz13`.
+- **GitHub Pages**: workflow `.github/workflows/pages.yml` buduje klienta przy każdym pushu.
+  W *Settings → Pages* ustaw *Source: GitHub Actions* (jeśli workflow nie włączył tego sam).
+
+Potem: otwórz stronę, wpisz nick, „Stwórz pokój”, wyślij kolegom link z kodem.
+
+## Własny serwer (opcjonalnie)
 
 ```bash
 npm install
-npm run build      # buduje klienta do dist/client
-npm start          # serwer na http://localhost:3000 (PORT=xxxx żeby zmienić)
+VITE_TRANSPORT=ws npm run build   # klient łączy się WebSocketem z serwerem Node
+npm start                          # http://localhost:3000 (PORT=xxxx żeby zmienić)
 ```
 
 Serwer po starcie wypisze adresy w sieci lokalnej, np. `http://192.168.1.10:3000` – koledzy w tej samej
