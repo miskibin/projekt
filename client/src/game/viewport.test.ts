@@ -1,3 +1,4 @@
+import { WORLD_WIDTH } from "@shared/constants";
 import { describe, expect, it } from "vitest";
 import { Camera } from "./camera";
 import { canvasResolution, viewportZoom } from "./viewport";
@@ -11,17 +12,29 @@ describe("responsive game canvas", () => {
     expect(large.width / large.height).toBeCloseTo(16 / 9, 2);
   });
 
-  it("shows more world on a short landscape screen and restores zoom after rotation", () => {
+  it("fits the whole map width on landscape screens", () => {
     const camera = new Camera();
     camera.setViewport(830, 360);
     expect(camera.zoom).toBeCloseTo(viewportZoom(830, 360));
-    expect(camera.viewRect().w).toBeGreaterThan(1400);
-    camera.setViewport(390, 844);
+    expect(camera.viewRect().w).toBeCloseTo(WORLD_WIDTH, 3);
     camera.setViewport(1280, 720);
-    expect(camera.zoom).toBeCloseTo(1);
+    expect(camera.zoom).toBeCloseTo(1280 / WORLD_WIDTH);
+    expect(camera.viewRect().w).toBeCloseTo(WORLD_WIDTH, 3);
     const screen = camera.worldToScreen(900, 600);
     const world = camera.screenToWorld(screen.x, screen.y);
     expect(world.x).toBeCloseTo(900);
     expect(world.y).toBeCloseTo(600);
+  });
+
+  it("keeps the relative zoom level when the phone is rotated", () => {
+    const camera = new Camera();
+    camera.setViewport(390, 844);
+    camera.zoomBy(2); // gracz przybliżył 2× ponad widok przeglądowy
+    camera.update(2);
+    const relative = camera.zoom / camera.fitZoom;
+    camera.setViewport(844, 390);
+    expect(camera.zoom / camera.fitZoom).toBeCloseTo(relative, 3);
+    camera.setViewport(390, 844);
+    expect(camera.zoom / camera.fitZoom).toBeCloseTo(relative, 3);
   });
 });

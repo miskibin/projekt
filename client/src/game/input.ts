@@ -173,7 +173,15 @@ export class InputController {
         this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         const after = [...this.pointers.values()];
         const distance = Math.hypot(after[0].x - after[1].x, after[0].y - after[1].y);
-        if (before > 0) this.camera.zoomBy(distance / before);
+        if (before > 0) {
+          // zoom wokół punktu między palcami – ten fragment świata zostaje pod nimi
+          const r = this.canvas.getBoundingClientRect();
+          const mid = this.camera.screenToWorld(
+            (after[0].x + after[1].x) / 2 - r.left,
+            (after[0].y + after[1].y) / 2 - r.top,
+          );
+          this.camera.zoomBy(distance / before, mid.x, mid.y);
+        }
         return;
       }
       if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });

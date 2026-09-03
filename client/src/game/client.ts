@@ -185,7 +185,7 @@ export class GameClient {
     this.renderer.regen(config.seed);
     this.renderer.setTheme(config.theme);
     this.camera.resetManual();
-    this.camera.follow(WORLD_WIDTH / 2, WORLD_HEIGHT * 0.45, true);
+    this.camera.overview(undefined, undefined, true);
     this.setOverlay(this.els.gameover, false);
     this.overOpen = false;
     this.setWeapons(false);
@@ -342,12 +342,16 @@ export class GameClient {
     if (state) {
       const turn = state.turn;
       const active = state.worms.find((w) => w.id === turn.activeWormId && w.alive);
-      // kamera: pocisk > aktywny robak
+      // kamera: kadr na pociskach + strzelcu > zbliżenie na aktywnego robaka > widok całej mapy
       if (state.projectiles.length > 0) {
-        const p = state.projectiles[state.projectiles.length - 1];
-        this.camera.follow(p.x, p.y);
-      } else if (active) {
-        this.camera.follow(active.x, active.y - 30);
+        const points = state.projectiles.map((p) => ({ x: p.x, y: p.y }));
+        if (active) points.push({ x: active.x, y: active.y });
+        this.camera.frame(points);
+      } else if (active && turn.phase === "active") {
+        this.camera.focus(active.x, active.y - 20);
+      } else {
+        // między turami / w odwrocie / gdy fizyka się uspokaja wracamy do przeglądu mapy
+        this.camera.overview(active?.x);
       }
       this.waterShown += (turn.waterLevel - this.waterShown) * Math.min(1, dt * 2.5);
       this.input.setContext({

@@ -5,6 +5,9 @@ import { Rng } from "@shared/engine/rng";
 export type ThemeId = GameConfig["theme"];
 export type RGB = [number, number, number];
 
+/** Kształt sylwetek warstw parallaxu w tle (patrz `background.ts`). */
+export type BgStyle = "mountains" | "peaks" | "dunes" | "spires";
+
 export interface ThemePalette {
   skyTop: string;
   skyMid: string;
@@ -18,6 +21,7 @@ export interface ThemePalette {
   /** wierzchnia warstwa (trawa / piasek / śnieg / skorupa lawy) */
   topA: RGB;
   topB: RGB;
+  /** grubość czapy w pikselach (mierzona jako odległość od powietrza) */
   topDepth: number;
   soil: RGB;
   soilDark: RGB;
@@ -29,60 +33,120 @@ export interface ThemePalette {
   waterDeep: string;
   waterFoam: string;
   fog: string;
+
+  // --- wygląd terenu (kostka brukowa + czapa) ---
+  /** rozjaśnienie tuż przy samej górze czapy */
+  topHi: RGB;
+  /** ciemniejsza linia na dolnej krawędzi czapy */
+  topEdge: RGB;
+  /** ciemny kontur dookoła całego terenu */
+  outline: RGB;
+  /** jaśniejszy i ciemniejszy odcień „kamyka” (Worley) */
+  stoneA: RGB;
+  stoneB: RGB;
+  /** ciemna „zaprawa” między kamykami – zarazem kolor cienia w kraterach */
+  mortar: RGB;
+  /** rozmiar oczka siatki kamyków w pikselach */
+  pebble: number;
+  /** gęstość kępek trawy sterczących ponad powierzchnię (0 = brak) */
+  tufts: number;
+
+  // --- tło (parallax) ---
+  bgStyle: BgStyle;
+  /** najdalsza warstwa (najjaśniejsza – perspektywa powietrzna) */
+  bgFar: string;
+  /** czubki gór / grzbiety najdalszej warstwy */
+  bgPeak: string;
+  bgMid: string;
+  bgNear: string;
+  /** wysokość linii horyzontu jako ułamek wysokości świata */
+  horizon: number;
+  /** tarcza słońca / księżyca */
+  sun: string;
 }
 
 export const THEMES: Record<ThemeId, ThemePalette> = {
   grass: {
-    skyTop: "#0a1830",
-    skyMid: "#1d3f66",
-    skyBottom: "#4b7ea8",
-    glow: "rgba(255, 226, 168, 0.30)",
-    cloud: "rgba(226, 240, 255, 0.42)",
+    skyTop: "#17457f",
+    skyMid: "#3877b3",
+    skyBottom: "#7fb3da",
+    glow: "rgba(255, 244, 214, 0.26)",
+    cloud: "rgba(206, 227, 246, 0.62)",
     stars: false,
     embers: false,
-    topA: [122, 206, 86],
-    topB: [58, 128, 46],
-    topDepth: 7,
-    soil: [138, 96, 56],
-    soilDark: [86, 57, 33],
-    rim: [176, 132, 82],
+    topA: [142, 209, 58],
+    topB: [64, 132, 40],
+    topDepth: 14,
+    soil: [150, 104, 62],
+    soilDark: [96, 64, 38],
+    rim: [186, 140, 88],
     debris: "#8a5f38",
     water: "rgba(46, 122, 190, 0.55)",
     waterDeep: "rgba(14, 52, 96, 0.80)",
     waterFoam: "rgba(190, 232, 255, 0.9)",
     fog: "rgba(120, 170, 210, 0.05)",
+    topHi: [190, 235, 116],
+    topEdge: [42, 96, 30],
+    outline: [44, 27, 16],
+    stoneA: [158, 110, 65],
+    stoneB: [106, 71, 42],
+    mortar: [58, 37, 22],
+    pebble: 14,
+    tufts: 0.55,
+    bgStyle: "mountains",
+    bgFar: "#8fb0cd",
+    bgPeak: "#d6e6f4",
+    bgMid: "#5f8fbb",
+    bgNear: "#2f6f76",
+    horizon: 0.68,
+    sun: "rgba(255, 249, 224, 0.55)",
   },
   desert: {
-    skyTop: "#241436",
-    skyMid: "#8d4a3a",
-    skyBottom: "#e8b77e",
+    skyTop: "#2a1740",
+    skyMid: "#96513c",
+    skyBottom: "#eebd83",
     glow: "rgba(255, 190, 120, 0.40)",
-    cloud: "rgba(255, 214, 170, 0.32)",
+    cloud: "rgba(255, 214, 170, 0.34)",
     stars: false,
     embers: false,
-    topA: [242, 216, 150],
-    topB: [200, 166, 104],
-    topDepth: 9,
-    soil: [186, 146, 88],
-    soilDark: [130, 96, 54],
+    topA: [246, 222, 160],
+    topB: [206, 170, 110],
+    topDepth: 13,
+    soil: [190, 150, 92],
+    soilDark: [134, 100, 58],
     rim: [246, 224, 170],
     debris: "#c9a36a",
     water: "rgba(60, 140, 170, 0.5)",
     waterDeep: "rgba(20, 60, 90, 0.78)",
     waterFoam: "rgba(220, 246, 255, 0.85)",
     fog: "rgba(230, 180, 120, 0.06)",
+    topHi: [255, 243, 206],
+    topEdge: [168, 130, 76],
+    outline: [88, 58, 32],
+    stoneA: [204, 164, 106],
+    stoneB: [152, 116, 72],
+    mortar: [104, 74, 44],
+    pebble: 17,
+    tufts: 0.14,
+    bgStyle: "dunes",
+    bgFar: "#d1a179",
+    bgPeak: "#f0cda3",
+    bgMid: "#ac764f",
+    bgNear: "#6d4530",
+    horizon: 0.7,
+    sun: "rgba(255, 214, 148, 0.6)",
   },
   snow: {
-    skyTop: "#070f1f",
-    skyMid: "#1b3350",
-    skyBottom: "#5b7fa5",
-    glow: "rgba(200, 226, 255, 0.30)",
-    cloud: "rgba(226, 238, 255, 0.35)",
+    skyTop: "#050b18",
+    skyMid: "#16294a",
+    skyBottom: "#4a6c94",
+    glow: "rgba(200, 226, 255, 0.28)",
+    cloud: "rgba(226, 238, 255, 0.32)",
     stars: true,
     embers: false,
-    topA: [244, 250, 255],
-    topB: [186, 208, 232],
-    topDepth: 8,
+    topA: [248, 252, 255],
+    topB: [196, 216, 238],
+    topDepth: 15,
     soil: [126, 148, 176],
     soilDark: [72, 92, 120],
     rim: [214, 232, 252],
@@ -91,26 +155,56 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     waterDeep: "rgba(16, 54, 92, 0.8)",
     waterFoam: "rgba(235, 250, 255, 0.9)",
     fog: "rgba(180, 210, 240, 0.07)",
+    topHi: [255, 255, 255],
+    topEdge: [148, 175, 208],
+    outline: [34, 46, 66],
+    stoneA: [134, 154, 180],
+    stoneB: [86, 106, 134],
+    mortar: [46, 60, 82],
+    pebble: 16,
+    tufts: 0.08,
+    bgStyle: "peaks",
+    bgFar: "#42597c",
+    bgPeak: "#cadcf2",
+    bgMid: "#2d4262",
+    bgNear: "#182741",
+    horizon: 0.68,
+    sun: "rgba(214, 232, 255, 0.42)",
   },
   hell: {
     skyTop: "#0a0306",
-    skyMid: "#37060c",
-    skyBottom: "#7e1a10",
+    skyMid: "#3c060c",
+    skyBottom: "#8a1d10",
     glow: "rgba(255, 110, 40, 0.35)",
     cloud: "rgba(120, 30, 20, 0.5)",
     stars: false,
     embers: true,
-    topA: [255, 138, 46],
-    topB: [122, 34, 18],
-    topDepth: 5,
-    soil: [56, 40, 44],
-    soilDark: [26, 18, 22],
+    topA: [255, 150, 52],
+    topB: [126, 38, 18],
+    topDepth: 10,
+    soil: [58, 42, 46],
+    soilDark: [28, 20, 24],
     rim: [176, 62, 30],
     debris: "#5a3a34",
     water: "rgba(214, 74, 22, 0.62)",
     waterDeep: "rgba(120, 22, 6, 0.85)",
     waterFoam: "rgba(255, 200, 110, 0.9)",
     fog: "rgba(255, 90, 40, 0.05)",
+    topHi: [255, 226, 148],
+    topEdge: [78, 18, 10],
+    outline: [12, 7, 9],
+    stoneA: [68, 52, 58],
+    stoneB: [38, 28, 34],
+    mortar: [16, 10, 14],
+    pebble: 13,
+    tufts: 0.22,
+    bgStyle: "spires",
+    bgFar: "#5c2018",
+    bgPeak: "#8f3220",
+    bgMid: "#3c1210",
+    bgNear: "#1d0a0a",
+    horizon: 0.7,
+    sun: "rgba(255, 120, 50, 0.5)",
   },
 };
 
@@ -121,23 +215,53 @@ interface DirtyRect {
   y1: number;
 }
 
+const AIR = 0;
+const GRASS = 1;
+const SOIL = 2;
+/** Wartość „daleko” w wektorowej transformacie odległości (mieści się w Int8). */
+const FAR = 60;
+/** Ile pikseli poza przemalowywany prostokąt liczymy pola pomocnicze. */
+const MARGIN = 30;
+/** Maksymalna wysokość kępki trawy nad powierzchnią. */
+const TUFT_MAX = 7;
+/** Zasięg miękkiego cienia wewnątrz krateru. */
+const SHADOW_REACH = 11;
+
 /**
  * Buduje bitmapę terenu na offscreen canvasie o rozmiarach świata.
  * Pełna przebudowa tylko przy zmianie terenu (nowa gra / terrainSync),
  * a po eksplozjach – wyłącznie prostokąt wokół dziury.
+ *
+ * Wygląd: ziemia z proceduralnego szumu komórkowego (Worley) daje „bruk” z kamyków
+ * z zaprawą i światłem od góry-lewej, na wierzchu gruba czapa (trawa/piasek/śnieg/lawa)
+ * oplatająca też strome boki, dookoła ciemny kontur + antyaliasing 1-bitowej bitmapy.
  */
 export class TerrainRenderer {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private img: ImageData;
-  private noise: Uint8Array;
+  /** gładki szum niskiej częstotliwości – faluje dolną krawędź czapy */
+  private smooth: Uint8Array;
+  /** oświetlenie/zaprawa kamyków (128 = neutralnie) */
+  private stone: Uint8Array;
+  /** odcień pojedynczego kamyka (stały w obrębie komórki Worleya) */
+  private tint: Uint8Array;
+  /** AIR / GRASS / SOIL, liczone w padded-rect przed malowaniem */
+  private kind: Uint8Array;
+  /** wektor do najbliższego powietrza (transformata odległości) */
+  private vdx: Int8Array;
+  private vdy: Int8Array;
+  /** wysokość kępki trawy dla każdej kolumny świata */
+  private tuft: Uint8Array;
   private terrain: Terrain;
   private pal: ThemePalette;
+  private seed: number;
   private lastVersion = -1;
   private dirty: DirtyRect[] = [];
 
   constructor(terrain: Terrain, theme: ThemeId, seed: number) {
     this.terrain = terrain;
+    this.seed = seed >>> 0;
     this.pal = THEMES[theme] ?? THEMES.grass;
     this.canvas = document.createElement("canvas");
     this.canvas.width = terrain.width;
@@ -146,12 +270,27 @@ export class TerrainRenderer {
     if (!ctx) throw new Error("Brak kontekstu 2D dla tekstury terenu");
     this.ctx = ctx;
     this.img = this.ctx.createImageData(terrain.width, terrain.height);
-    this.noise = makeNoise(terrain.width, terrain.height, seed);
+    const n = terrain.width * terrain.height;
+    this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
+    const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
+    this.stone = st.stone;
+    this.tint = st.tint;
+    this.kind = new Uint8Array(n);
+    this.vdx = new Int8Array(n);
+    this.vdy = new Int8Array(n);
+    this.tuft = makeTufts(terrain.width, this.seed, this.pal.tufts);
     this.rebuildAll();
   }
 
   setTheme(theme: ThemeId): void {
-    this.pal = THEMES[theme] ?? THEMES.grass;
+    const next = THEMES[theme] ?? THEMES.grass;
+    if (next.pebble !== this.pal.pebble) {
+      const st = makeStone(this.terrain.width, this.terrain.height, this.seed, next.pebble);
+      this.stone = st.stone;
+      this.tint = st.tint;
+    }
+    this.pal = next;
+    this.tuft = makeTufts(this.terrain.width, this.seed, next.tufts);
     this.rebuildAll();
   }
 
@@ -161,19 +300,29 @@ export class TerrainRenderer {
 
   /** Podmienia teren (np. po terrainSync) i przebudowuje całość. */
   setTerrain(terrain: Terrain): void {
+    const resized = terrain.width !== this.canvas.width || terrain.height !== this.canvas.height;
     this.terrain = terrain;
-    if (terrain.width !== this.canvas.width || terrain.height !== this.canvas.height) {
+    if (resized) {
       this.canvas.width = terrain.width;
       this.canvas.height = terrain.height;
       this.img = this.ctx.createImageData(terrain.width, terrain.height);
-      this.noise = makeNoise(terrain.width, terrain.height, 1);
+      const n = terrain.width * terrain.height;
+      this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
+      const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
+      this.stone = st.stone;
+      this.tint = st.tint;
+      this.kind = new Uint8Array(n);
+      this.vdx = new Int8Array(n);
+      this.vdy = new Int8Array(n);
+      this.tuft = makeTufts(terrain.width, this.seed, this.pal.tufts);
     }
     this.rebuildAll();
   }
 
   /** Zgłoś obszar zmieniony przez eksplozję / belkę – przerysujemy tylko go. */
   markDirty(x: number, y: number, w: number, h: number): void {
-    const pad = 3;
+    // czapa + kępki + kontur sięgają dalej niż sama dziura
+    const pad = this.pal.topDepth + TUFT_MAX + 4;
     this.dirty.push({
       x0: Math.max(0, Math.floor(x - pad)),
       y0: Math.max(0, Math.floor(y - pad)),
@@ -202,101 +351,527 @@ export class TerrainRenderer {
   }
 
   private paintRect(x0: number, y0: number, x1: number, y1: number): void {
+    if (x1 < x0 || y1 < y0) return;
     const t = this.terrain;
     const w = t.width;
     const h = t.height;
-    if (x1 < x0 || y1 < y0) return;
+    const rx0 = Math.max(0, x0 - MARGIN);
+    const ry0 = Math.max(0, y0 - MARGIN);
+    const rx1 = Math.min(w - 1, x1 + MARGIN);
+    const ry1 = Math.min(h - 1, y1 + MARGIN);
+    this.computeField(rx0, ry0, rx1, ry1);
+    this.paintPixels(x0, y0, x1, y1);
+    this.ctx.putImageData(this.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  }
+
+  /**
+   * Wektorowa transformata odległości do najbliższego powietrza (dwa przebiegi chamfer)
+   * + klasyfikacja pikseli na powietrze / czapę / ziemię.
+   * Poza kanwą traktujemy świat jako pełny, więc na bocznych krawędziach mapy nie ma trawy.
+   */
+  private computeField(rx0: number, ry0: number, rx1: number, ry1: number): void {
+    const t = this.terrain;
+    const w = t.width;
     const d = t.data;
+    const vx = this.vdx;
+    const vy = this.vdy;
+    const kind = this.kind;
+
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * w;
+      for (let x = rx0; x <= rx1; x++) {
+        const i = row + x;
+        if (d[i] === 0) {
+          vx[i] = 0;
+          vy[i] = 0;
+        } else {
+          vx[i] = FAR;
+          vy[i] = FAR;
+        }
+      }
+    }
+
+    // przebieg w dół/w prawo
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * w;
+      for (let x = rx0; x <= rx1; x++) {
+        const i = row + x;
+        let bx = vx[i];
+        let by = vy[i];
+        if (bx === 0 && by === 0) continue;
+        let bd = bx * bx + by * by;
+        if (x > rx0) {
+          const j = i - 1;
+          const cx = vx[j] - 1;
+          const cy = vy[j];
+          const cd = cx * cx + cy * cy;
+          if (cd < bd) {
+            bd = cd;
+            bx = cx;
+            by = cy;
+          }
+        }
+        if (y > ry0) {
+          const j = i - w;
+          {
+            const cx = vx[j];
+            const cy = vy[j] - 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+          if (x > rx0) {
+            const k = j - 1;
+            const cx = vx[k] - 1;
+            const cy = vy[k] - 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+          if (x < rx1) {
+            const k = j + 1;
+            const cx = vx[k] + 1;
+            const cy = vy[k] - 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+        }
+        vx[i] = bx;
+        vy[i] = by;
+      }
+    }
+
+    // przebieg w górę/w lewo
+    for (let y = ry1; y >= ry0; y--) {
+      const row = y * w;
+      for (let x = rx1; x >= rx0; x--) {
+        const i = row + x;
+        let bx = vx[i];
+        let by = vy[i];
+        if (bx === 0 && by === 0) continue;
+        let bd = bx * bx + by * by;
+        if (x < rx1) {
+          const j = i + 1;
+          const cx = vx[j] + 1;
+          const cy = vy[j];
+          const cd = cx * cx + cy * cy;
+          if (cd < bd) {
+            bd = cd;
+            bx = cx;
+            by = cy;
+          }
+        }
+        if (y < ry1) {
+          const j = i + w;
+          {
+            const cx = vx[j];
+            const cy = vy[j] + 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+          if (x < rx1) {
+            const k = j + 1;
+            const cx = vx[k] + 1;
+            const cy = vy[k] + 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+          if (x > rx0) {
+            const k = j - 1;
+            const cx = vx[k] - 1;
+            const cy = vy[k] + 1;
+            const cd = cx * cx + cy * cy;
+            if (cd < bd) {
+              bd = cd;
+              bx = cx;
+              by = cy;
+            }
+          }
+        }
+        vx[i] = bx;
+        vy[i] = by;
+      }
+    }
+
+    // klasyfikacja
+    const cap = this.pal.topDepth;
+    const capMax = (cap * 1.2 + 2) * (cap * 1.2 + 2);
+    const sm = this.smooth;
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * w;
+      for (let x = rx0; x <= rx1; x++) {
+        const i = row + x;
+        if (d[i] === 0) {
+          kind[i] = AIR;
+          continue;
+        }
+        const dx = vx[i];
+        const dy = vy[i];
+        const dd = dx * dx + dy * dy;
+        if (dd >= capMax) {
+          kind[i] = SOIL;
+          continue;
+        }
+        const dist = Math.sqrt(dd);
+        kind[i] = dist <= capDepthAt(cap, dy / dist, sm[i]) ? GRASS : SOIL;
+      }
+    }
+  }
+
+  private paintPixels(x0: number, y0: number, x1: number, y1: number): void {
+    const t = this.terrain;
+    const w = t.width;
+    const h = t.height;
     const p = this.img.data;
     const pal = this.pal;
-    const td = pal.topDepth;
-    const noise = this.noise;
+    const kind = this.kind;
+    const vx = this.vdx;
+    const vy = this.vdy;
+    const stone = this.stone;
+    const tint = this.tint;
+    const sm = this.smooth;
+    const tuft = this.tuft;
+    const cap = pal.topDepth;
+
+    const taR = pal.topA[0];
+    const taG = pal.topA[1];
+    const taB = pal.topA[2];
+    const tbR = pal.topB[0];
+    const tbG = pal.topB[1];
+    const tbB = pal.topB[2];
+    const thR = pal.topHi[0];
+    const thG = pal.topHi[1];
+    const thB = pal.topHi[2];
+    const teR = pal.topEdge[0];
+    const teG = pal.topEdge[1];
+    const teB = pal.topEdge[2];
+    const olR = pal.outline[0];
+    const olG = pal.outline[1];
+    const olB = pal.outline[2];
+    const saR = pal.stoneA[0];
+    const saG = pal.stoneA[1];
+    const saB = pal.stoneA[2];
+    const sbR = pal.stoneB[0];
+    const sbG = pal.stoneB[1];
+    const sbB = pal.stoneB[2];
+    const moR = pal.mortar[0];
+    const moG = pal.mortar[1];
+    const moB = pal.mortar[2];
+    const riR = pal.rim[0];
+    const riG = pal.rim[1];
+    const riB = pal.rim[2];
 
     for (let y = y0; y <= y1; y++) {
       const row = y * w;
-      // pionowy gradient przyciemniający głębiej położoną ziemię
-      const depthShade = 1 - 0.28 * (y / h);
+      const depthShade = 1 - 0.24 * (y / h);
       for (let x = x0; x <= x1; x++) {
         const i = row + x;
         const o = i * 4;
-        if (d[i] === 0) {
-          p[o + 3] = 0;
+        const k = kind[i];
+
+        if (k === AIR) {
+          // 1) kępki trawy sterczące ponad powierzchnię
+          const th = tuft[x];
+          let drawn = false;
+          if (th > 0) {
+            for (let s = 1; s <= th; s++) {
+              const yy = y + s;
+              if (yy >= h) break;
+              const kk = kind[i + s * w];
+              if (kk === AIR) continue;
+              if (kk === GRASS) {
+                const up = th > 1 ? (s - 1) / (th - 1) : 0;
+                const bl = 0.25 + 0.55 * up;
+                p[o] = taR + (thR - taR) * bl;
+                p[o + 1] = taG + (thG - taG) * bl;
+                p[o + 2] = taB + (thB - taB) * bl;
+                p[o + 3] = s >= th ? 150 : 235;
+                drawn = true;
+              }
+              break;
+            }
+          }
+          if (drawn) continue;
+
+          // 2) antyaliasing krawędzi: pokrycie z liczby stałych sąsiadów
+          let solid = 0;
+          let green = 0;
+          for (let oy = -1; oy <= 1; oy++) {
+            const yy = y + oy;
+            if (yy < 0 || yy >= h) continue;
+            const rr = yy * w;
+            for (let ox = -1; ox <= 1; ox++) {
+              if (ox === 0 && oy === 0) continue;
+              const xx = x + ox;
+              if (xx < 0 || xx >= w) continue;
+              const kk = kind[rr + xx];
+              if (kk === AIR) continue;
+              solid++;
+              if (kk === GRASS) green++;
+            }
+          }
+          if (solid === 0) {
+            p[o + 3] = 0;
+            continue;
+          }
+          const a = solid * 0.15;
+          if (green * 2 >= solid) {
+            p[o] = teR;
+            p[o + 1] = teG;
+            p[o + 2] = teB;
+          } else {
+            p[o] = olR;
+            p[o + 1] = olG;
+            p[o + 2] = olB;
+          }
+          p[o + 3] = a > 1 ? 255 : a * 255;
           continue;
         }
-        // ile pikseli w górę do powietrza (maks. td+1)
-        let up = td + 1;
-        for (let k = 1; k <= td; k++) {
-          const yy = y - k;
-          if (yy < 0) break;
-          if (d[yy * w + x] === 0) {
-            up = k;
-            break;
-          }
-        }
-        const n = noise[i];
+
+        const dx = vx[i];
+        const dy = vy[i];
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const uy = dy / dist;
         let r: number;
         let g: number;
         let b: number;
-        if (up <= td) {
-          const tt = td > 1 ? (up - 1) / (td - 1) : 0;
-          r = pal.topA[0] + (pal.topB[0] - pal.topA[0]) * tt;
-          g = pal.topA[1] + (pal.topB[1] - pal.topA[1]) * tt;
-          b = pal.topA[2] + (pal.topB[2] - pal.topA[2]) * tt;
-          const jitter = (n - 128) * 0.16;
-          r += jitter;
-          g += jitter;
-          b += jitter;
+
+        if (k === GRASS) {
+          const capE = capDepthAt(cap, uy, sm[i]);
+          const tt = capE > 1.2 ? clamp01((dist - 0.6) / (capE - 0.6)) : 0;
+          const e = tt * tt * (3 - 2 * tt);
+          r = taR + (tbR - taR) * e;
+          g = taG + (tbG - taG) * e;
+          b = taB + (tbB - taB) * e;
+          // ciemna linia na dolnej krawędzi czapy
+          const be = clamp01((tt - 0.68) / 0.32);
+          const bw = be * be * 0.92;
+          if (bw > 0) {
+            r += (teR - r) * bw;
+            g += (teG - g) * bw;
+            b += (teB - b) * bw;
+          }
+          // rozjaśnienie przy samej górze
+          if (dist < 2.8) {
+            const hw = (1 - dist / 2.8) * 0.72;
+            r += (thR - r) * hw;
+            g += (thG - g) * hw;
+            b += (thB - b) * hw;
+          }
+          // czapa opadająca po stromym boku dostaje kontur zamiast rozjaśnienia
+          if (dist < 1.7 && uy > -0.3) {
+            const ow = (1 - dist / 1.7) * 0.6;
+            r += (olR - r) * ow;
+            g += (olG - g) * ow;
+            b += (olB - b) * ow;
+          }
+          const gr = (fine(x, y) - 128) * 0.1;
+          r += gr;
+          g += gr;
+          b += gr;
         } else {
-          const m = n / 255;
-          r = (pal.soilDark[0] + (pal.soil[0] - pal.soilDark[0]) * m) * depthShade;
-          g = (pal.soilDark[1] + (pal.soil[1] - pal.soilDark[1]) * m) * depthShade;
-          b = (pal.soilDark[2] + (pal.soil[2] - pal.soilDark[2]) * m) * depthShade;
-          // krawędź boczna / dolna -> jaśniejszy rant
-          const left = x > 0 ? d[i - 1] : 1;
-          const right = x < w - 1 ? d[i + 1] : 1;
-          const down = y < h - 1 ? d[i + w] : 0;
-          if (left === 0 || right === 0 || down === 0) {
-            r = r * 0.45 + pal.rim[0] * 0.55;
-            g = g * 0.45 + pal.rim[1] * 0.55;
-            b = b * 0.45 + pal.rim[2] * 0.55;
+          const tn = tint[i] / 255;
+          r = sbR + (saR - sbR) * tn;
+          g = sbG + (saG - sbG) * tn;
+          b = sbB + (saB - sbB) * tn;
+          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade;
+          r *= mul;
+          g *= mul;
+          b *= mul;
+          const gr = (fine(x, y) - 128) * 0.055;
+          r += gr;
+          g += gr;
+          b += gr;
+          if (dist < SHADOW_REACH) {
+            // miękki cień wewnątrz krateru (mocniejszy tam, gdzie powietrze jest poniżej)
+            const down = clamp01((uy + 0.35) / 0.8);
+            const sc = 1 - dist / SHADOW_REACH;
+            const sh = sc * sc * (0.16 + 0.46 * down);
+            r += (moR - r) * sh;
+            g += (moG - g) * sh;
+            b += (moB - b) * sh;
+            if (dist < 2.3) {
+              const ow = dist < 1.45 ? 0.92 : 0.5;
+              r += (olR - r) * ow;
+              g += (olG - g) * ow;
+              b += (olB - b) * ow;
+            } else if (uy < -0.55 && dist < 4.5) {
+              // jaśniejszy rant na odsłoniętej ziemi zwróconej do góry (dno krateru)
+              const rw = (1 - dist / 4.5) * 0.22;
+              r += (riR - r) * rw;
+              g += (riG - g) * rw;
+              b += (riB - b) * rw;
+            }
           }
         }
+
         p[o] = r < 0 ? 0 : r > 255 ? 255 : r;
         p[o + 1] = g < 0 ? 0 : g > 255 ? 255 : g;
         p[o + 2] = b < 0 ? 0 : b > 255 ? 255 : b;
         p[o + 3] = 255;
       }
     }
-    this.ctx.putImageData(this.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
   }
 }
 
-function makeNoise(w: number, h: number, seed: number): Uint8Array {
-  const rng = new Rng(seed ^ 0x9e3779b9);
-  const n = new Uint8Array(w * h);
-  // dwie skale szumu: drobne ziarno + większe plamy
-  const bw = Math.ceil(w / 16) + 1;
-  const bh = Math.ceil(h / 16) + 1;
+/**
+ * Grubość czapy w danym punkcie. Pełna tam, gdzie powietrze jest nad pikselem,
+ * cieńsza na stromych bokach, zerowa pod spodem. `sm` faluje dolną krawędź.
+ */
+function capDepthAt(cap: number, uy: number, sm: number): number {
+  let f = (0.36 - uy) / 0.96;
+  if (f <= 0) return 0;
+  if (f > 1) f = 1;
+  const s = f * f * (3 - 2 * f);
+  return cap * s * (0.8 + 0.4 * (sm / 255));
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+/** Tani, deterministyczny hash per-piksel (drobne ziarno bez dodatkowej pamięci). */
+function fine(x: number, y: number): number {
+  let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+  n = Math.imul(n ^ (n >>> 13), 1274126177);
+  return (n ^ (n >>> 16)) & 255;
+}
+
+/** Gładki szum (komórki ~18 px, interpolacja smoothstep). */
+function makeSmooth(w: number, h: number, seed: number): Uint8Array {
+  const rng = new Rng((seed ^ 0x9e3779b9) >>> 0);
+  const cs = 18;
+  const bw = Math.ceil(w / cs) + 2;
+  const bh = Math.ceil(h / cs) + 2;
   const blob = new Float32Array(bw * bh);
   for (let i = 0; i < blob.length; i++) blob[i] = rng.next();
+  const out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
-    const by = y / 16;
-    const y0 = by | 0;
-    const fy = by - y0;
-    const y1 = Math.min(bh - 1, y0 + 1);
+    const by = y / cs;
+    const iy = by | 0;
+    let fy = by - iy;
+    fy = fy * fy * (3 - 2 * fy);
+    const r0 = iy * bw;
+    const r1 = (iy + 1) * bw;
+    const row = y * w;
     for (let x = 0; x < w; x++) {
-      const bx = x / 16;
-      const x0 = bx | 0;
-      const fx = bx - x0;
-      const x1 = Math.min(bw - 1, x0 + 1);
-      const a = blob[y0 * bw + x0] * (1 - fx) + blob[y0 * bw + x1] * fx;
-      const b = blob[y1 * bw + x0] * (1 - fx) + blob[y1 * bw + x1] * fx;
-      const big = a * (1 - fy) + b * fy;
-      const fine = rng.next();
-      n[y * w + x] = Math.max(0, Math.min(255, (big * 0.65 + fine * 0.35) * 255)) | 0;
+      const bx = x / cs;
+      const ix = bx | 0;
+      let fx = bx - ix;
+      fx = fx * fx * (3 - 2 * fx);
+      const a = blob[r0 + ix] * (1 - fx) + blob[r0 + ix + 1] * fx;
+      const c = blob[r1 + ix] * (1 - fx) + blob[r1 + ix + 1] * fx;
+      out[row + x] = ((a * (1 - fy) + c * fy) * 255) | 0;
     }
   }
-  return n;
+  return out;
+}
+
+/**
+ * Szum komórkowy (Worley) z jitterowanej siatki – „bruk” z zaokrąglonych kamyków.
+ * `stone` = oświetlenie (128 neutralnie, jasno w górnym-lewym rancie kamyka,
+ * ciemno w prawym-dolnym i w zaprawie), `tint` = stały odcień danego kamyka.
+ */
+function makeStone(w: number, h: number, seed: number, cell: number): { stone: Uint8Array; tint: Uint8Array } {
+  const rng = new Rng((seed ^ 0x51ed270b) >>> 0);
+  const gw = Math.ceil(w / cell) + 2;
+  const gh = Math.ceil(h / cell) + 2;
+  const fx = new Float32Array(gw * gh);
+  const fy = new Float32Array(gw * gh);
+  const ft = new Uint8Array(gw * gh);
+  for (let gy = 0; gy < gh; gy++) {
+    for (let gx = 0; gx < gw; gx++) {
+      const j = gy * gw + gx;
+      fx[j] = (gx - 1 + 0.18 + rng.next() * 0.64) * cell;
+      fy[j] = (gy - 1 + 0.18 + rng.next() * 0.64) * cell;
+      ft[j] = (rng.next() * 255) | 0;
+    }
+  }
+  const stone = new Uint8Array(w * h);
+  const tint = new Uint8Array(w * h);
+  const lx = -0.7071;
+  const ly = -0.7071;
+  const rimR = cell * 0.62;
+  const mortarW = Math.max(2, cell * 0.22);
+  for (let y = 0; y < h; y++) {
+    const gy = ((y / cell) | 0) + 1;
+    const row = y * w;
+    const g0 = gy > 0 ? gy - 1 : 0;
+    const g1 = gy + 1 < gh ? gy + 1 : gh - 1;
+    for (let x = 0; x < w; x++) {
+      const gx = ((x / cell) | 0) + 1;
+      const h0 = gx > 0 ? gx - 1 : 0;
+      const h1 = gx + 1 < gw ? gx + 1 : gw - 1;
+      let b1 = 1e9;
+      let b2 = 1e9;
+      let bj = 0;
+      for (let gyy = g0; gyy <= g1; gyy++) {
+        const base = gyy * gw;
+        for (let gxx = h0; gxx <= h1; gxx++) {
+          const j = base + gxx;
+          const ddx = fx[j] - x;
+          const ddy = fy[j] - y;
+          const dd = ddx * ddx + ddy * ddy;
+          if (dd < b1) {
+            b2 = b1;
+            b1 = dd;
+            bj = j;
+          } else if (dd < b2) {
+            b2 = dd;
+          }
+        }
+      }
+      const d1 = Math.sqrt(b1);
+      const d2 = Math.sqrt(b2);
+      const edge = d2 - d1;
+      const mortar = edge < mortarW ? 1 - edge / mortarW : 0;
+      let rr = d1 / rimR;
+      if (rr > 1) rr = 1;
+      const inv = d1 > 0.001 ? 1 / d1 : 0;
+      const lam = (x - fx[bj]) * inv * lx + (y - fy[bj]) * inv * ly;
+      const v = 128 + lam * rr * 54 - rr * rr * 16 - mortar * mortar * 104;
+      stone[row + x] = v < 0 ? 0 : v > 255 ? 255 : v | 0;
+      tint[row + x] = ft[bj];
+    }
+  }
+  return { stone, tint };
+}
+
+/** Wysokość kępki trawy dla każdej kolumny (deterministycznie z seeda). */
+function makeTufts(w: number, seed: number, amount: number): Uint8Array {
+  const out = new Uint8Array(w);
+  if (amount <= 0) return out;
+  const rng = new Rng((seed ^ 0x2545f491) >>> 0);
+  let x = 0;
+  while (x < w) {
+    if (rng.next() < amount) {
+      const bw = 1 + (rng.next() < 0.35 ? 1 : 0);
+      const hgt = 2 + ((rng.next() * (TUFT_MAX - 1)) | 0);
+      for (let k = 0; k < bw && x + k < w; k++) out[x + k] = hgt;
+      x += bw + 2 + ((rng.next() * 5) | 0);
+    } else {
+      x += 1 + ((rng.next() * 3) | 0);
+    }
+  }
+  return out;
 }
 
 /** Mały podgląd mapy do lobby – próbkowanie terenu do rozmiaru kanwy. */
@@ -315,10 +890,26 @@ export function renderTerrainPreview(
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, w, h);
 
+  // pas dalekich wzgórz, żeby podgląd nie był płaski
+  ctx.fillStyle = pal.bgFar;
+  ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  const hy = h * pal.horizon;
+  ctx.moveTo(0, h);
+  ctx.lineTo(0, hy);
+  for (let x = 0; x <= w; x += 6) {
+    ctx.lineTo(x, hy - Math.sin(x * 0.07) * h * 0.05 - Math.sin(x * 0.021 + 1.7) * h * 0.06);
+  }
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
   const img = ctx.createImageData(w, h);
   const p = img.data;
   const sx = terrain.width / w;
   const sy = terrain.height / h;
+  const capRows = Math.max(1, Math.round(pal.topDepth / sy));
   for (let y = 0; y < h; y++) {
     const ty = Math.min(terrain.height - 1, (y * sy) | 0);
     for (let x = 0; x < w; x++) {
@@ -328,11 +919,33 @@ export function renderTerrainPreview(
         p[o + 3] = 0;
         continue;
       }
-      const top = !terrain.isSolid(tx, ty - Math.ceil(sy) * 2);
-      const c = top ? pal.topA : pal.soil;
-      p[o] = c[0];
-      p[o + 1] = c[1];
-      p[o + 2] = c[2];
+      const top = !terrain.isSolid(tx, (ty - Math.ceil(sy) * capRows) | 0);
+      let r: number;
+      let g: number;
+      let b: number;
+      if (top) {
+        r = pal.topA[0];
+        g = pal.topA[1];
+        b = pal.topA[2];
+      } else {
+        const n = fine(x, y) / 255;
+        r = pal.stoneB[0] + (pal.stoneA[0] - pal.stoneB[0]) * n;
+        g = pal.stoneB[1] + (pal.stoneA[1] - pal.stoneB[1]) * n;
+        b = pal.stoneB[2] + (pal.stoneA[2] - pal.stoneB[2]) * n;
+        // kontur na krawędziach próbkowanej bitmapy
+        const edge =
+          !terrain.isSolid(tx - (sx | 0) - 1, ty) ||
+          !terrain.isSolid(tx + (sx | 0) + 1, ty) ||
+          !terrain.isSolid(tx, ty + (sy | 0) + 1);
+        if (edge) {
+          r = r * 0.35 + pal.outline[0] * 0.65;
+          g = g * 0.35 + pal.outline[1] * 0.65;
+          b = b * 0.35 + pal.outline[2] * 0.65;
+        }
+      }
+      p[o] = r;
+      p[o + 1] = g;
+      p[o + 2] = b;
       p[o + 3] = 255;
     }
   }
