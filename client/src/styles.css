@@ -122,6 +122,7 @@ input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 a.btn { color: var(--text); text-decoration: none; text-align: center; }
 .demo-link { display: block; margin-top: 18px; }
+.demo-link-secondary { margin-top: 8px; }
 .btn-sm { padding: 6px 11px; font-size: 13px; border-radius: 8px; }
 .btn-primary { background: linear-gradient(180deg, #2f80ed, #1c5fc0); border-color: #3f8fef; }
 .btn-go { background: linear-gradient(180deg, #35c05a, #1f8f42); border-color: #46d06d; }

@@ -1,5 +1,4 @@
 import {
-  MAX_SHOT_POWER,
   TEAM_COLORS,
   WORLD_HEIGHT,
   WORLD_WIDTH,
@@ -13,9 +12,7 @@ import type { RenderState } from "./state";
 import type { ThemeId, ThemePalette } from "./terrainRenderer";
 import { THEMES } from "./terrainRenderer";
 import { Background } from "./background";
-import type { Terrain } from "@shared/engine/terrain";
 import { TARGETED } from "./weapons";
-import { raycast, simulateTrajectory } from "./trajectory";
 import {
   darken,
   drawWormCharacter,
@@ -37,8 +34,6 @@ export interface Grave {
 export interface RenderInput {
   state: RenderState;
   terrainTex: HTMLCanvasElement;
-  /** bitmapa terenu (do przewidywania trajektorii / kolizji efektów) */
-  terrain: Terrain;
   theme: ThemeId;
   camera: Camera;
   particles: Particles;
@@ -56,15 +51,6 @@ export interface RenderInput {
 
 const teamColor = (t: number): string => TEAM_COLORS[((t % TEAM_COLORS.length) + TEAM_COLORS.length) % TEAM_COLORS.length];
 
-/** Bronie lecące po łuku – podgląd trajektorii balistycznej. */
-const ARC_WEAPONS: ReadonlySet<WeaponId> = new Set<WeaponId>([
-  "bazooka", "grenade", "cluster", "banana", "holy", "homing",
-]);
-/** Bronie hitscan – prosty promień. */
-const STRAIGHT_WEAPONS: ReadonlySet<WeaponId> = new Set<WeaponId>(["shotgun", "uzi"]);
-/** Bronie znoszone przez wiatr (zgodnie z `shared/engine/game.ts`). */
-const WIND_WEAPONS: ReadonlySet<WeaponId> = new Set<WeaponId>(["bazooka", "homing"]);
-
 const DEFAULT_PREVIEW_POWER = 0.6;
 
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
@@ -79,12 +65,8 @@ export class Renderer {
   /** bufor zagrożeń (pociski + tykające miny) – bez alokacji co klatkę */
   private readonly threats: AnimThreat[] = [];
   private theme: ThemeId = "grass";
-  /** ostatnio użyta moc – do podglądu toru zanim gracz zacznie ładować */
+  /** ostatnio użyta moc – do długości celownika zanim gracz zacznie ładować */
   private lastPower = DEFAULT_PREVIEW_POWER;
-  private terrainRef: Terrain | null = null;
-  /** stabilna referencja (bez alokacji closure co klatkę) */
-  private readonly isSolid = (x: number, y: number): boolean =>
-    this.terrainRef !== null && y >= 0 && this.terrainRef.isSolid(x, y);
 
   constructor(seed = 1) {
     this.background = new Background(seed);
@@ -130,7 +112,6 @@ export class Renderer {
     const pal = THEMES[inp.theme] ?? THEMES.grass;
     const W = camera.viewW;
     const H = camera.viewH;
-    this.terrainRef = inp.terrain;
 
     ctx.save();
     ctx.clearRect(0, 0, W, H);
@@ -433,70 +414,17 @@ export class Renderer {
     const mx = worm.x + dirX * (WORM_RADIUS + 3);
     const my = worm.y + dirY * (WORM_RADIUS + 3);
 
-    let endX = mx + dirX * 110 * s;
-    let endY = my + dirY * 110 * s;
-
-    if (ARC_WEAPONS.has(inp.weapon)) {
-      const speed = Math.max(0.05, power) * MAX_SHOT_POWER;
-      const tr = simulateTrajectory({
-        x: mx,
-        y: my,
-        vx: dirX * speed,
-        vy: dirY * speed,
-        wind: WIND_WEAPONS.has(inp.weapon) ? st.turn.wind : 0,
-        waterLevel: inp.waterLevel,
-        isSolid: this.isSolid,
-        maxTime: 5,
-        maxPoints: 200,
-        stepPx: 3,
-      });
-      this.dottedPath(ctx, tr.points, s);
-      endX = tr.endX;
-      endY = tr.endY;
-    } else if (STRAIGHT_WEAPONS.has(inp.weapon)) {
-      const hit = raycast({
-        x: mx,
-        y: my,
-        dx: dirX,
-        dy: dirY,
-        maxLen: 800,
-        waterLevel: inp.waterLevel,
-        isSolid: this.isSolid,
-        step: 3,
-      });
-      this.dottedLine(ctx, mx, my, hit.endX, hit.endY, s);
-      endX = hit.endX;
-      endY = hit.endY;
-    } else if (!TARGETED.has(inp.weapon)) {
-      // krótkie wskazanie kierunku (kij, dynamit, mina…)
-      this.dottedLine(ctx, mx, my, endX, endY, s);
-    }
+    // Celownik pokazuje tylko kierunek i przybliżoną siłę. Nie symuluje pełnego toru
+    // ani nie zdradza punktu uderzenia; wiatr, grawitację i teren trzeba ocenić samemu.
+    const guideLength = (55 + power * 45) * s;
+    const endX = mx + dirX * guideLength;
+    const endY = my + dirY * guideLength;
+    if (!TARGETED.has(inp.weapon)) this.dottedLine(ctx, mx, my, endX, endY, s);
 
     if (!TARGETED.has(inp.weapon)) this.crosshair(ctx, endX, endY, s, inp.time);
 
     // wskaźnik naładowania: pierścień wokół robaka
     if (inp.localCharge > 0.001) this.chargeGauge(ctx, worm.x, worm.y, inp.localCharge, s);
-  }
-
-  /** Kropkowany łuk (spłaszczone pary x,y) o stałej grubości na ekranie. */
-  private dottedPath(ctx: CanvasRenderingContext2D, pts: number[], s: number): void {
-    if (pts.length < 4) return;
-    ctx.save();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.setLineDash([5 * s, 8 * s]);
-    ctx.beginPath();
-    ctx.moveTo(pts[0], pts[1]);
-    for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]);
-    // cień pod kreską – czytelność na jasnym niebie
-    ctx.strokeStyle = "rgba(10,16,26,0.35)";
-    ctx.lineWidth = 5 * s;
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,0.92)";
-    ctx.lineWidth = 3 * s;
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
   }
 
   private dottedLine(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, s: number): void {

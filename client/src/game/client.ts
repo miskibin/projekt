@@ -11,7 +11,7 @@ import type {
   WeaponId,
 } from "@shared/protocol";
 import { Camera } from "./camera";
-import { DemoDriver } from "./demo";
+import { DemoDriver, type LocalMode } from "./demo";
 import { Hud } from "./hud";
 import { InputController } from "./input";
 import { Particles } from "./particles";
@@ -166,7 +166,7 @@ export class GameClient {
 
   // ---------------- cykl życia ----------------
 
-  start(config: GameConfig, players: PlayerInfo[], myTeam: number, demo = false): void {
+  start(config: GameConfig, players: PlayerInfo[], myTeam: number, localMode: LocalMode | false = false): void {
     this.config = config;
     this.players = players;
     this.myTeam = myTeam;
@@ -192,10 +192,10 @@ export class GameClient {
     this.setEsc(false);
     this.els.volume.value = String(Math.round(this.sound.volume * 100));
 
-    this.demo = demo ? new DemoDriver(config) : null;
+    this.demo = localMode ? new DemoDriver(config, localMode) : null;
     this.demoAcc = 0;
-    this.els.demoControls.hidden = !demo;
-    byId("btn-back-lobby").textContent = demo ? "Wróć do menu" : "Wróć do lobby";
+    this.els.demoControls.hidden = !localMode;
+    byId("btn-back-lobby").textContent = localMode ? "Wróć do menu" : "Wróć do lobby";
     this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
     if (this.demo) {
       // Oddzielny teren renderera: zdarzenia wizualne nie mogą zmieniać fizyki.
@@ -236,18 +236,20 @@ export class GameClient {
   onSnapshot(s: GameSnapshot): void {
     this.buffer.push(s);
     if (this.demo) {
-      this.myTeam = s.turn.activeTeam;
+      this.myTeam = this.demo.controlledTeam;
       const team = s.teams.find((t) => t.team === this.myTeam);
-      const label = `Sterujesz: ${team?.name ?? "—"} · ${TEAM_NAMES[this.myTeam] ?? ""}`;
+      const label = this.demo.mode === "computer"
+        ? this.demo.computerTurn ? "Ruch komputera…" : "Twoja tura"
+        : `Sterujesz: ${team?.name ?? "—"} · ${TEAM_NAMES[this.myTeam] ?? ""}`;
       if (this.els.demoTeam.textContent !== label) this.els.demoTeam.textContent = label;
-      this.els.demoSkip.disabled = s.turn.phase !== "active";
+      this.els.demoSkip.disabled = s.turn.phase !== "active" || this.demo.computerTurn;
     }
     for (const w of s.worms) {
       this.lastPos.set(w.id, { x: w.x, y: w.y, team: w.team, name: w.name });
     }
     // `turn.selectedWeapon` dotyczy AKTYWNEJ drużyny – przejmujemy je tylko w swojej turze,
     // inaczej panel/HUD pokazywałby broń przeciwnika (i kasował nasz lokalny wybór).
-    if (s.turn.selectedWeapon && (this.demo || s.turn.activeTeam === this.myTeam)) {
+    if (s.turn.selectedWeapon && (this.demo?.mode === "twoPlayers" || s.turn.activeTeam === this.myTeam)) {
       this.selectedWeapon = s.turn.selectedWeapon;
     }
     this.refreshWeaponPanel();
@@ -383,7 +385,6 @@ export class GameClient {
       this.renderer.draw(this.ctx, {
         state,
         terrainTex: tex,
-        terrain: this.terrain,
         theme: this.config.theme,
         camera: this.camera,
         particles: this.particles,
@@ -629,7 +630,7 @@ export class GameClient {
     });
     byId("btn-demo-restart").addEventListener("click", () => {
       if (this.demo && this.config) {
-        this.start({ ...this.config, seed: (Math.random() * 0x7fffffff) | 0 }, [], 0, true);
+        this.start({ ...this.config, seed: (Math.random() * 0x7fffffff) | 0 }, [], 0, this.demo.mode);
       }
     });
     byId("btn-resume").addEventListener("click", () => this.setEsc(false));

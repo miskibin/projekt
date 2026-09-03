@@ -36,6 +36,16 @@ i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, po czym strzał p
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
 
+## Gra z komputerem
+
+W menu wybierz **„Graj z komputerem”** albo otwórz stronę z `?computer=1`. Grasz Czerwonymi,
+a komputer prowadzi Niebieskich: sam wybiera najbliższy cel, broń, kierunek i siłę. Korzysta też
+z nalotu i rakiety naprowadzanej, gdy zwykły strzał nie ma dobrej drogi. Celowo ma niewielki błąd,
+więc może chybić.
+
+Celownik pokazuje kierunek oraz przybliżoną siłę strzału, ale nie rysuje pełnej trajektorii ani
+punktu uderzenia. Wpływ wiatru, grawitacji i terenu trzeba ocenić samodzielnie.
+
 ## Własny serwer (opcjonalnie)
 
 ```bash

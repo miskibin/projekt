@@ -68,7 +68,8 @@ export function createTransport(): Transport {
 type Screen = "menu" | "lobby" | "game";
 
 const params = new URLSearchParams(location.search);
-let DEMO = params.get("demo") === "1";
+let COMPUTER = params.get("computer") === "1";
+let DEMO = params.get("demo") === "1" || COMPUTER;
 const DEMO_LOBBY = params.get("demoLobby") === "1";
 const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
@@ -331,10 +332,22 @@ const DEMO_CONFIG: GameConfig = {
 byId("btn-demo").addEventListener("click", (event) => {
   event.preventDefault();
   DEMO = true;
+  COMPUTER = false;
   net.close();
   history.replaceState(null, "", `${location.pathname}?demo=1`);
   showScreen("game");
-  game.start(DEMO_CONFIG, [], 0, true);
+  game.start(DEMO_CONFIG, [], 0, "twoPlayers");
+  void game.fullscreen();
+});
+
+byId("btn-computer").addEventListener("click", (event) => {
+  event.preventDefault();
+  DEMO = true;
+  COMPUTER = true;
+  net.close();
+  history.replaceState(null, "", `${location.pathname}?computer=1`);
+  showScreen("game");
+  game.start(DEMO_CONFIG, [], 0, "computer");
   void game.fullscreen();
 });
 
@@ -358,7 +371,7 @@ if (DEMO || DEBUG) {
 
 if (DEMO) {
   showScreen("game");
-  game.start(DEMO_CONFIG, [], 0, true);
+  game.start(DEMO_CONFIG, [], 0, COMPUTER ? "computer" : "twoPlayers");
 } else if (DEMO_LOBBY) {
   const d = demoRoom();
   playerId = d.playerId;
