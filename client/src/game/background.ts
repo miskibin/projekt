@@ -49,6 +49,18 @@ interface LayerSpec {
   /** jasne czapy na szczytach (śnieg / rozgrzana skała) */
   caps: boolean;
   alpha: number;
+  /** ridge/spikes: liczba szczytów oraz zakresy dolin i wierzchołków (ułamki wysokości) */
+  seg?: number;
+  valLo?: number;
+  valHi?: number;
+  peakLo?: number;
+  peakHi?: number;
+  /** hills/dunes: linia bazowa, amplituda, ostrość grzbietu */
+  base?: number;
+  amp?: number;
+  sharp?: number;
+  /** pines: odstęp między drzewami w px canvasu */
+  spacing?: number;
 }
 
 interface Layer {
@@ -59,24 +71,54 @@ interface Layer {
 
 const LAYERS: Record<BgStyle, LayerSpec[]> = {
   mountains: [
-    { kind: "ridge", depth: 0.1, w: 940, h: 300, scale: 1.05, yOff: -86, color: "far", caps: true, alpha: 0.92 },
-    { kind: "hills", depth: 0.22, w: 820, h: 250, scale: 1.0, yOff: -34, color: "mid", caps: false, alpha: 0.95 },
-    { kind: "pines", depth: 0.42, w: 780, h: 220, scale: 1.0, yOff: 10, color: "near", caps: false, alpha: 1 },
+    {
+      kind: "ridge", depth: 0.1, w: 1700, h: 210, scale: 1, yOff: -46, color: "far", caps: true, alpha: 0.9,
+      seg: 5, valLo: 0.74, valHi: 0.96, peakLo: 0.1, peakHi: 0.46,
+    },
+    {
+      kind: "hills", depth: 0.22, w: 1500, h: 160, scale: 1, yOff: -18, color: "mid", caps: false, alpha: 0.95,
+      base: 0.98, amp: 0.62,
+    },
+    { kind: "pines", depth: 0.42, w: 1220, h: 122, scale: 1, yOff: 8, color: "near", caps: false, alpha: 1, spacing: 44 },
   ],
   peaks: [
-    { kind: "ridge", depth: 0.1, w: 900, h: 340, scale: 1.1, yOff: -84, color: "far", caps: true, alpha: 0.95 },
-    { kind: "ridge", depth: 0.22, w: 780, h: 250, scale: 1.0, yOff: -30, color: "mid", caps: true, alpha: 0.97 },
-    { kind: "pines", depth: 0.42, w: 760, h: 210, scale: 1.0, yOff: 10, color: "near", caps: false, alpha: 1 },
+    {
+      kind: "ridge", depth: 0.1, w: 1600, h: 280, scale: 1, yOff: -46, color: "far", caps: true, alpha: 0.95,
+      seg: 6, valLo: 0.76, valHi: 0.98, peakLo: 0.06, peakHi: 0.4,
+    },
+    {
+      kind: "ridge", depth: 0.22, w: 1400, h: 190, scale: 1, yOff: -16, color: "mid", caps: true, alpha: 0.97,
+      seg: 7, valLo: 0.8, valHi: 1, peakLo: 0.16, peakHi: 0.52,
+    },
+    { kind: "pines", depth: 0.42, w: 1200, h: 118, scale: 1, yOff: 8, color: "near", caps: false, alpha: 1, spacing: 50 },
   ],
   dunes: [
-    { kind: "ridge", depth: 0.1, w: 960, h: 260, scale: 1.05, yOff: -72, color: "far", caps: true, alpha: 0.85 },
-    { kind: "dunes", depth: 0.22, w: 860, h: 240, scale: 1.0, yOff: -26, color: "mid", caps: false, alpha: 0.95 },
-    { kind: "dunes", depth: 0.42, w: 800, h: 220, scale: 1.0, yOff: 14, color: "near", caps: false, alpha: 1 },
+    {
+      kind: "ridge", depth: 0.1, w: 1800, h: 170, scale: 1, yOff: -40, color: "far", caps: true, alpha: 0.8,
+      seg: 4, valLo: 0.82, valHi: 1, peakLo: 0.3, peakHi: 0.62,
+    },
+    {
+      kind: "dunes", depth: 0.22, w: 1500, h: 170, scale: 1, yOff: -14, color: "mid", caps: false, alpha: 0.92,
+      base: 0.98, amp: 0.66, sharp: 1.5,
+    },
+    {
+      kind: "dunes", depth: 0.42, w: 1250, h: 140, scale: 1, yOff: 10, color: "near", caps: false, alpha: 1,
+      base: 0.98, amp: 0.6, sharp: 1.7,
+    },
   ],
   spires: [
-    { kind: "spikes", depth: 0.1, w: 900, h: 320, scale: 1.05, yOff: -80, color: "far", caps: true, alpha: 0.9 },
-    { kind: "spikes", depth: 0.22, w: 820, h: 270, scale: 1.0, yOff: -28, color: "mid", caps: false, alpha: 0.95 },
-    { kind: "spikes", depth: 0.42, w: 760, h: 230, scale: 1.0, yOff: 12, color: "near", caps: false, alpha: 1 },
+    {
+      kind: "spikes", depth: 0.1, w: 1500, h: 250, scale: 1, yOff: -44, color: "far", caps: true, alpha: 0.9,
+      seg: 11, valLo: 0.78, valHi: 1, peakLo: 0.06, peakHi: 0.46,
+    },
+    {
+      kind: "spikes", depth: 0.22, w: 1300, h: 200, scale: 1, yOff: -14, color: "mid", caps: false, alpha: 0.95,
+      seg: 13, valLo: 0.84, valHi: 1, peakLo: 0.12, peakHi: 0.5,
+    },
+    {
+      kind: "spikes", depth: 0.42, w: 1150, h: 140, scale: 1, yOff: 10, color: "near", caps: false, alpha: 1,
+      seg: 15, valLo: 0.88, valHi: 1, peakLo: 0.16, peakHi: 0.58,
+    },
   ],
 };
 
@@ -103,19 +145,19 @@ export class Background {
     this.seed = seed >>> 0 || 1;
     const rnd = mulberry(this.seed ^ 0x1b873593);
     this.clouds = Array.from({ length: 12 }, () => {
-      const n = 4 + ((rnd() * 3) | 0);
+      const n = 5 + ((rnd() * 3) | 0);
       const bumps: Bump[] = [];
       for (let i = 0; i < n; i++) {
         const t = n > 1 ? i / (n - 1) : 0.5;
         bumps.push({
-          dx: (t - 0.5) * 2.7,
-          rr: (0.4 + 0.6 * Math.sin(Math.PI * t)) * (0.82 + 0.36 * rnd()),
+          dx: (t - 0.5) * 3.4,
+          rr: (0.34 + 0.5 * Math.sin(Math.PI * t)) * (0.84 + 0.32 * rnd()),
         });
       }
       return {
         x: rnd() * WORLD_WIDTH * 1.6,
         y: 40 + rnd() * (WORLD_HEIGHT * 0.34),
-        s: 22 + rnd() * 30,
+        s: 26 + rnd() * 34,
         depth: 0.05 + rnd() * 0.09,
         speed: 1.5 + rnd() * 5,
         bumps,
@@ -167,13 +209,13 @@ export class Background {
     ctx.fillStyle = this.glow.grad;
     ctx.fillRect(0, 0, W, H);
     if (!pal.embers) {
-      const disc = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, H * 0.17);
+      const rr = H * 0.24;
+      const disc = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, rr);
       disc.addColorStop(0, pal.sun);
-      disc.addColorStop(0.34, pal.sun);
       disc.addColorStop(1, "rgba(0,0,0,0)");
       ctx.fillStyle = disc;
       ctx.beginPath();
-      ctx.arc(sunX, sunY, H * 0.17, 0, Math.PI * 2);
+      ctx.arc(sunX, sunY, rr, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -279,7 +321,7 @@ export class Background {
         if (br < minR) minR = br;
       }
       // płaski spód: prostokąt spinający dolne części okręgów
-      ctx.rect(minX, sy - minR * 0.95, maxX - minX, minR * 0.95);
+      ctx.rect(minX, sy - minR * 1.02, maxX - minX, minR * 1.02);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -313,7 +355,7 @@ export class Background {
       const g = canvas.getContext("2d");
       if (g) {
         const rnd = mulberry((this.seed ^ (0x9e3779b9 + idx * 0x85ebca6b)) >>> 0);
-        drawShape(g, spec.kind, rnd, spec.w, spec.h, color, spec.caps ? pal.bgPeak : null);
+        drawShape(g, spec, rnd, color, spec.caps ? pal.bgPeak : null);
       }
       return { canvas, spec, ground: color };
     });
@@ -325,29 +367,32 @@ export class Background {
 
 function drawShape(
   g: CanvasRenderingContext2D,
-  kind: ShapeKind,
+  spec: LayerSpec,
   rnd: () => number,
-  W: number,
-  H: number,
   color: string,
   cap: string | null,
 ): void {
+  const W = spec.w;
+  const H = spec.h;
   g.fillStyle = color;
-  switch (kind) {
+  switch (spec.kind) {
     case "ridge":
-      ridge(g, rnd, W, H, color, cap, 13, 0.6, 0.72, 0.06, 0.34);
-      break;
     case "spikes":
-      ridge(g, rnd, W, H, color, cap, 21, 0.7, 0.86, 0.03, 0.3);
+      ridge(
+        g, rnd, W, H, color, cap,
+        spec.seg ?? 6,
+        spec.valLo ?? 0.78,
+        spec.valHi ?? 1,
+        spec.peakLo ?? 0.1,
+        spec.peakHi ?? 0.45,
+      );
       break;
     case "hills":
-      wave(g, rnd, W, H, H * 0.6, H * 0.38, 1);
-      break;
     case "dunes":
-      wave(g, rnd, W, H, H * 0.66, H * 0.42, 1.5);
+      wave(g, rnd, W, H, H * (spec.base ?? 0.98), H * (spec.amp ?? 0.6), spec.sharp ?? 1);
       break;
     case "pines":
-      pines(g, rnd, W, H, color);
+      pines(g, rnd, W, H, color, spec.spacing ?? 44);
       break;
   }
 }
@@ -430,7 +475,14 @@ function wave(
 }
 
 /** Linia gruntu + sylwetki świerków (kafelkowalne przez rysowanie kopii na brzegach). */
-function pines(g: CanvasRenderingContext2D, rnd: () => number, W: number, H: number, color: string): void {
+function pines(
+  g: CanvasRenderingContext2D,
+  rnd: () => number,
+  W: number,
+  H: number,
+  color: string,
+  spacing: number,
+): void {
   const base = H * 0.76;
   const amp = H * 0.09;
   const a = [0.6, 0.26, 0.14];
@@ -442,7 +494,7 @@ function pines(g: CanvasRenderingContext2D, rnd: () => number, W: number, H: num
   };
 
   g.fillStyle = color;
-  const count = Math.max(6, Math.round(W / 26));
+  const count = Math.max(4, Math.round(W / spacing));
   for (let i = 0; i < count; i++) {
     const x = rnd() * W;
     const th = H * (0.28 + rnd() * 0.4);

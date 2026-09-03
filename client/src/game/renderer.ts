@@ -257,9 +257,9 @@ export class Renderer {
     // ciałko: pękata kropla / jajko
     bodyPath(ctx, rx, ry);
     const bg = ctx.createLinearGradient(0, -ry, 0, ry);
-    bg.addColorStop(0, lighten(col, 0.55));
-    bg.addColorStop(0.42, lighten(col, 0.12));
-    bg.addColorStop(1, darken(col, 0.42));
+    bg.addColorStop(0, lighten(col, 0.42));
+    bg.addColorStop(0.45, lighten(col, 0.05));
+    bg.addColorStop(1, darken(col, 0.4));
     ctx.fillStyle = bg;
     ctx.fill();
     ctx.strokeStyle = darken(col, 0.58);
@@ -397,8 +397,9 @@ export class Renderer {
     // ------- strzałka nad aktywnym robakiem -------
     if (isActive) {
       const bounce = Math.abs(Math.sin(t * 3.2)) * 4;
+      // pozycja w skali ekranu, żeby strzałka trzymała się etykiety przy każdym zoomie
       ctx.save();
-      ctx.translate(w.x, w.y - ry - 38 - bounce);
+      ctx.translate(w.x, w.y - ry - 12 - (30 + bounce) * s);
       ctx.scale(s, s);
       ctx.beginPath();
       ctx.moveTo(0, 11);
@@ -592,24 +593,26 @@ export class Renderer {
   /** Pierścieniowy wskaźnik siły strzału wokół robaka. */
   private chargeGauge(ctx: CanvasRenderingContext2D, x: number, y: number, power: number, s: number): void {
     const p = Math.max(0, Math.min(1, power));
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(s, s);
-    const r = 19;
+    // promień w świecie: nigdy nie wchodzi na robaka, ale grubość linii stała na ekranie
+    const r = Math.max(WORM_RADIUS + 9, 19 * s);
     const start = -Math.PI / 2 - Math.PI * 0.82;
     const sweep = Math.PI * 1.64;
+    ctx.save();
+    ctx.translate(x, y);
     ctx.lineCap = "round";
-    ctx.strokeStyle = "rgba(8,14,22,0.55)";
-    ctx.lineWidth = 5.5;
+    ctx.strokeStyle = "rgba(8,14,22,0.5)";
+    ctx.lineWidth = 5.5 * s;
     ctx.beginPath();
     ctx.arc(0, 0, r, start, start + sweep);
     ctx.stroke();
     ctx.strokeStyle = p < 0.55 ? "#8fea57" : p < 0.8 ? "#ffd24d" : "#ff5d46";
-    ctx.lineWidth = 3.4;
+    ctx.lineWidth = 3.4 * s;
     ctx.beginPath();
     ctx.arc(0, 0, r, start, start + sweep * p);
     ctx.stroke();
 
+    ctx.translate(0, r + 10 * s);
+    ctx.scale(s, s);
     ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -617,9 +620,9 @@ export class Renderer {
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(7,17,28,0.85)";
     const txt = `${Math.round(p * 100)}%`;
-    ctx.strokeText(txt, 0, r + 8);
+    ctx.strokeText(txt, 0, 0);
     ctx.fillStyle = "#fff";
-    ctx.fillText(txt, 0, r + 8);
+    ctx.fillText(txt, 0, 0);
     ctx.restore();
   }
 

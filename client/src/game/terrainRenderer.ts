@@ -71,7 +71,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     skyMid: "#3877b3",
     skyBottom: "#7fb3da",
     glow: "rgba(255, 244, 214, 0.26)",
-    cloud: "rgba(206, 227, 246, 0.62)",
+    cloud: "rgba(210, 230, 248, 0.5)",
     stars: false,
     embers: false,
     topA: [142, 209, 58],
@@ -89,7 +89,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     topEdge: [42, 96, 30],
     outline: [44, 27, 16],
     stoneA: [158, 110, 65],
-    stoneB: [106, 71, 42],
+    stoneB: [100, 67, 40],
     mortar: [58, 37, 22],
     pebble: 14,
     tufts: 0.55,
@@ -251,6 +251,10 @@ export class TerrainRenderer {
   /** wektor do najbliższego powietrza (transformata odległości) */
   private vdx: Int8Array;
   private vdy: Int8Array;
+  /** 1 = powietrze połączone z otwartym niebem (nie wnętrze jaskini) */
+  private open: Uint8Array;
+  /** stos span-fillu (reużywany, żeby nie alokować co klatkę) */
+  private stack: number[] = [];
   /** wysokość kępki trawy dla każdej kolumny świata */
   private tuft: Uint8Array;
   private terrain: Terrain;
@@ -278,6 +282,7 @@ export class TerrainRenderer {
     this.kind = new Uint8Array(n);
     this.vdx = new Int8Array(n);
     this.vdy = new Int8Array(n);
+    this.open = new Uint8Array(n);
     this.tuft = makeTufts(terrain.width, this.seed, this.pal.tufts);
     this.rebuildAll();
   }
@@ -314,6 +319,7 @@ export class TerrainRenderer {
       this.kind = new Uint8Array(n);
       this.vdx = new Int8Array(n);
       this.vdy = new Int8Array(n);
+      this.open = new Uint8Array(n);
       this.tuft = makeTufts(terrain.width, this.seed, this.pal.tufts);
     }
     this.rebuildAll();
@@ -359,9 +365,71 @@ export class TerrainRenderer {
     const ry0 = Math.max(0, y0 - MARGIN);
     const rx1 = Math.min(w - 1, x1 + MARGIN);
     const ry1 = Math.min(h - 1, y1 + MARGIN);
+    this.computeOpen(rx0, ry0, rx1, ry1);
     this.computeField(rx0, ry0, rx1, ry1);
     this.paintPixels(x0, y0, x1, y1);
     this.ctx.putImageData(this.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  }
+
+  /**
+   * Zaznacza powietrze połączone z otwartym niebem (span-fill od krawędzi obszaru).
+   * Dzięki temu zamknięte jaskinie nie dostają czapy trawy – w środku jest goła ziemia.
+   * Dla prostokąta częściowego zarodkami są otwarte piksele tuż za jego krawędzią,
+   * więc zwykłe wybuchy (połączone z niebem) aktualizują się poprawnie i tanio.
+   */
+  private computeOpen(rx0: number, ry0: number, rx1: number, ry1: number): void {
+    const t = this.terrain;
+    const w = t.width;
+    const d = t.data;
+    const open = this.open;
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * w;
+      for (let x = rx0; x <= rx1; x++) open[row + x] = 0;
+    }
+
+    const st = this.stack;
+    st.length = 0;
+    const seed = (x: number, y: number): void => {
+      const i = y * w + x;
+      if (d[i] !== 0 || open[i] !== 0) return;
+      st.push(x, x, y - 1, 1, x, x, y + 1, -1);
+    };
+    // „niebo” to tylko górna krawędź świata – szczelina na wodę pod terenem nią nie jest
+    for (let x = rx0; x <= rx1; x++) {
+      if (ry0 === 0 || open[(ry0 - 1) * w + x] === 1) seed(x, ry0);
+      if (ry1 < t.height - 1 && open[(ry1 + 1) * w + x] === 1) seed(x, ry1);
+    }
+    for (let y = ry0; y <= ry1; y++) {
+      const row = y * w;
+      if (rx0 > 0 && open[row + rx0 - 1] === 1) seed(rx0, y);
+      if (rx1 < w - 1 && open[row + rx1 + 1] === 1) seed(rx1, y);
+    }
+
+    while (st.length > 0) {
+      const dy = st.pop() as number;
+      const y0 = st.pop() as number;
+      const x2 = st.pop() as number;
+      const x1 = st.pop() as number;
+      const y = y0 + dy;
+      if (y < ry0 || y > ry1) continue;
+      const row = y * w;
+      let x = x1;
+      while (x <= x2) {
+        if (d[row + x] !== 0 || open[row + x] !== 0) {
+          x++;
+          continue;
+        }
+        let l = x;
+        while (l > rx0 && d[row + l - 1] === 0 && open[row + l - 1] === 0) l--;
+        let r = x;
+        while (r < rx1 && d[row + r + 1] === 0 && open[row + r + 1] === 0) r++;
+        for (let k = l; k <= r; k++) open[row + k] = 1;
+        st.push(l, r, y, dy);
+        if (l < x1 - 1) st.push(l, x1 - 2, y, -dy);
+        if (r > x2 + 1) st.push(x2 + 2, r, y, -dy);
+        x = r + 1;
+      }
+    }
   }
 
   /**
@@ -515,6 +583,7 @@ export class TerrainRenderer {
     const cap = this.pal.topDepth;
     const capMax = (cap * 1.2 + 2) * (cap * 1.2 + 2);
     const sm = this.smooth;
+    const open = this.open;
     for (let y = ry0; y <= ry1; y++) {
       const row = y * w;
       for (let x = rx0; x <= rx1; x++) {
@@ -531,7 +600,8 @@ export class TerrainRenderer {
           continue;
         }
         const dist = Math.sqrt(dd);
-        kind[i] = dist <= capDepthAt(cap, dy / dist, sm[i]) ? GRASS : SOIL;
+        const grass = dist <= capDepthAt(cap, dy / dist, sm[i]) && open[i + dy * w + dx] === 1;
+        kind[i] = grass ? GRASS : SOIL;
       }
     }
   }
@@ -692,7 +762,7 @@ export class TerrainRenderer {
           r = sbR + (saR - sbR) * tn;
           g = sbG + (saG - sbG) * tn;
           b = sbB + (saB - sbB) * tn;
-          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade;
+          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade * (0.86 + (sm[i] / 255) * 0.28);
           r *= mul;
           g *= mul;
           b *= mul;
@@ -797,20 +867,21 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
   const fx = new Float32Array(gw * gh);
   const fy = new Float32Array(gw * gh);
   const ft = new Uint8Array(gw * gh);
+  const fr = new Float32Array(gw * gh);
   for (let gy = 0; gy < gh; gy++) {
     for (let gx = 0; gx < gw; gx++) {
       const j = gy * gw + gx;
       fx[j] = (gx - 1 + 0.18 + rng.next() * 0.64) * cell;
       fy[j] = (gy - 1 + 0.18 + rng.next() * 0.64) * cell;
       ft[j] = (rng.next() * 255) | 0;
+      fr[j] = cell * (0.44 + rng.next() * 0.2);
     }
   }
   const stone = new Uint8Array(w * h);
   const tint = new Uint8Array(w * h);
   const lx = -0.7071;
   const ly = -0.7071;
-  const rimR = cell * 0.62;
-  const mortarW = Math.max(2, cell * 0.22);
+  const mortarW = Math.max(1.7, cell * 0.17);
   for (let y = 0; y < h; y++) {
     const gy = ((y / cell) | 0) + 1;
     const row = y * w;
@@ -842,12 +913,18 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
       const d1 = Math.sqrt(b1);
       const d2 = Math.sqrt(b2);
       const edge = d2 - d1;
-      const mortar = edge < mortarW ? 1 - edge / mortarW : 0;
-      let rr = d1 / rimR;
+      const seam = edge < mortarW ? 1 - edge / mortarW : 0;
+      const R = fr[bj];
+      // zaokrąglenie kamyka: poza promieniem R robi się „zaprawa”
+      let round = (d1 - (R - 2.4)) / 2.4;
+      if (round < 0) round = 0;
+      else if (round > 1) round = 1;
+      const dark = Math.max(seam * seam, round * round);
+      let rr = d1 / R;
       if (rr > 1) rr = 1;
       const inv = d1 > 0.001 ? 1 / d1 : 0;
       const lam = (x - fx[bj]) * inv * lx + (y - fy[bj]) * inv * ly;
-      const v = 128 + lam * rr * 54 - rr * rr * 16 - mortar * mortar * 104;
+      const v = 128 + lam * rr * 60 - rr * rr * 12 - dark * 94;
       stone[row + x] = v < 0 ? 0 : v > 255 ? 255 : v | 0;
       tint[row + x] = ft[bj];
     }

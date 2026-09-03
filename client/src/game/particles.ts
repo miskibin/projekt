@@ -113,16 +113,16 @@ export class Particles {
 
     // jasny rdzeń + kula ognia + fala uderzeniowa
     this.flash(x, y, r * 1.7, "#fff3cf", 0.16);
-    this.pushFireball({ x, y, r: r * 1.35, life: 0, max: 0.34 + k * 0.16 });
+    this.pushFireball({ x, y, r: r * 1.5, life: 0, max: 0.3 + k * 0.16 });
     this.pushRing({
       x,
       y,
-      r0: r * 0.45,
-      r1: r * 3.1,
+      r0: r * 0.5,
+      r1: r * 2.0,
       life: 0,
-      max: 0.34 + k * 0.1,
-      color: "rgba(255,226,170,1)",
-      width: 3 + k * 2.6,
+      max: 0.22,
+      color: "rgba(255,242,210,1)",
+      width: 2.0 + k * 1.2,
       flat: false,
       additive: true,
     });
@@ -190,15 +190,15 @@ export class Particles {
         vy: Math.sin(a) * sp - 26,
         life: 0,
         max: 1.0 + Math.random() * 1.4,
-        size: r * (0.34 + Math.random() * 0.4),
-        grow: r * 0.5,
-        color: i % 3 === 0 ? "rgba(96,88,82,1)" : "rgba(58,53,50,1)",
+        size: r * (0.22 + Math.random() * 0.3),
+        grow: r * 0.6,
+        color: i % 3 === 0 ? "rgba(122,110,100,1)" : "rgba(70,63,58,1)",
         kind: "smoke",
         grav: -0.07,
         drag: 1.0,
         rot: 0,
         vr: 0,
-        fade: 0.62,
+        fade: 0.5,
       });
     }
   }
@@ -484,40 +484,13 @@ export class Particles {
 
   /** Rysuje w koordynatach świata (transformacja kamery już nałożona). */
   draw(ctx: CanvasRenderingContext2D, zoom: number): void {
-    // 1) kule ognia (zwykłe mieszanie – ciemna czerwień na brzegu ma być widoczna)
-    const fire = this.getFireSprite();
-    for (const f of this.fireballs) {
-      const t = f.life / f.max;
-      const r = f.r * (0.42 + t * 0.85);
-      ctx.globalAlpha = Math.min(1, (1 - t) * 1.25);
-      if (fire) ctx.drawImage(fire, f.x - r, f.y - r, r * 2, r * 2);
-      else {
-        ctx.fillStyle = "rgba(255,150,40,0.8)";
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.globalAlpha = 1;
-
-    // 2) rozbłyski + addytywne pierścienie
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    for (const f of this.flashes) {
-      const t = f.life / f.max;
-      const r = f.r * (0.45 + t * 0.85);
-      const sp = this.getSoft(f.color);
-      ctx.globalAlpha = (1 - t) * 0.9;
-      if (sp) ctx.drawImage(sp, f.x - r, f.y - r, r * 2, r * 2);
-    }
-    ctx.globalAlpha = 1;
+    // 1) zwykłe pierścienie (fale na wodzie) – pod cząsteczkami
     for (const r of this.rings) {
-      if (!r.additive) continue;
+      if (r.additive) continue;
       this.strokeRing(ctx, r);
     }
-    ctx.restore();
 
-    // 3) dym (miękkie sprity)
+    // 2) dym (miękkie sprity)
     for (const p of this.ps) {
       if (p.kind !== "smoke") continue;
       const t = p.life / p.max;
@@ -535,11 +508,38 @@ export class Particles {
     }
     ctx.globalAlpha = 1;
 
-    // 4) zwykłe pierścienie (fale na wodzie)
+    // 3) kule ognia (nad dymem – jasny rdzeń ma być widoczny)
+    const fire = this.getFireSprite();
+    for (const f of this.fireballs) {
+      const t = f.life / f.max;
+      const r = f.r * (0.42 + t * 0.85);
+      ctx.globalAlpha = Math.min(1, (1 - t) * 1.35);
+      if (fire) ctx.drawImage(fire, f.x - r, f.y - r, r * 2, r * 2);
+      else {
+        ctx.fillStyle = "rgba(255,150,40,0.8)";
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // 4) rozbłyski + addytywne pierścienie (fala uderzeniowa)
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const f of this.flashes) {
+      const t = f.life / f.max;
+      const r = f.r * (0.45 + t * 0.85);
+      const sp = this.getSoft(f.color);
+      ctx.globalAlpha = (1 - t) * 0.9;
+      if (sp) ctx.drawImage(sp, f.x - r, f.y - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1;
     for (const r of this.rings) {
-      if (r.additive) continue;
+      if (!r.additive) continue;
       this.strokeRing(ctx, r);
     }
+    ctx.restore();
 
     // 5) odłamki / pióra / krople
     for (const p of this.ps) {
@@ -616,7 +616,7 @@ export class Particles {
   private strokeRing(ctx: CanvasRenderingContext2D, r: Ring): void {
     const t = r.life / r.max;
     const rad = r.r0 + (r.r1 - r.r0) * easeOut(t);
-    ctx.globalAlpha = (1 - t) * (1 - t);
+    ctx.globalAlpha = (1 - t) * (1 - t) * 0.6;
     ctx.strokeStyle = r.color;
     ctx.lineWidth = Math.max(0.4, r.width * (1 - t * 0.75));
     ctx.beginPath();
