@@ -35,7 +35,28 @@ Otwórz http://localhost:5173 w dwóch kartach, w jednej „Stwórz pokój”, w
 
 ## Sterowanie
 
-(uzupełniane poniżej)
+| Klawisz | Akcja |
+|---|---|
+| `A`/`D` lub `←`/`→` | chodzenie |
+| `W`/`S`, `↑`/`↓` lub mysz | celowanie |
+| `Enter` | skok do przodu |
+| `Backspace` | salto w tył |
+| `Spacja` (przytrzymaj) | ładowanie mocy, puszczenie = strzał (shotgun, uzi, kij, dynamit, mina, jetpack strzelają od razu) |
+| `1`–`5` | zapalnik granatów (sekundy) |
+| `Tab` lub prawy przycisk myszy | panel broni |
+| Lewy przycisk myszy na mapie | cel dla nalotu, teleportu, belki i rakiety naprowadzanej |
+| `R` | obrót belki (girder) |
+| `F1` | pomiń turę |
+| `Esc` | menu (poddanie, wyjście, głośność, pomoc) |
+| Kółko myszy, przeciąganie, `Shift`+strzałki | zoom i kamera |
+
+## Bronie i mechaniki
+
+Bazooka (wiatr), granat i granat kasetowy, banan, shotgun (2 strzały), uzi, Święty Granat Ręczny,
+dynamit, miny (także losowe na mapie), nalot, rakieta naprowadzana, kij baseballowy, teleport,
+belka (girder), jetpack. Do tego: zniszczalny teren, wiatr zmieniany co turę, obrażenia od upadku,
+topienie się w wodzie, skrzynki ze zdrowiem/bronią/narzędziami spadające na spadochronach,
+nagła śmierć z rosnącą wodą, 4 motywy map (łąka, pustynia, śnieg, piekło) i losowe mapy z seeda.
 
 ## Architektura
 
