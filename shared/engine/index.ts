@@ -1,9 +1,14 @@
 // PUBLICZNE API SILNIKA. Serwer używa wyłącznie tego, klient używa Terrain/generateTerrain + typów.
 import type { GameConfig, GameEvent, GameSnapshot, InputAction, InputState, TerrainSync } from "../protocol";
 import { Terrain } from "./terrain";
+import { GameImpl } from "./game";
 
 export { Terrain, generateTerrain } from "./terrain";
 export { Rng } from "./rng";
+export { WEAPONS, WEAPON_IDS, CRATE_WEAPONS, CRATE_UTILITIES, startingAmmo } from "./weapons";
+export type { WeaponDef } from "./weapons";
+export { WORM_NAMES } from "./names";
+export type { Worm, Projectile, Crate, Mine, TeamState, DeathReason, ProjectileKind } from "./types";
 
 export interface TeamSetup {
   team: number; // 0..3
@@ -31,7 +36,5 @@ export interface Game {
 }
 
 export function createGame(config: GameConfig, teams: TeamSetup[]): Game {
-  // Implementacja w ./game.ts (patrz ARCHITECTURE.md)
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  throw new Error("createGame not implemented yet – see shared/engine/game.ts");
+  return new GameImpl(config, teams);
 }
