@@ -83,8 +83,12 @@ export class SupabaseTransport implements Transport {
     }
     if (msg.t === "joinRoom") {
       const code = msg.code.toUpperCase().trim();
-      // Jesteśmy hostem tego pokoju – „dołączenie” po reconnekcie nie może zburzyć pokoju.
-      if (this.host && this.roomCode === code) return;
+      // NetClient odtwarza członkostwo po sygnale open. Nie zamykaj wtedy kanału:
+      // jego ponowne otwarcie wywołałoby kolejne joinRoom i pętlę reconnectów.
+      if (this.channel && this.roomCode === code) {
+        if (!this.host) this.deliverToHost({ t: "joinRoom", code });
+        return;
+      }
       void this.joinRoom(code);
       return;
     }

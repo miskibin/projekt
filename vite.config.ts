@@ -13,5 +13,5 @@ export default defineConfig({
     port: 5173,
     proxy: { "/ws": { target: "ws://localhost:3000", ws: true } },
   },
-  test: { root: __dirname, include: ["shared/**/*.test.ts", "server/**/*.test.ts"], environment: "node" },
+  test: { root: __dirname, include: ["shared/**/*.test.ts", "server/**/*.test.ts", "client/**/*.test.ts"], environment: "node" },
 });
