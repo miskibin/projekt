@@ -375,6 +375,7 @@ export class GameClient {
       this.renderer.draw(this.ctx, {
         state,
         terrainTex: tex,
+        terrain: this.terrain,
         theme: this.config.theme,
         camera: this.camera,
         particles: this.particles,
