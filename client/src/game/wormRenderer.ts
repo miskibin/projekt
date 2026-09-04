@@ -718,8 +718,11 @@ export function isLowHp(hp: number): boolean {
 // ============================================================================
 
 /** Pół-szerokość / pół-wysokość ciała (świat). Stopy na y ≈ +RY. */
-export const WORM_RX = 10.9;
-export const WORM_RY = 12.8;
+/** Większa, czytelna sylwetka inspirowana proporcjami klasycznych Wormsów. Hitbox pozostaje w silniku bez zmian. */
+export const WORM_RX = 13.5;
+export const WORM_RY = 15.9;
+/** Dolna krawędź postaci względem środka fizycznego — utrzymuje stopy na starej linii gruntu. */
+export const WORM_GROUND_OFFSET = 12.8;
 
 const EYE_RX = 3.7;
 const EYE_RY = 4.15;
@@ -844,7 +847,7 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   // kontur
   bodyPath(ctx, rx, ry);
   ctx.strokeStyle = skin.line;
-  ctx.lineWidth = 1.3;
+  ctx.lineWidth = 1.55;
   ctx.lineJoin = "round";
   ctx.stroke();
 

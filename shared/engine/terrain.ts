@@ -110,16 +110,17 @@ export function generateTerrain(seed: number, width: number, height: number, den
 
   // 1) profil powierzchni: suma sinusów o losowych fazach
   const waves = Array.from({ length: 6 }, (_, i) => ({
-    amp: rng.range(30, 110) / (i + 1) ** 0.5,
+    amp: rng.range(27, 96) / (i + 1) ** 0.5,
     freq: rng.range(0.002, 0.012) * (i + 1),
     phase: rng.range(0, Math.PI * 2),
   }));
-  const base = height * (0.72 - 0.18 * density);
+  // Niższa linia lądu zostawia więcej czystego kadru nad robakami i ogranicza ściany zajmujące cały ekran.
+  const base = height * (0.76 - 0.16 * density);
   const surface = new Int32Array(width);
   for (let x = 0; x < width; x++) {
     let y = base;
     for (const w of waves) y += Math.sin(x * w.freq + w.phase) * w.amp;
-    surface[x] = Math.max(80, Math.min(height - 60, y)) | 0;
+    surface[x] = Math.max(height * 0.16, Math.min(height - 60, y)) | 0;
   }
   for (let x = 0; x < width; x++) t.data.fill(1, surface[x] * width + x, surface[x] * width + x + 1);
   for (let y = 0; y < height; y++)
@@ -129,7 +130,7 @@ export function generateTerrain(seed: number, width: number, height: number, den
   const islands = rng.int(2, 5);
   for (let i = 0; i < islands; i++) {
     const cx = rng.int(120, width - 120);
-    const cy = rng.int(120, Math.max(160, base - 150));
+    const cy = rng.int(Math.round(height * 0.16), Math.max(Math.round(height * 0.2), base - 120));
     const rw = rng.int(50, 140);
     const rh = rng.int(18, 45);
     for (let y = cy - rh; y <= cy + rh; y++)

@@ -20,6 +20,7 @@ import {
   lighten,
   roundRect,
   WormAnimator,
+  WORM_GROUND_OFFSET,
   WormSkins,
   WORM_RY,
   type AnimThreat,
@@ -255,17 +256,18 @@ export class Renderer {
     const col = teamColor(w.team);
     const skin = this.skins.get(ctx, col);
     const ry = WORM_RY;
+    const visualLift = ry - WORM_GROUND_OFFSET;
     const jet = w.anim === "jetpack";
 
     // cień na podłożu (nie skaluje się razem z ciałem)
     ctx.globalAlpha = 0.26 * pose.alpha;
     ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.ellipse(w.x, w.y + ry + 1, 8.4, 2.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(w.x, w.y + WORM_GROUND_OFFSET + 1, 10.2, 2.9, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
-    if (jet) inp.particles.jetFlame(w.x + (Math.random() - 0.5) * 6, w.y + ry);
+    if (jet) inp.particles.jetFlame(w.x + (Math.random() - 0.5) * 7, w.y + WORM_GROUND_OFFSET);
 
     // broń w rękach tylko dla aktywnego robaka; lokalny wybór ma pierwszeństwo
     const weapon: WeaponId | null = isActive ? (inp.myTurn ? inp.weapon : inp.state.turn.selectedWeapon) : null;
@@ -277,7 +279,7 @@ export class Renderer {
     }
 
     ctx.save();
-    ctx.translate(w.x, w.y);
+    ctx.translate(w.x, w.y - visualLift);
     drawWormCharacter(ctx, pose, {
       skin,
       facing: w.facing,
@@ -295,14 +297,14 @@ export class Renderer {
     const t = inp.time;
     const s = 1 / inp.camera.zoom;
     ctx.save();
-    ctx.translate(w.x, w.y - ry - 14);
+    ctx.translate(w.x, w.y - ry - visualLift - 14);
     ctx.scale(s, s);
-    const barW = 56;
+    const barW = 48;
     const hp = Math.max(0, Math.min(1, w.hp / WORM_MAX_HP));
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
 
-    ctx.font = "800 14px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 13px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "alphabetic";
     ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(6,10,16,0.85)";
@@ -312,27 +314,27 @@ export class Renderer {
 
     // tło pastylki
     ctx.fillStyle = "rgba(8,12,18,0.55)";
-    roundRect(ctx, -barW / 2, -12, barW, 12, 6);
+    roundRect(ctx, -barW / 2, -11, barW, 11, 5.5);
     ctx.fill();
     if (hp > 0) {
       ctx.fillStyle = hp > 0.35 ? col : hp > 0.18 ? "#ffb020" : "#ff4d4d";
       const fw = Math.max(6, barW * hp);
-      roundRect(ctx, -barW / 2, -12, fw, 12, 6);
+      roundRect(ctx, -barW / 2, -11, fw, 11, 5.5);
       ctx.fill();
     }
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 1.4;
-    roundRect(ctx, -barW / 2, -12, barW, 12, 6);
+    roundRect(ctx, -barW / 2, -11, barW, 11, 5.5);
     ctx.stroke();
 
-    ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 9px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 2.4;
     ctx.strokeStyle = "rgba(6,10,16,0.55)";
     const hpTxt = String(Math.max(0, Math.round(w.hp)));
-    ctx.strokeText(hpTxt, 0, -5.8);
+    ctx.strokeText(hpTxt, 0, -5.3);
     ctx.fillStyle = "#ffffff";
-    ctx.fillText(hpTxt, 0, -5.8);
+    ctx.fillText(hpTxt, 0, -5.3);
     ctx.restore();
 
     // ------- strzałka nad aktywnym robakiem -------
@@ -340,7 +342,7 @@ export class Renderer {
       const bounce = Math.abs(Math.sin(t * 3.2)) * 4;
       // pozycja w skali ekranu, żeby strzałka trzymała się etykiety przy każdym zoomie
       ctx.save();
-      ctx.translate(w.x, w.y - ry - 12 - (30 + bounce) * s);
+      ctx.translate(w.x, w.y - ry - visualLift - 12 - (30 + bounce) * s);
       ctx.scale(s, s);
       ctx.beginPath();
       ctx.moveTo(0, 11);
