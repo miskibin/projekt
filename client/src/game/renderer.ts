@@ -12,6 +12,7 @@ import type { RenderState } from "./state";
 import type { ThemeId, ThemePalette } from "./terrainRenderer";
 import { THEMES } from "./terrainRenderer";
 import { Background } from "./background";
+import { PostProcess } from "./postprocess";
 import { TARGETED } from "./weapons";
 import {
   darken,
@@ -56,6 +57,7 @@ const DEFAULT_PREVIEW_POWER = 0.6;
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
 export class Renderer {
   private background: Background;
+  private readonly postProcess = new PostProcess();
   /** stan animacji postaci (per robak) */
   private readonly animator = new WormAnimator();
   /** cache barw/gradientów per kolor drużyny */
@@ -76,6 +78,7 @@ export class Renderer {
     this.background.regen(seed);
     this.animator.reset();
     this.lastTime = -1;
+    this.postProcess.clear();
   }
 
   // --- zdarzenia gry -> reakcje postaci (wołane z client.ts) ---
@@ -99,6 +102,10 @@ export class Renderer {
     this.animator.onTurnStart(team);
   }
 
+  onExplosion(radius: number, power: number): void {
+    this.postProcess.triggerImpact(Math.min(1, radius / 75 + power / 900));
+  }
+
   setTheme(t: ThemeId): void {
     this.theme = t;
   }
@@ -112,6 +119,8 @@ export class Renderer {
     const pal = THEMES[inp.theme] ?? THEMES.grass;
     const W = camera.viewW;
     const H = camera.viewH;
+    const dt = this.lastTime < 0 ? 1 / 60 : Math.max(0, Math.min(0.05, inp.time - this.lastTime));
+    this.lastTime = inp.time;
 
     ctx.save();
     ctx.clearRect(0, 0, W, H);
@@ -124,7 +133,7 @@ export class Renderer {
     ctx.imageSmoothingQuality = "high";
     ctx.drawImage(inp.terrainTex, 0, 0);
 
-    this.updateAnimator(inp);
+    this.updateAnimator(inp, dt);
     this.drawGraves(ctx, inp);
     this.drawMines(ctx, inp.state.mines, inp.time);
     this.drawCrates(ctx, inp.state.crates, inp.time);
@@ -135,6 +144,7 @@ export class Renderer {
     this.drawWater(ctx, inp, pal);
 
     ctx.restore();
+    this.postProcess.draw(ctx, W, H, dt);
     ctx.restore();
   }
 
@@ -207,10 +217,7 @@ export class Renderer {
   // ---------------- robaki ----------------
 
   /** Krok maszyny stanów animacji: raz na klatkę, przed rysowaniem robaków. */
-  private updateAnimator(inp: RenderInput): void {
-    const dt = this.lastTime < 0 ? 1 / 60 : inp.time - this.lastTime;
-    this.lastTime = inp.time;
-
+  private updateAnimator(inp: RenderInput, dt: number): void {
     // zagrożenia w pobliżu (reakcja "strach"): lecące pociski i tykające miny
     this.threats.length = 0;
     for (const p of inp.state.projectiles) this.threats.push(p);
@@ -644,15 +651,29 @@ export class Renderer {
       }
       case "clusterlet":
       case "bananalet": {
-        const c = p.kind === "bananalet" ? "#ffd83d" : "#4a7a5a";
-        ctx.fillStyle = c;
-        ctx.beginPath();
-        ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.4)";
-        ctx.beginPath();
-        ctx.arc(-1, -1.2, 1.1, 0, Math.PI * 2);
-        ctx.fill();
+        if (p.kind === "bananalet") {
+          ctx.rotate(ang + inp.time * 6 + p.id);
+          ctx.strokeStyle = "#b98112";
+          ctx.lineWidth = 4.2;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.arc(0, 0, 5.4, 0.5, Math.PI - 0.5);
+          ctx.stroke();
+          ctx.strokeStyle = "#ffeb4f";
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.arc(0, -0.5, 5.4, 0.58, Math.PI - 0.58);
+          ctx.stroke();
+        } else {
+          ctx.fillStyle = "#4a7a5a";
+          ctx.beginPath();
+          ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,255,255,0.4)";
+          ctx.beginPath();
+          ctx.arc(-1, -1.2, 1.1, 0, Math.PI * 2);
+          ctx.fill();
+        }
         break;
       }
       case "banana": {

@@ -718,11 +718,11 @@ export function isLowHp(hp: number): boolean {
 // ============================================================================
 
 /** Pół-szerokość / pół-wysokość ciała (świat). Stopy na y ≈ +RY. */
-export const WORM_RX = 9.6;
-export const WORM_RY = 11.2;
+export const WORM_RX = 10.9;
+export const WORM_RY = 12.8;
 
-const EYE_RX = 3.35;
-const EYE_RY = 3.75;
+const EYE_RX = 3.7;
+const EYE_RY = 4.15;
 
 export interface WormSkin {
   base: string;

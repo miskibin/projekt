@@ -53,15 +53,19 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
   if (p.shards > 0 && p.shardKind) {
     const spec = p.shardKind === "bananalet" ? BANANALET : CLUSTERLET;
     for (let i = 0; i < p.shards; i++) {
-      const ang = ctx.rng.range(-Math.PI * 0.85, -Math.PI * 0.15);
-      const speed =
-        p.shardKind === "bananalet" ? ctx.rng.range(280, 430) : ctx.rng.range(150, 260);
+      const banana = p.shardKind === "bananalet";
+      const fan = (i + 0.5) / p.shards;
+      const ang = banana
+        ? -Math.PI * 0.96 + fan * Math.PI * 0.92 + ctx.rng.range(-0.07, 0.07)
+        : ctx.rng.range(-Math.PI * 0.85, -Math.PI * 0.15);
+      const speed = banana ? ctx.rng.range(340, 540) : ctx.rng.range(150, 260);
       makeProjectile(ctx, {
         kind: p.shardKind,
         x: p.x + Math.cos(ang) * 4,
         y: p.y + Math.sin(ang) * 4,
-        vx: Math.cos(ang) * speed + p.vx * 0.15,
+        vx: Math.cos(ang) * speed + p.vx * (banana ? 0.08 : 0.15),
         vy: Math.sin(ang) * speed,
+        ...(banana ? { fuse: ctx.rng.range(0.9, 1.45) } : {}),
         radius: spec.radius,
         damage: spec.damage,
         power: spec.power,

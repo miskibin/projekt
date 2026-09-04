@@ -23,7 +23,6 @@ import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
 import { canvasResolution } from "./viewport";
 import { enterFullscreen } from "./display";
 import type { TouchControl } from "./input";
-import { clampJoystick, joystickControls } from "./joystick";
 
 export interface GameCallbacks {
   send(msg: ClientMessage): void;
@@ -449,7 +448,8 @@ export class GameClient {
         this.terrain.carveCircle(ev.x, ev.y, ev.r);
         this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
-        this.camera.shake(Math.min(30, ev.r * 0.55));
+        this.renderer.onExplosion(ev.r, ev.power);
+        this.camera.shake(Math.min(55, 7 + ev.r * 0.68 + ev.power * 0.025));
         this.camera.glance(ev.x, ev.y, 0.25);
         break;
       }
@@ -484,7 +484,9 @@ export class GameClient {
         break;
       }
       case "shot": {
-        this.particles.sparks(ev.x, ev.y, 8, "#ffe07a");
+        const fx = weaponFireEffect(ev.weapon);
+        this.particles.sparks(ev.x, ev.y, fx.sparks, fx.color);
+        this.camera.shake(fx.kick);
         const shooter = this.buffer.latest?.turn.activeWormId;
         if (shooter !== undefined) this.renderer.onShot(shooter);
         break;
@@ -511,7 +513,8 @@ export class GameClient {
         this.renderer.onTurnStart(ev.team);
         this.camera.resetManual();
         const name = this.buffer.latest?.teams.find((t) => t.team === ev.team)?.name;
-        this.hud.banner(`${name ?? TEAM_NAMES[ev.team % TEAM_NAMES.length]} – twoja kolej`, 1.7);
+        const label = name ?? TEAM_NAMES[ev.team % TEAM_NAMES.length];
+        this.hud.banner(ev.team === this.myTeam ? "Twoja tura" : `${label} rozpoczyna turę`, 1.1);
         break;
       }
       case "suddenDeath": {
@@ -690,60 +693,6 @@ export class GameClient {
       this.syncControls();
     });
 
-    const joystick = byId("touch-joystick");
-    const knob = byId("touch-joystick-knob");
-    let joystickPointer: number | null = null;
-    let joystickActive = new Set<TouchControl>();
-
-    const updateJoystick = (clientX: number): void => {
-      const rect = joystick.getBoundingClientRect();
-      const radius = Math.max(1, Math.min(rect.width, rect.height) * 0.3);
-      const dx = clientX - (rect.left + rect.width / 2);
-      const x = clampJoystick(dx, radius);
-      knob.style.transform = `translate(calc(-50% + ${x.toFixed(1)}px), -50%)`;
-
-      const next = new Set(joystickControls(x, radius));
-      for (const control of joystickActive) {
-        if (!next.has(control)) this.input.releaseControl(control);
-      }
-      for (const control of next) {
-        if (!joystickActive.has(control)) this.input.pressControl(control);
-      }
-      joystickActive = next;
-    };
-
-    const resetJoystick = (): void => {
-      if (joystickPointer === null && joystickActive.size === 0) return;
-      joystickPointer = null;
-      for (const control of joystickActive) this.input.releaseControl(control, true);
-      joystickActive.clear();
-      joystick.dataset.active = "false";
-      knob.style.transform = "translate(-50%, -50%)";
-    };
-    this.touchResetters.push(resetJoystick);
-
-    joystick.addEventListener("pointerdown", (event) => {
-      if (joystickPointer !== null) return;
-      event.preventDefault();
-      joystickPointer = event.pointerId;
-      joystick.setPointerCapture(event.pointerId);
-      joystick.dataset.active = "true";
-      this.sound.unlock();
-      if (!this.autoFullscreenAttempted) void this.fullscreen();
-      updateJoystick(event.clientX);
-    });
-    joystick.addEventListener("pointermove", (event) => {
-      if (joystickPointer !== event.pointerId) return;
-      event.preventDefault();
-      updateJoystick(event.clientX);
-    });
-    for (const eventName of ["pointerup", "pointercancel", "lostpointercapture"] as const) {
-      joystick.addEventListener(eventName, (event) => {
-        if (joystickPointer !== event.pointerId) return;
-        resetJoystick();
-      });
-    }
-
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-control]")) {
       const control = button.dataset.control as TouchControl;
       let pointer: number | null = null;
@@ -794,6 +743,21 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Brak elementu #${id}`);
   return el as T;
+}
+
+function weaponFireEffect(weapon: WeaponId): { color: string; sparks: number; kick: number } {
+  switch (weapon) {
+    case "homing": return { color: "#79efff", sparks: 11, kick: 3.5 };
+    case "cluster": return { color: "#66ffd3", sparks: 10, kick: 3 };
+    case "banana": return { color: "#fff04d", sparks: 12, kick: 4 };
+    case "holy": return { color: "#fffbd1", sparks: 16, kick: 6 };
+    case "dynamite": return { color: "#ff6b45", sparks: 7, kick: 2.5 };
+    case "airstrike": return { color: "#ff745c", sparks: 12, kick: 4 };
+    case "shotgun": return { color: "#fff1bd", sparks: 15, kick: 6 };
+    case "uzi": return { color: "#bceaff", sparks: 6, kick: 1.5 };
+    case "teleport": return { color: "#be8cff", sparks: 14, kick: 2 };
+    default: return { color: "#ffe07a", sparks: 8, kick: 3 };
+  }
 }
 
 /** 92.4 -> "1:32" */

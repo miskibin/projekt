@@ -50,8 +50,8 @@ import { placeMine, spawnCrate, spawnInitialMines, stepCrates, stepMines, MINE_R
 import { WORM_NAMES } from "./names";
 import type { Crate, DeathReason, EngineCtx, Mine, Projectile, TeamState, Worm } from "./types";
 
-const STARTING_TIME = 1.5;
-const SETTLE_TIMEOUT = 12;
+const STARTING_TIME = 0.75;
+const SETTLE_TIMEOUT = 7;
 const WATER_RISE_TIME = 1.2;
 
 const WORM_RESTITUTION = 0.3;
@@ -606,7 +606,6 @@ export class GameImpl implements Game, EngineCtx {
     this.settleGuard = 0;
 
     this.emit({ t: "turnStart", team, wormId: worm.id, wind: this.wind });
-    this.emit({ t: "message", text: `Tura: ${worm.name} (${teamLabel(team)})` });
 
     if (this.rng.chance(CRATE_DROP_CHANCE)) spawnCrate(this);
   }
@@ -920,7 +919,7 @@ export class GameImpl implements Game, EngineCtx {
           collidesWorms: false,
           bounces: true,
           restitution: id === "banana" ? 0.6 : 0.45,
-          shards: id === "cluster" ? 5 : id === "banana" ? 6 : 0,
+          shards: id === "cluster" ? 5 : id === "banana" ? 8 : 0,
           shardKind: id === "cluster" ? "clusterlet" : id === "banana" ? "bananalet" : undefined,
           ownerWorm: w.id,
           ownerTeam: w.team,

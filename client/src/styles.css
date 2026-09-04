@@ -226,7 +226,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .game-tools .game-tool { width: 48px; padding: 0; }
 .game-tool:hover, .game-tool[aria-pressed=true] { background: var(--hud-bg-hi); border-color: var(--hud-line-hi); }
 .game-tool:active { background: var(--hud-bg-hi); }
-.game-tool:focus-visible, .touch-key:focus-visible, .touch-joystick:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.game-tool:focus-visible, .touch-key:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* --- pigułka aktualnej broni w lewym górnym rogu --- */
 .weapon-tool {
@@ -235,7 +235,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   left: max(12px, env(safe-area-inset-left));
   height: 48px; padding: 0 16px; gap: 12px;
   font-size: 15px; font-weight: 700; letter-spacing: .2px;
-  max-width: min(220px, calc((100vw - 230px) / 2));
+  max-width: min(220px, calc(100vw - 90px));
 }
 #current-weapon { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #current-ammo { color: #6ee06e; font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -243,28 +243,10 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 /* --- sterowanie dotykowe --- */
 .touch-controls { position: absolute; inset: 0; pointer-events: none; z-index: 11; }
 .touch-controls[hidden] { display: none; }
-.touch-joystick {
+.touch-move {
   position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom));
-  width: 138px; height: 138px; border-radius: 50%; pointer-events: auto; touch-action: none;
-  border: 2px solid rgba(160,205,255,.42);
-  background: radial-gradient(circle, rgba(62,99,140,.35) 0 34%, rgba(14,28,45,.78) 36% 100%);
-  box-shadow: inset 0 0 0 12px rgba(125,176,232,.06), 0 8px 30px rgba(0,0,0,.24);
-  -webkit-touch-callout: none;
+  display: flex; gap: 10px; pointer-events: none;
 }
-.joystick-arrows {
-  position: absolute; inset: 14px; display: flex; align-items: center; justify-content: space-between;
-  color: rgba(220,238,255,.42); font: 800 24px var(--font); pointer-events: none;
-}
-.joystick-knob {
-  position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; border-radius: 50%;
-  transform: translate(-50%, -50%); pointer-events: none;
-  border: 2px solid rgba(217,237,255,.82);
-  background: radial-gradient(circle at 36% 30%, rgba(190,222,255,.72), rgba(48,86,128,.92) 55%, rgba(21,41,66,.96));
-  box-shadow: 0 5px 14px rgba(0,0,0,.4), inset 0 1px 2px rgba(255,255,255,.35);
-  transition: transform 70ms ease-out;
-}
-.touch-joystick[data-active=true] { border-color: rgba(177,220,255,.85); background-color: rgba(44,83,124,.35); }
-.touch-joystick[data-active=true] .joystick-knob { transition: none; }
 .touch-right {
   position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom));
   display: flex; align-items: flex-end; gap: 12px; pointer-events: none;
@@ -276,6 +258,11 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   border: 2px solid rgba(113,190,255,.72); background: rgba(23,52,80,.82); color: #d9f1ff; font-size: 19px;
 }
 .touch-aim-key[data-pressed=true] { background: rgba(61,143,209,.55); border-color: rgba(190,229,255,.95); transform: scale(.96); }
+.touch-move-key {
+  width: 76px; height: 76px; border-radius: 22px; flex-direction: column; gap: 3px;
+  border: 2px solid rgba(160,205,255,.72); background: rgba(20,43,70,.82); color: #e4f3ff;
+}
+.touch-move-key[data-pressed=true] { background: rgba(69,137,202,.58); border-color: rgba(210,238,255,.98); transform: scale(.96); }
 .touch-key {
   pointer-events: auto; width: 64px; height: 64px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -303,11 +290,11 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   #screen-game { --hud-r: 10px; }
   .game-tools { gap: 6px; top: max(8px, env(safe-area-inset-top)); }
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
-  .weapon-tool { height: 40px; padding: 0 12px; gap: 8px; font-size: 12.5px; max-width: min(150px, calc((100vw - 170px) / 2)); }
+  .weapon-tool { height: 40px; padding: 0 12px; gap: 8px; font-size: 12.5px; max-width: min(170px, calc(100vw - 66px)); }
 }
 @media (max-height: 460px), (max-width: 430px) {
-  .touch-joystick { width: 112px; height: 112px; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); }
-  .joystick-knob { width: 52px; height: 52px; }
+  .touch-move { left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }
+  .touch-move-key { width: 64px; height: 64px; border-radius: 19px; font-size: 22px; }
   .touch-right { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }
   .touch-actions { gap: 8px; }
   .touch-aim { gap: 6px; }
@@ -334,6 +321,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 14px; font-size: 14px; }
 .dlg-row input { flex: 1; }
 .dlg-actions { display: flex; flex-direction: column; gap: 9px; margin-top: 16px; }
+.game-view-actions { margin: 0 0 14px; }
 .help { margin: 6px 0 2px; font-size: 13px; }
 .help summary { cursor: pointer; color: var(--muted); }
 .keys { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 12.5px; }

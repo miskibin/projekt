@@ -35,7 +35,7 @@ export class Hud {
   private feed: { text: string; color: string; life: number }[] = [];
 
   banner(text: string, seconds = 2): void {
-    this.notice = { text, life: 0, max: Math.min(seconds, 2) };
+    this.notice = { text, life: 0, max: Math.min(seconds, 1.35) };
   }
 
   kill(text: string, color = "#e7ecf5"): void {
@@ -59,7 +59,6 @@ export class Hud {
     ctx.save();
     ctx.textBaseline = "middle";
     const clockBottom = this.drawClock(ctx, inp, W, narrow);
-    this.drawTeams(ctx, inp, W, H, narrow);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
 
     // Krótkie komunikaty zamiast stałych podpisów i dużych kart na środku ekranu.
@@ -91,55 +90,46 @@ export class Hud {
     ctx.restore();
   }
 
-  /** Panel rundy/zegara na górze pośrodku. Zwraca dolną krawędź bloku (z wiatrem). */
+  /** Jeden zwarty panel: runda, czas oraz wiatr. */
   private drawClock(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, narrow: boolean): number {
     const turn = inp.state.turn;
-    const pw = narrow ? 216 : 290;
-    const ph = narrow ? 44 : 56;
-    // Na wąskich ekranach panel schodzi pod przyciski w lewym/prawym górnym rogu.
-    const py = narrow ? 56 : 10;
+    const pw = narrow ? 210 : 270;
+    const ph = narrow ? 40 : 46;
+    const py = narrow ? 52 : 8;
     const px = Math.round(width / 2 - pw / 2);
-    panel(ctx, px, py, pw, ph, narrow ? 11 : 14);
+    panel(ctx, px, py, pw, ph, narrow ? 10 : 13);
 
     const cy = py + ph / 2;
     const seconds = Math.max(0, Math.ceil(turn.timeLeft));
     const hot = seconds <= 10 && turn.phase === "active";
 
     ctx.textAlign = "left";
-    ctx.font = "600 " + (narrow ? 12 : 15) + "px " + FONT;
+    ctx.font = "700 " + (narrow ? 10 : 12) + "px " + FONT;
     ctx.fillStyle = turn.suddenDeath ? ALERT : MUTED;
-    ctx.fillText("Runda " + turn.round, px + (narrow ? 14 : 22), cy, pw * 0.36);
+    ctx.fillText("R" + turn.round, px + (narrow ? 12 : 16), cy);
 
     ctx.textAlign = "center";
-    ctx.font = "800 " + (narrow ? 24 : 30) + "px " + FONT;
+    ctx.font = "800 " + (narrow ? 22 : 27) + "px " + FONT;
     ctx.fillStyle = hot ? ALERT : TEXT;
-    ctx.fillText(String(seconds).padStart(2, "0"), px + pw * 0.655, cy + 1);
+    ctx.fillText(String(seconds).padStart(2, "0"), px + pw * 0.43, cy + 1);
 
-    clockGlyph(ctx, px + pw - (narrow ? 22 : 30), cy, narrow ? 8 : 10, hot ? ALERT : "#cfe0f2");
-
-    // Wiatr: mała pigułka ze wskaźnikiem siły i kierunku.
-    const ww = narrow ? 112 : 136;
-    const wh = narrow ? 18 : 20;
-    const wy = py + ph + (narrow ? 5 : 7);
-    panel(ctx, Math.round(width / 2 - ww / 2), wy, ww, wh, wh / 2);
-    const cx = width / 2;
-    const by = wy + wh / 2;
-    const half = (ww - 38) / 2;
+    const cx = px + pw * 0.77;
+    const half = narrow ? 32 : 42;
     ctx.fillStyle = "rgba(255,255,255,.16)";
-    roundRect(ctx, cx - half, by - 2, half * 2, 4, 2);
+    roundRect(ctx, cx - half, cy - 2, half * 2, 4, 2);
     ctx.fill();
     const wind = Math.max(-1, Math.min(1, turn.wind / MAX_WIND));
     const len = Math.abs(wind) * half;
     if (len > 1) {
       ctx.fillStyle = WIND;
-      roundRect(ctx, wind < 0 ? cx - len : cx, by - 2, len, 4, 2);
+      roundRect(ctx, wind < 0 ? cx - len : cx, cy - 2, len, 4, 2);
       ctx.fill();
     }
     ctx.fillStyle = "rgba(255,255,255,.45)";
-    ctx.fillRect(cx - 0.5, by - 5, 1, 10);
-    arrow(ctx, cx - half - 8, by, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
-    arrow(ctx, cx + half + 8, by, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
-    return wy + wh;
+    ctx.fillRect(cx - 0.5, cy - 5, 1, 10);
+    arrow(ctx, cx - half - 7, cy, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
+    arrow(ctx, cx + half + 7, cy, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
+    return py + ph;
   }
 
   private drawBanner(ctx: CanvasRenderingContext2D, text: string, width: number, cy: number, narrow: boolean): void {
@@ -153,57 +143,6 @@ export class Hud {
     panel(ctx, Math.round(width / 2 - w / 2), Math.round(cy - h / 2), w, h, h / 2);
     ctx.fillStyle = TEXT;
     ctx.fillText(text, width / 2, cy + 1, max);
-  }
-
-  private drawTeams(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, height: number, narrow: boolean): void {
-    const teams = inp.state.teams;
-    if (teams.length === 0) return;
-    const gap = narrow ? 14 : 26;
-    const available = Math.max(140, Math.min(760, width - 32));
-    const cell = Math.max(70, Math.min(220, (available - gap * (teams.length - 1)) / teams.length));
-    const total = teams.length * cell + (teams.length - 1) * gap;
-    // Przy sterowaniu dotykowym pasek drużyn wjeżdża nad przyciski (kółko strzału ma 110 px).
-    const bottom = height - (inp.touch ? 128 : narrow ? 40 : 52);
-    const barH = narrow ? 6 : 8;
-    const barY = bottom - barH;
-    const textY = barY - (narrow ? 12 : 15);
-    const left = (width - total) / 2;
-
-    // 1) paski (bez cienia)
-    let x = left;
-    for (const team of teams) {
-      const active = team.team === inp.state.turn.activeTeam;
-      const maxHp = Math.max(1, inp.state.worms.filter((worm) => worm.team === team.team).length) * 100;
-      ctx.globalAlpha = active ? 1 : 0.55;
-      ctx.fillStyle = "rgba(10,20,34,.62)";
-      roundRect(ctx, x, barY, cell, barH, barH / 2);
-      ctx.fill();
-      const filled = cell * Math.max(0, Math.min(1, team.totalHp / maxHp));
-      if (filled > 1) {
-        ctx.fillStyle = teamColor(team.team);
-        roundRect(ctx, x, barY, filled, barH, barH / 2);
-        ctx.fill();
-      }
-      x += cell + gap;
-    }
-
-    // 2) podpisy – jedno ustawienie cienia dla czytelności na jasnym niebie
-    ctx.shadowColor = "rgba(0,0,0,.6)";
-    ctx.shadowBlur = 4;
-    x = left;
-    for (const team of teams) {
-      const active = team.team === inp.state.turn.activeTeam;
-      ctx.globalAlpha = active ? 1 : 0.55;
-      ctx.fillStyle = TEXT;
-      ctx.font = (active ? "700" : "600") + " " + (narrow ? 12 : 15) + "px " + FONT;
-      ctx.textAlign = "left";
-      ctx.fillText(team.name, x, textY, Math.max(10, cell - 46));
-      ctx.textAlign = "right";
-      ctx.fillText(String(Math.max(0, Math.round(team.totalHp))), x + cell, textY);
-      x += cell + gap;
-    }
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
   }
 
   private drawMap(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, height: number): void {
@@ -244,20 +183,6 @@ function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.fill();
   ctx.strokeStyle = PANEL_LINE;
   ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-/** Ikonka zegarka (obrys + dwie wskazówki) – tanio, bez cieni. */
-function clockGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string): void {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r * 0.55);
-  ctx.lineTo(cx, cy);
-  ctx.lineTo(cx + r * 0.45, cy + r * 0.2);
   ctx.stroke();
 }
 

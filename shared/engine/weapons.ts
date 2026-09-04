@@ -1,5 +1,7 @@
-// Tabela broni: startowa amunicja + parametry wybuchu i zachowania w turze.
+import { RETREAT_TIME } from "../constants";
 import type { WeaponId } from "../protocol";
+
+// Tabela broni: startowa amunicja + parametry wybuchu i zachowania w turze.
 
 export interface WeaponDef {
   id: WeaponId;
@@ -40,7 +42,7 @@ const D = (
   radius,
   damage,
   power,
-  retreat: 3,
+  retreat: RETREAT_TIME,
   ...opts,
 });
 
@@ -52,12 +54,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   shotgun: D("shotgun", -1, 10, 25, 160, { shots: 2 }),
   uzi: D("uzi", 3, 5, 4, 70),
   holy: D("holy", 1, 70, 100, 600, { charge: true }),
-  dynamite: D("dynamite", 1, 60, 75, 500, { retreat: 5 }),
-  mine: D("mine", 2, 30, 45, 300, { retreat: 5 }),
+  dynamite: D("dynamite", 1, 60, 75, 500, { retreat: 1.5 }),
+  mine: D("mine", 2, 30, 45, 300, { retreat: 1.5 }),
   airstrike: D("airstrike", 1, 24, 30, 240, { target: "required" }),
   homing: D("homing", 1, 30, 45, 300, { charge: true, target: "optional" }),
   bat: D("bat", 2, 0, 30, 500),
-  teleport: D("teleport", 2, 0, 0, 0, { target: "required", retreat: 1.5 }),
+  teleport: D("teleport", 2, 0, 0, 0, { target: "required", retreat: 0.7 }),
   girder: D("girder", 3, 0, 0, 0, { target: "required", utility: true }),
   jetpack: D("jetpack", 1, 0, 0, 0, { utility: true }),
   skip: D("skip", -1, 0, 0, 0),
@@ -82,7 +84,7 @@ export const CRATE_UTILITIES: readonly WeaponId[] = ["teleport", "girder", "jetp
 
 /** Parametry odłamków (cluster / banana). */
 export const CLUSTERLET = { radius: 16, damage: 20, power: 180 };
-export const BANANALET = { radius: 32, damage: 45, power: 300 };
+export const BANANALET = { radius: 24, damage: 35, power: 250 };
 export const AIRSTRIKE_BOMB = { radius: 24, damage: 30, power: 240 };
 
 export function startingAmmo(): Record<WeaponId, number> {

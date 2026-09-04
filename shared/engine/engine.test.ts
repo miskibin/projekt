@@ -189,6 +189,29 @@ describe("bronie", () => {
     expect(late.some((e) => e.t === "explosion")).toBe(true);
   });
 
+  it("banan rozpada się na szeroki wachlarz ośmiu mini-bananów", () => {
+    const g = createGame(cfg({ seed: 9191 }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    const team = g.snapshot().turn.activeTeam;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "banana" });
+    g.applyAction(team, { kind: "setTimer", seconds: 1 });
+    g.applyInput(team, { ...NEUTRAL, aim: -1.15 });
+    g.applyAction(team, { kind: "fire", power: 0.35 });
+
+    let children = gi.projectiles.filter((p) => p.kind === "bananalet");
+    for (let i = 0; i < 120 && children.length === 0; i++) {
+      g.step(FIXED_DT);
+      g.drainEvents();
+      children = gi.projectiles.filter((p) => p.kind === "bananalet");
+    }
+    expect(children).toHaveLength(8);
+    expect(Math.min(...children.map((p) => p.vx))).toBeLessThan(-250);
+    expect(Math.max(...children.map((p) => p.vx))).toBeGreaterThan(250);
+    expect(children.every((p) => p.fuse !== undefined && p.fuse > 0)).toBe(true);
+  });
+
   it("shotgun pozwala na dwa strzały, dopiero drugi kończy turę", () => {
     const g = createGame(cfg({ seed: 606 }), setups(2));
     toActive(g);
@@ -345,6 +368,22 @@ describe("tury", () => {
     expect(g.snapshot().turn.wind).not.toBe(wind);
   });
 
+  it("nie zostawia długiej pustej pauzy między ruchami", () => {
+    const g = createGame(cfg({ seed: 2424 }), setups(2));
+    toActive(g);
+    const first = g.snapshot().turn.activeTeam;
+    g.applyAction(first, { kind: "selectWeapon", weapon: "shotgun" });
+    g.applyAction(first, { kind: "fire", power: 1 });
+    g.applyAction(first, { kind: "fire", power: 1 });
+    let ticks = 0;
+    while (ticks < 240 && !(g.snapshot().turn.phase === "active" && g.snapshot().turn.activeTeam !== first)) {
+      g.step(FIXED_DT);
+      g.drainEvents();
+      ticks++;
+    }
+    expect(ticks * FIXED_DT).toBeLessThan(3.5);
+  });
+
   it("koniec czasu kończy turę", () => {
     const g = createGame(cfg({ seed: 13, turnTime: 1 }), setups(2));
     toActive(g);
@@ -378,12 +417,12 @@ describe("tury", () => {
     expect(g.winner().team).toBe(null);
   });
 
-  it("turnStart pojawia się z komunikatem po polsku", () => {
+  it("turnStart niesie dane tury bez osobnego, podwójnego komunikatu", () => {
     const g = createGame(cfg({ seed: 61 }), setups(2));
     const evs = g.drainEvents();
-    expect(evs.some((e) => e.t === "turnStart")).toBe(true);
-    const msg = evs.find((e) => e.t === "message");
-    expect(msg && msg.t === "message" && msg.text.startsWith("Tura:")).toBe(true);
+    const start = evs.find((e) => e.t === "turnStart");
+    expect(start && start.t === "turnStart" && start.wormId > 0).toBe(true);
+    expect(evs.some((e) => e.t === "message" && e.text.startsWith("Tura:"))).toBe(false);
   });
 });
 

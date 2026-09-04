@@ -221,7 +221,7 @@ export class Camera {
   }
 
   shake(amount: number): void {
-    this.shakeAmp = Math.min(38, Math.max(this.shakeAmp, amount));
+    this.shakeAmp = Math.min(58, Math.max(this.shakeAmp, amount));
     this.shakeT = 0;
   }
 
@@ -252,11 +252,11 @@ export class Camera {
 
     if (this.shakeAmp > 0.2) {
       this.shakeT += dt;
-      const decay = Math.exp(-this.shakeT * 6);
+      const decay = Math.exp(-this.shakeT * 4.8);
       // amplituda w pikselach ekranu, nie świata – wstrząs czuć tak samo przy każdym zbliżeniu
       const a = (this.shakeAmp * decay) / Math.max(0.4, this.zoom);
-      this.ox = Math.sin(this.shakeT * 61) * a;
-      this.oy = Math.cos(this.shakeT * 47) * a * 0.7;
+      this.ox = (Math.sin(this.shakeT * 67) + Math.sin(this.shakeT * 31) * 0.35) * a;
+      this.oy = (Math.cos(this.shakeT * 53) + Math.sin(this.shakeT * 37) * 0.25) * a * 0.72;
       this.clampShake();
       if (decay < 0.02) this.shakeAmp = 0;
     } else {

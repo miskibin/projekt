@@ -104,14 +104,12 @@
         <span id="current-weapon">Bazooka</span><span id="current-ammo">∞</span>
       </button>
       <nav class="game-tools" aria-label="Opcje gry">
-        <button id="btn-fullscreen" class="game-tool" aria-label="Pełny ekran" title="Pełny ekran (F)">⛶</button>
-        <button id="btn-map" class="game-tool" aria-label="Pokaż mapę" aria-pressed="false" title="Mapa (M)">▧</button>
         <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
       </nav>
       <div id="touch-controls" class="touch-controls" aria-label="Sterowanie dotykowe">
-        <div id="touch-joystick" class="touch-joystick" role="application" tabindex="0" aria-label="Joystick chodzenia: lewo i prawo">
-          <span class="joystick-arrows" aria-hidden="true">‹ ›</span>
-          <span id="touch-joystick-knob" class="joystick-knob" aria-hidden="true"></span>
+        <div class="touch-move" aria-label="Chodzenie">
+          <button class="touch-key touch-move-key" data-control="left" aria-label="Idź w lewo">◀</button>
+          <button class="touch-key touch-move-key" data-control="right" aria-label="Idź w prawo">▶</button>
         </div>
         <div class="touch-right">
           <div class="touch-aim" aria-label="Celowanie">
@@ -140,6 +138,10 @@
               <button id="btn-demo-restart" class="btn btn-sm">Nowa gra</button>
             </div>
           </aside>
+          <div class="demo-actions game-view-actions">
+            <button id="btn-fullscreen" class="btn btn-sm" aria-label="Pełny ekran">⛶ Pełny ekran</button>
+            <button id="btn-map" class="btn btn-sm" aria-label="Pokaż mapę" aria-pressed="false">▧ Mapa</button>
+          </div>
           <div class="dlg-row"><span>Głośność</span><input id="volume" type="range" min="0" max="100" step="1" /></div>
           <label class="dlg-row"><span>Przyciski dotykowe</span><input id="touch-enabled" type="checkbox" /></label>
           <details class="help">
@@ -148,7 +150,7 @@
               <tr><td>A / D lub ← / →</td><td>chodzenie</td></tr>
               <tr><td>W / S lub ↑ / ↓</td><td>celowanie (albo myszą)</td></tr>
               <tr><td>SPACJA / ◎</td><td>przytrzymaj: ładuj, puść: strzel</td></tr>
-              <tr><td>Joystick / ▲▼</td><td>chodzenie / osobne celowanie po prawej</td></tr>
+              <tr><td>◀ ▶ / ▲ ▼</td><td>chodzenie / osobne celowanie po prawej</td></tr>
               <tr><td>F / M</td><td>pełny ekran / mapa</td></tr>
               <tr><td>Enter</td><td>skok</td></tr>
               <tr><td>Backspace</td><td>salto w tył</td></tr>

@@ -31,8 +31,10 @@ Gra wypełnia okno i dopasowuje kamerę do jego wymiarów. Przycisk **⛶ / F** 
 wejście do demo z menu również go uruchamia, jeśli przeglądarka obsługuje tę funkcję.
 Canvas korzysta z rozdzielczości ekranu (DPR, do 8 megapikseli). Mapa jest dostępna pod **▧ / M**.
 Kamera miękko prowadzi aktywnego robaka podczas ruchu, a po strzale przejmuje lecący pocisk.
+Obraz korzysta z lekkiego bloom, korekcji koloru i winiety. Mocne eksplozje uruchamiają błysk,
+krótką aberrację barwną i screen shake zależny od promienia oraz siły wybuchu.
 
-Na telefonie lewy joystick steruje wyłącznie chodzeniem. Po prawej są osobne przyciski **▲/▼** do
+Na telefonie duże strzałki **◀/▶** po lewej sterują chodzeniem. Po prawej są osobne przyciski **▲/▼** do
 celowania oraz **SKOK** i **◎ STRZAŁ**, więc można iść i skakać dwoma kciukami. Przytrzymaj **◎**, żeby
 zwiększać moc, i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, po czym strzał pada automatycznie.
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
@@ -103,6 +105,8 @@ dynamit, miny (także losowe na mapie), nalot, rakieta naprowadzana, kij basebal
 belka (girder), jetpack. Do tego: zniszczalny teren, wiatr zmieniany co turę, obrażenia od upadku,
 topienie się w wodzie, skrzynki ze zdrowiem/bronią/narzędziami spadające na spadochronach,
 nagła śmierć z rosnącą wodą, 4 motywy map (łąka, pustynia, śnieg, piekło) i losowe mapy z seeda.
+Banan rozpada się na wachlarz ośmiu mniejszych bananów, które wybuchają przy kontakcie albo po krótkim
+wtórnym zapalniku. Przerwy po uspokojeniu pola walki są skrócone, żeby kolejna tura zaczynała się szybciej.
 
 ## Architektura
 
