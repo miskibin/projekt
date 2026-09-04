@@ -17,7 +17,7 @@ import { InputController } from "./input";
 import { Particles } from "./particles";
 import { Renderer, teamColor, type Grave } from "./renderer";
 import type { Sound } from "./sound";
-import { INTERP_DELAY_MS, SnapshotBuffer } from "./state";
+import { INTERP_DELAY_MS, LOCAL_INTERP_DELAY_MS, SnapshotBuffer } from "./state";
 import { TerrainRenderer } from "./terrainRenderer";
 import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
 import { canvasResolution } from "./viewport";
@@ -177,6 +177,7 @@ export class GameClient {
     this.trackedWorm = null;
     this.pending = [];
     this.buffer.clear();
+    this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
     this.particles.clear();
     this.hud.clear();
     this.selectedWeapon = "bazooka";
@@ -260,7 +261,7 @@ export class GameClient {
 
   onEvents(events: GameEvent[]): void {
     // opóźniamy o bufor interpolacji, żeby efekty pasowały do rysowanych pozycji
-    const at = performance.now() + INTERP_DELAY_MS;
+    const at = performance.now() + this.buffer.interpolationDelayMs;
     for (const ev of events) this.pending.push({ at, ev });
   }
 

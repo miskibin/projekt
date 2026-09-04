@@ -24,8 +24,8 @@ export interface InputContext {
   blocked: boolean;
 }
 
-/** Maks. częstotliwość wysyłania ciągłego `input` (celowanie itp.) – 10 Hz. */
-const SEND_INTERVAL = 1 / 10;
+/** Maks. częstotliwość wysyłania ciągłego `input` (celowanie itp.) – 20 Hz. */
+const SEND_INTERVAL = 1 / 20;
 /** Podtrzymanie stanu, gdy nic się nie zmienia (na wypadek zgubionego pakietu). */
 const RESEND_INTERVAL = 0.5;
 
@@ -332,7 +332,7 @@ export class InputController {
     }
   }
 
-  /** Przelicza stan klawiszy i wysyła `input` maks. 20×/s (lub co 100 ms). */
+  /** Przelicza stan klawiszy i wysyła `input` maks. 20×/s. */
   update(dt: number): void {
     const blocked = this.ctxInfo.blocked || !this.ctxInfo.myTurn;
     const shift = this.keys.has("ShiftLeft") || this.keys.has("ShiftRight");

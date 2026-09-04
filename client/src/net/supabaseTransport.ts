@@ -24,7 +24,9 @@ interface S2C {
   msgs: ServerMessage[];
 }
 
-const FLUSH_MS = 50; // batchowanie wiadomości → max 20 pakietów/s na peer
+// Snapshoty powstają co 50 ms. Krótsze okno zapobiega sklejeniu dwóch kolejnych
+// stanów w jedną paczkę, co wcześniej dawało gościom widoczne stop-klatki.
+const FLUSH_MS = 16;
 const HOST_WAIT_MS = 4000;
 
 function randomId(): string {

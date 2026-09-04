@@ -9,8 +9,14 @@ import type {
   WormSnapshot,
 } from "@shared/protocol";
 
-/** Opóźnienie renderu: jeden odstęp snapshotów + zapas na jitter. */
-export const INTERP_DELAY_MS = 1000 / SNAPSHOT_RATE + 30;
+/** Online render stays behind the host long enough to absorb normal Realtime jitter. */
+export const INTERP_DELAY_MS = Math.max(120, 2 * (1000 / SNAPSHOT_RATE));
+/** Local demo produces a snapshot every simulation step and does not need a network buffer. */
+export const LOCAL_INTERP_DELAY_MS = 1000 / 30;
+
+const HISTORY_SIZE = 12;
+const OFFSET_SAMPLES = 32;
+const MAX_EXTRAPOLATION_MS = 80;
 
 export interface RenderState {
   tick: number;
@@ -29,45 +35,94 @@ interface Entry {
 }
 
 /**
- * Bufor dwóch ostatnich snapshotów + interpolacja pozycji w czasie renderu.
- * Encje, których nie ma w starszym snapshocie, rysujemy bez interpolacji.
+ * Snapshot history rendered on the host's simulation timeline.
+ *
+ * Supabase can deliver two 20 Hz snapshots in one broadcast. Receive timestamps are
+ * deliberately not used as interpolation endpoints: doing so made a remote worm stop
+ * for a frame and then jump. The lowest recent clock offset estimates the normal network
+ * path, while the render delay absorbs temporary packet jitter.
  */
 export class SnapshotBuffer {
-  private prev: Entry | null = null;
-  private cur: Entry | null = null;
+  private entries: Entry[] = [];
+  private offsets: number[] = [];
+  private clockOffset = 0;
+  private delayMs: number;
+
+  constructor(delayMs = INTERP_DELAY_MS) {
+    this.delayMs = delayMs;
+  }
+
+  setInterpolationDelay(delayMs: number): void {
+    this.delayMs = Math.max(0, delayMs);
+  }
+
+  get interpolationDelayMs(): number {
+    return this.delayMs;
+  }
 
   push(snap: GameSnapshot, now = performance.now()): void {
-    if (this.cur && snap.tick < this.cur.snap.tick) return; // spóźniony pakiet
-    this.prev = this.cur;
-    this.cur = { recv: now, snap };
+    const latest = this.entries.at(-1);
+    if (latest && snap.tick <= latest.snap.tick) return;
+
+    this.entries.push({ recv: now, snap });
+    if (this.entries.length > HISTORY_SIZE) this.entries.shift();
+
+    this.offsets.push(now - snap.time * 1000);
+    if (this.offsets.length > OFFSET_SAMPLES) this.offsets.shift();
+    // The minimum filters queueing jitter without letting a late packet move the
+    // render clock backwards. A rolling window adapts after a long tab pause.
+    this.clockOffset = Math.min(...this.offsets);
   }
 
   clear(): void {
-    this.prev = null;
-    this.cur = null;
+    this.entries = [];
+    this.offsets = [];
+    this.clockOffset = 0;
   }
 
   get latest(): GameSnapshot | null {
-    return this.cur?.snap ?? null;
+    return this.entries.at(-1)?.snap ?? null;
   }
 
   get hasData(): boolean {
-    return this.cur !== null;
+    return this.entries.length > 0;
   }
 
-  /** Zinterpolowany stan do wyrenderowania w chwili `now` (performance.now()). */
+  /** Interpolated state for `now` (performance.now), based on simulation time. */
   sample(now = performance.now()): RenderState | null {
-    if (!this.cur) return null;
-    const b = this.cur;
-    if (!this.prev) return toRender(b.snap, b.snap, 1);
-    const a = this.prev;
-    const renderTime = now - INTERP_DELAY_MS;
-    const span = b.recv - a.recv;
-    let t = span > 0.0001 ? (renderTime - a.recv) / span : 1;
-    if (t < 0) t = 0;
-    if (t > 1) t = 1;
-    return toRender(a.snap, b.snap, t);
+    const first = this.entries[0];
+    if (!first) return null;
+    if (this.entries.length === 1) return toRender(first.snap, first.snap, 1);
+
+    const targetMs = now - this.clockOffset - this.delayMs;
+    if (targetMs <= first.snap.time * 1000) return toRender(first.snap, first.snap, 1);
+
+    for (let i = 1; i < this.entries.length; i++) {
+      const b = this.entries[i];
+      const bTime = b.snap.time * 1000;
+      if (targetMs > bTime) continue;
+      const a = this.entries[i - 1];
+      const aTime = a.snap.time * 1000;
+      const span = bTime - aTime;
+      const t = span > 0.0001 ? (targetMs - aTime) / span : 1;
+      return toRender(a.snap, b.snap, clamp(t, 0, 1));
+    }
+
+    // A short extrapolation masks a single late packet. It uses the two latest
+    // snapshots, so walking (whose physics velocity can be zero) also stays smooth.
+    const b = this.entries.at(-1)!;
+    const a = this.entries.at(-2)!;
+    const aTime = a.snap.time * 1000;
+    const bTime = b.snap.time * 1000;
+    const span = bTime - aTime;
+    if (span <= 0.0001) return toRender(b.snap, b.snap, 1);
+    const extra = clamp(targetMs - bTime, 0, MAX_EXTRAPOLATION_MS);
+    return toRender(a.snap, b.snap, 1 + extra / span);
   }
+}
+
+function clamp(v: number, a: number, b: number): number {
+  return v < a ? a : v > b ? b : v;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -135,8 +190,8 @@ function toRender(a: GameSnapshot, b: GameSnapshot, t: number): RenderState {
   const turn: TurnInfo = {
     ...b.turn,
     waterLevel: lerp(a.turn.waterLevel, b.turn.waterLevel, t),
-    timeLeft: lerp(a.turn.timeLeft, b.turn.timeLeft, t),
-    chargePower: lerp(a.turn.chargePower, b.turn.chargePower, t),
+    timeLeft: Math.max(0, lerp(a.turn.timeLeft, b.turn.timeLeft, t)),
+    chargePower: clamp(lerp(a.turn.chargePower, b.turn.chargePower, t), 0, 1),
   };
 
   return {
