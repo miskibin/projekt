@@ -12,6 +12,41 @@ export interface BackgroundInput {
   height: number;
 }
 
+export interface CoverPlacement {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Skaluje obraz jak CSS `cover`, zostawiając bezpieczny zapas na parallax.
+ * panX / panY są znormalizowane do zakresu -1..1 i nigdy nie odsłaniają krawędzi obrazu.
+ */
+export function coverPlacement(
+  imageWidth: number,
+  imageHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  panX: number,
+  panY: number,
+  overscan = 1.08,
+): CoverPlacement {
+  const scale = Math.max(viewportWidth / imageWidth, viewportHeight / imageHeight) * Math.max(1, overscan);
+  const width = imageWidth * scale;
+  const height = imageHeight * scale;
+  const overflowX = Math.max(0, width - viewportWidth);
+  const overflowY = Math.max(0, height - viewportHeight);
+  const px = Math.max(-1, Math.min(1, panX));
+  const py = Math.max(-1, Math.min(1, panY));
+  return {
+    x: (viewportWidth - width) / 2 - px * overflowX * 0.5,
+    y: (viewportHeight - height) / 2 - py * overflowY * 0.5,
+    width,
+    height,
+  };
+}
+
 interface Bump {
   dx: number;
   rr: number;
@@ -136,9 +171,14 @@ export class Background {
   private layers: Layer[] = [];
   private builtFor: ThemePalette | null = null;
   private glow: { key: string; grad: CanvasGradient } | null = null;
+  private landscape: HTMLImageElement | null = null;
+  private foreground: HTMLImageElement | null = null;
+  private landscapeReady = false;
+  private foregroundReady = false;
 
   constructor(seed = 1) {
     this.regen(seed);
+    this.loadLandscape();
   }
 
   regen(seed: number): void {
@@ -176,6 +216,7 @@ export class Background {
   draw(ctx: CanvasRenderingContext2D, inp: BackgroundInput): void {
     const { palette: pal, width: W, height: H } = inp;
     if (W <= 0 || H <= 0) return;
+    if (this.drawLandscape(ctx, inp)) return;
     if (this.builtFor !== pal) this.build(pal);
 
     // --- niebo ---
@@ -323,6 +364,70 @@ export class Background {
     if (pal.embers) this.drawEmbers(ctx, inp, camX, W, H);
   }
 
+  private loadLandscape(): void {
+    if (typeof Image === "undefined") return;
+
+    const landscape = new Image();
+    landscape.decoding = "async";
+    landscape.onload = () => { this.landscapeReady = true; };
+    landscape.src = "/assets/alpine-valley.webp";
+    this.landscape = landscape;
+
+    const foreground = new Image();
+    foreground.decoding = "async";
+    foreground.onload = () => { this.foregroundReady = true; };
+    foreground.src = "/assets/alpine-valley-foreground.webp";
+    this.foreground = foreground;
+  }
+
+  /**
+   * Fotograficzna baza porusza się wolno, a wycięty pierwszy plan lasu szybciej.
+   * Obie warstwy mają zapas kadru, więc również przy skrajnej pozycji kamery
+   * nigdy nie pojawiają się puste pasy.
+   */
+  private drawLandscape(ctx: CanvasRenderingContext2D, inp: BackgroundInput): boolean {
+    const image = this.landscape;
+    if (!this.landscapeReady || !image?.naturalWidth || !image.naturalHeight) return false;
+
+    const { width: W, height: H, camera, palette: pal } = inp;
+    const view = camera.viewRect();
+    const camX = view.x + view.w / 2;
+    const camY = view.y + view.h / 2;
+    const nx = Math.max(-1, Math.min(1, (camX - WORLD_WIDTH / 2) / (WORLD_WIDTH / 2)));
+    const ny = Math.max(-1, Math.min(1, (camY - WORLD_HEIGHT / 2) / (WORLD_HEIGHT / 2)));
+
+    const back = coverPlacement(image.naturalWidth, image.naturalHeight, W, H, nx * 0.28, ny * 0.18);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(image, back.x, back.y, back.width, back.height);
+
+    const front = this.foreground;
+    if (this.foregroundReady && front?.naturalWidth && front.naturalHeight) {
+      const near = coverPlacement(front.naturalWidth, front.naturalHeight, W, H, nx * 0.72, ny * 0.42);
+      ctx.drawImage(front, near.x, near.y, near.width, near.height);
+    }
+
+    // Motywy nadal różnią się temperaturą i nastrojem, ale zachowują dostarczony pejzaż.
+    const tint = landscapeTint(pal.bgStyle);
+    if (tint) {
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // Przyciemnia dół obrazu, aby teren, woda i robaki nie ginęły w szczegółach lasu.
+    const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
+    depth.addColorStop(0, "rgba(4,12,24,0)");
+    depth.addColorStop(0.72, "rgba(4,12,24,0.08)");
+    depth.addColorStop(1, "rgba(2,8,17,0.27)");
+    ctx.fillStyle = depth;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    if (pal.embers) this.drawEmbers(ctx, inp, camX, W, H);
+    return true;
+  }
+
   private drawClouds(
     ctx: CanvasRenderingContext2D,
     inp: BackgroundInput,
@@ -410,6 +515,15 @@ export class Background {
       return { canvas, spec, ground: color };
     });
     this.builtFor = pal;
+  }
+}
+
+function landscapeTint(style: BgStyle): string | null {
+  switch (style) {
+    case "peaks": return "rgba(30,58,92,0.12)";
+    case "dunes": return "rgba(126,69,18,0.16)";
+    case "spires": return "rgba(58,4,12,0.38)";
+    default: return null;
   }
 }
 
