@@ -272,7 +272,7 @@ export class Particles {
     this.flashes.push({ x, y, r, life: 0, max, color });
   }
 
-  smokeTrail(x: number, y: number, scale = 1): void {
+  smokeTrail(x: number, y: number, scale = 1, color = "rgba(168,168,172,1)"): void {
     this.add({
       x: x + (Math.random() - 0.5) * 3,
       y: y + (Math.random() - 0.5) * 3,
@@ -282,7 +282,7 @@ export class Particles {
       max: 0.5 + Math.random() * 0.55,
       size: (2.4 + Math.random() * 2.2) * scale,
       grow: 16 * scale,
-      color: "rgba(168,168,172,1)",
+      color,
       kind: "smoke",
       grav: -0.05,
       drag: 1.4,

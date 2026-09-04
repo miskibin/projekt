@@ -5,9 +5,9 @@ import { BANANALET, CLUSTERLET } from "./weapons";
 import type { EngineCtx, Projectile, ProjectileKind } from "./types";
 import type { ExplosionStyle } from "../protocol";
 
-const HOMING_TURN_RATE = 3.2; // rad/s
-const HOMING_ACCEL = 260;
-const HOMING_MAX_SPEED = 560;
+const HOMING_TURN_RATE = 4.2; // rad/s
+const HOMING_ACCEL = 320;
+const HOMING_MAX_SPEED = 620;
 
 export function makeProjectile(ctx: EngineCtx, init: Partial<Projectile> & { kind: ProjectileKind }): Projectile {
   const p: Projectile = {
@@ -58,7 +58,7 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
       const ang = banana
         ? -Math.PI * 0.96 + fan * Math.PI * 0.92 + ctx.rng.range(-0.07, 0.07)
         : ctx.rng.range(-Math.PI * 0.85, -Math.PI * 0.15);
-      const speed = banana ? ctx.rng.range(340, 540) : ctx.rng.range(150, 260);
+      const speed = banana ? ctx.rng.range(360, 570) : ctx.rng.range(125, 215);
       makeProjectile(ctx, {
         kind: p.shardKind,
         x: p.x + Math.cos(ang) * 4,

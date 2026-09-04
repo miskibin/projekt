@@ -527,8 +527,15 @@ export class Renderer {
     switch (p.kind) {
       case "bazooka":
       case "homing": {
-        inp.particles.smokeTrail(p.x - Math.cos(ang) * 8, p.y - Math.sin(ang) * 8, p.kind === "homing" ? 1.2 : 1);
+        const homing = p.kind === "homing";
+        inp.particles.smokeTrail(
+          p.x - Math.cos(ang) * 8,
+          p.y - Math.sin(ang) * 8,
+          homing ? 1.3 : 0.9,
+          homing ? "rgba(83,220,255,0.9)" : "rgba(150,150,145,0.9)",
+        );
         ctx.rotate(ang);
+        if (homing) ctx.scale(1.2, 1.08);
         // płomień silnika (bez gradientu – dwa okręgi addytywnie)
         const flick = 0.75 + Math.sin(inp.time * 40 + p.id) * 0.25;
         ctx.save();
@@ -652,6 +659,7 @@ export class Renderer {
       case "clusterlet":
       case "bananalet": {
         if (p.kind === "bananalet") {
+          inp.particles.sparks(p.x, p.y, 1, "#fff04d");
           ctx.rotate(ang + inp.time * 6 + p.id);
           ctx.strokeStyle = "#b98112";
           ctx.lineWidth = 4.2;
@@ -665,11 +673,15 @@ export class Renderer {
           ctx.arc(0, -0.5, 5.4, 0.58, Math.PI - 0.58);
           ctx.stroke();
         } else {
-          ctx.fillStyle = "#4a7a5a";
+          inp.particles.sparks(p.x, p.y, 1, "#69ffe0");
+          ctx.fillStyle = "#2bbd9d";
           ctx.beginPath();
-          ctx.arc(0, 0, 3.4, 0, Math.PI * 2);
+          ctx.arc(0, 0, 4.1, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = "rgba(255,255,255,0.4)";
+          ctx.strokeStyle = "#d9fff7";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.fillStyle = "rgba(255,255,255,0.75)";
           ctx.beginPath();
           ctx.arc(-1, -1.2, 1.1, 0, Math.PI * 2);
           ctx.fill();
@@ -750,6 +762,7 @@ export class Renderer {
         break;
       }
       case "airstrikeBomb": {
+        inp.particles.smokeTrail(p.x, p.y - 6, 0.7, "rgba(90,76,78,0.82)");
         ctx.rotate(ang + Math.PI / 2);
         const bgr = ctx.createLinearGradient(-4, 0, 4, 0);
         bgr.addColorStop(0, "#2d333d");

@@ -1173,18 +1173,31 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
   switch (weapon) {
     case "bazooka":
     case "homing": {
-      ctx.fillStyle = weapon === "homing" ? "#8d3a34" : "#4d5563";
-      roundRect(ctx, -2, -1.8, 14, 3.6, 1.8);
+      const homing = weapon === "homing";
+      ctx.fillStyle = homing ? "#b1263f" : "#4d5563";
+      roundRect(ctx, -2, homing ? -2.2 : -1.8, homing ? 17 : 14, homing ? 4.4 : 3.6, 1.8);
       ctx.fill();
       ctx.strokeStyle = "rgba(10,14,20,0.6)";
       ctx.lineWidth = 0.9;
       ctx.stroke();
       ctx.fillStyle = "#2c333d";
-      roundRect(ctx, 10.5, -2.2, 2.4, 4.4, 1);
+      roundRect(ctx, homing ? 12.5 : 10.5, homing ? -2.8 : -2.2, 2.4, homing ? 5.6 : 4.4, 1);
       ctx.fill();
-      ctx.fillStyle = "#9aa6b8";
+      ctx.fillStyle = homing ? "#7cecff" : "#9aa6b8";
       roundRect(ctx, 2, -3.2, 3.6, 1.6, 0.7);
       ctx.fill();
+      if (homing) {
+        ctx.fillStyle = "#eafdff";
+        ctx.beginPath();
+        ctx.arc(15.2, 0, 1.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#66eaff";
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(5, -2.2); ctx.lineTo(2, -5.3);
+        ctx.moveTo(5, 2.2); ctx.lineTo(2, 5.3);
+        ctx.stroke();
+      }
       break;
     }
     case "shotgun": {
@@ -1212,14 +1225,31 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
     }
     case "grenade":
     case "cluster": {
-      const c = weapon === "cluster" ? "#2f5f4a" : "#3f7a3a";
-      ctx.fillStyle = c;
-      ctx.beginPath();
-      ctx.arc(4, 0, 3.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#1e3a24";
-      ctx.lineWidth = 0.8;
-      ctx.stroke();
+      if (weapon === "cluster") {
+        ctx.fillStyle = "#168c86";
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = i * Math.PI / 3;
+          const x = 4 + Math.cos(a) * 4.6;
+          const y = Math.sin(a) * 4.6;
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "#8effe9";
+        ctx.lineWidth = 0.9;
+        ctx.stroke();
+        ctx.fillStyle = "#ffe65c";
+        ctx.fillRect(0, -0.8, 8, 1.6);
+      } else {
+        ctx.fillStyle = "#3f7a3a";
+        ctx.beginPath();
+        ctx.arc(4, 0, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#1e3a24";
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
       ctx.fillStyle = "#9aa0a8";
       roundRect(ctx, 3, -6, 2, 3, 0.6);
       ctx.fill();

@@ -886,15 +886,16 @@ export class GameImpl implements Game, EngineCtx {
           kind: "homing",
           x: mx,
           y: my,
-          vx: dirX * speed,
-          vy: dirY * speed,
+          vx: dirX * speed * 0.74,
+          vy: dirY * speed * 0.74,
           radius: def.radius,
           damage: def.damage,
           power: def.power,
           windAffected: true,
           explodeOnContact: true,
           homingTarget: this.target ? { x: this.target.x, y: this.target.y } : undefined,
-          homingDelay: 0.5,
+          gravityScale: 0.55,
+          homingDelay: 0.34,
           ownerWorm: w.id,
           ownerTeam: w.team,
         });
@@ -904,22 +905,25 @@ export class GameImpl implements Game, EngineCtx {
       case "cluster":
       case "banana": {
         this.emitShot(id, w);
+        const speedScale = id === "grenade" ? 0.78 : id === "cluster" ? 0.94 : 1.08;
+        const gravityScale = id === "grenade" ? 1.2 : id === "cluster" ? 0.98 : 0.78;
         makeProjectile(this, {
           kind: id,
           x: mx,
           y: my,
-          vx: dirX * speed,
-          vy: dirY * speed,
+          vx: dirX * speed * speedScale,
+          vy: dirY * speed * speedScale,
           fuse: ts.weaponTimer,
           radius: def.radius,
           damage: def.damage,
           power: def.power,
           windAffected: false,
+          gravityScale,
           explodeOnContact: false,
           collidesWorms: false,
           bounces: true,
-          restitution: id === "banana" ? 0.6 : 0.45,
-          shards: id === "cluster" ? 5 : id === "banana" ? 8 : 0,
+          restitution: id === "grenade" ? 0.32 : id === "cluster" ? 0.52 : 0.72,
+          shards: id === "cluster" ? 6 : id === "banana" ? 8 : 0,
           shardKind: id === "cluster" ? "clusterlet" : id === "banana" ? "bananalet" : undefined,
           ownerWorm: w.id,
           ownerTeam: w.team,
@@ -932,18 +936,19 @@ export class GameImpl implements Game, EngineCtx {
           kind: "holy",
           x: mx,
           y: my,
-          vx: dirX * speed,
-          vy: dirY * speed,
+          vx: dirX * speed * 0.68,
+          vy: dirY * speed * 0.68,
           fuse: 3,
           restFuse: 1,
           radius: def.radius,
           damage: def.damage,
           power: def.power,
           windAffected: false,
+          gravityScale: 1.28,
           explodeOnContact: false,
           collidesWorms: false,
           bounces: true,
-          restitution: 0.4,
+          restitution: 0.24,
           ownerWorm: w.id,
           ownerTeam: w.team,
         });
@@ -992,8 +997,8 @@ export class GameImpl implements Game, EngineCtx {
         if (!this.target) return;
         this.emitShot(id, w);
         const tx = this.target.x;
-        for (let i = 0; i < 5; i++) {
-          const off = (i - 2) * 30 + this.rng.range(-8, 8);
+        for (let i = 0; i < 6; i++) {
+          const off = (i - 2.5) * 38 + this.rng.range(-7, 7);
           makeProjectile(this, {
             kind: "airstrikeBomb",
             x: clamp(tx + off, 4, WORLD_WIDTH - 4),

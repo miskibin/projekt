@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FIXED_DT, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH, WORM_RADIUS } from "../constants";
-import type { GameConfig, GameEvent, InputState } from "../protocol";
+import type { GameConfig, GameEvent, InputState, WeaponId } from "../protocol";
 import { createGame, type Game, type TeamSetup } from "./index";
 import { GameImpl } from "./game";
 import { circleHits } from "./physics";
@@ -187,6 +187,30 @@ describe("bronie", () => {
     const late: GameEvent[] = [];
     stepN(g, Math.round(1.2 * 60), late);
     expect(late.some((e) => e.t === "explosion")).toBe(true);
+  });
+
+  it("broń rzucana ma odrębny ciężar, prędkość i sprężystość", () => {
+    const launch = (weapon: Extract<WeaponId, "grenade" | "cluster" | "banana">) => {
+      const g = createGame(cfg({ seed: 4433 }), setups(2));
+      const gi = g as GameImpl;
+      toActive(g);
+      clearMines(g);
+      const team = g.snapshot().turn.activeTeam;
+      g.applyAction(team, { kind: "selectWeapon", weapon });
+      g.applyInput(team, { ...NEUTRAL, aim: -0.7 });
+      g.applyAction(team, { kind: "fire", power: 0.75 });
+      return gi.projectiles.find((p) => p.kind === weapon)!;
+    };
+
+    const grenade = launch("grenade");
+    const cluster = launch("cluster");
+    const banana = launch("banana");
+    expect(Math.hypot(grenade.vx, grenade.vy)).toBeLessThan(Math.hypot(cluster.vx, cluster.vy));
+    expect(Math.hypot(cluster.vx, cluster.vy)).toBeLessThan(Math.hypot(banana.vx, banana.vy));
+    expect(grenade.gravityScale).toBeGreaterThan(cluster.gravityScale);
+    expect(cluster.gravityScale).toBeGreaterThan(banana.gravityScale);
+    expect(grenade.restitution).toBeLessThan(cluster.restitution);
+    expect(cluster.restitution).toBeLessThan(banana.restitution);
   });
 
   it("banan rozpada się na szeroki wachlarz ośmiu mini-bananów", () => {

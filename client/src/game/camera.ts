@@ -26,6 +26,7 @@ const ZOOM_OUT_TAU = 0.3;
 const GLANCE_TIME = 0.6;
 /** Ile wstrząs może wyjść poza dozwolony obszar kamery (świat, px). */
 const SHAKE_SLACK = 14;
+const SHAKE_DECAY = 7.8;
 
 export interface Point {
   x: number;
@@ -221,7 +222,11 @@ export class Camera {
   }
 
   shake(amount: number): void {
-    this.shakeAmp = Math.min(58, Math.max(this.shakeAmp, amount));
+    const next = Math.min(24, Math.max(0, amount));
+    const residual = this.shakeAmp * Math.exp(-this.shakeT * SHAKE_DECAY);
+    // Kilka odłamków wybuchających w tej samej klatce nie przedłuża całego wstrząsu.
+    if (next <= residual) return;
+    this.shakeAmp = next;
     this.shakeT = 0;
   }
 
@@ -252,11 +257,18 @@ export class Camera {
 
     if (this.shakeAmp > 0.2) {
       this.shakeT += dt;
-      const decay = Math.exp(-this.shakeT * 4.8);
+      const decay = Math.exp(-this.shakeT * SHAKE_DECAY);
       // amplituda w pikselach ekranu, nie świata – wstrząs czuć tak samo przy każdym zbliżeniu
       const a = (this.shakeAmp * decay) / Math.max(0.4, this.zoom);
-      this.ox = (Math.sin(this.shakeT * 67) + Math.sin(this.shakeT * 31) * 0.35) * a;
-      this.oy = (Math.cos(this.shakeT * 53) + Math.sin(this.shakeT * 37) * 0.25) * a * 0.72;
+      this.ox = (Math.sin(this.shakeT * 47) + Math.sin(this.shakeT * 23) * 0.28) * a;
+      this.oy = (Math.cos(this.shakeT * 41) + Math.sin(this.shakeT * 29) * 0.2) * a * 0.58;
+      const magnitude = Math.hypot(this.ox, this.oy);
+      const maxOffset = this.shakeAmp / Math.max(0.4, this.zoom);
+      if (magnitude > maxOffset) {
+        const limit = maxOffset / magnitude;
+        this.ox *= limit;
+        this.oy *= limit;
+      }
       this.clampShake();
       if (decay < 0.02) this.shakeAmp = 0;
     } else {

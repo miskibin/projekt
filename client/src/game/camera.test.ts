@@ -186,4 +186,17 @@ describe("kamera", () => {
     expect(maxOut).toBeGreaterThan(0); // widać, że trzęsie
     expect(maxOut).toBeLessThanOrEqual(15);
   });
+
+  it("wstrząs szybko wygasa i nie dominuje nad kamerą", () => {
+    const camera = landscape();
+    camera.focus(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, undefined, true);
+    const base = camera.worldToScreen(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    camera.shake(30);
+    camera.update(1 / 60);
+    const shaken = camera.worldToScreen(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    expect(Math.hypot(shaken.x - base.x, shaken.y - base.y)).toBeLessThanOrEqual(24);
+    for (let i = 0; i < 48; i++) camera.update(1 / 60);
+    const settled = camera.worldToScreen(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    expect(Math.hypot(settled.x - base.x, settled.y - base.y)).toBeLessThan(0.2);
+  });
 });

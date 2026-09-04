@@ -48,16 +48,16 @@ const D = (
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   bazooka: D("bazooka", -1, 28, 45, 300, { charge: true }),
-  grenade: D("grenade", -1, 30, 50, 320, { charge: true }),
-  cluster: D("cluster", 2, 25, 35, 260, { charge: true }),
-  banana: D("banana", 1, 30, 45, 300, { charge: true }),
-  shotgun: D("shotgun", -1, 10, 25, 160, { shots: 2 }),
+  grenade: D("grenade", -1, 34, 55, 350, { charge: true }),
+  cluster: D("cluster", 2, 18, 20, 170, { charge: true }),
+  banana: D("banana", 1, 22, 25, 200, { charge: true }),
+  shotgun: D("shotgun", -1, 9, 22, 145, { shots: 2 }),
   uzi: D("uzi", 3, 5, 4, 70),
   holy: D("holy", 1, 70, 100, 600, { charge: true }),
-  dynamite: D("dynamite", 1, 60, 75, 500, { retreat: 1.5 }),
-  mine: D("mine", 2, 30, 45, 300, { retreat: 1.5 }),
-  airstrike: D("airstrike", 1, 24, 30, 240, { target: "required" }),
-  homing: D("homing", 1, 30, 45, 300, { charge: true, target: "optional" }),
+  dynamite: D("dynamite", 1, 58, 85, 620, { retreat: 1.5 }),
+  mine: D("mine", 2, 26, 55, 420, { retreat: 1.5 }),
+  airstrike: D("airstrike", 1, 21, 32, 250, { target: "required" }),
+  homing: D("homing", 1, 32, 50, 330, { charge: true, target: "optional" }),
   bat: D("bat", 2, 0, 30, 500),
   teleport: D("teleport", 2, 0, 0, 0, { target: "required", retreat: 0.7 }),
   girder: D("girder", 3, 0, 0, 0, { target: "required", utility: true }),
@@ -83,9 +83,9 @@ export const CRATE_WEAPONS: readonly WeaponId[] = [
 export const CRATE_UTILITIES: readonly WeaponId[] = ["teleport", "girder", "jetpack"];
 
 /** Parametry odłamków (cluster / banana). */
-export const CLUSTERLET = { radius: 16, damage: 20, power: 180 };
-export const BANANALET = { radius: 24, damage: 35, power: 250 };
-export const AIRSTRIKE_BOMB = { radius: 24, damage: 30, power: 240 };
+export const CLUSTERLET = { radius: 14, damage: 17, power: 155 };
+export const BANANALET = { radius: 23, damage: 32, power: 255 };
+export const AIRSTRIKE_BOMB = { radius: 21, damage: 32, power: 250 };
 
 export function startingAmmo(): Record<WeaponId, number> {
   const out = {} as Record<WeaponId, number>;

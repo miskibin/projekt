@@ -449,7 +449,7 @@ export class GameClient {
         this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.renderer.onExplosion(ev.r, ev.power);
-        this.camera.shake(Math.min(55, 7 + ev.r * 0.68 + ev.power * 0.025));
+        this.camera.shake(Math.min(22, 2 + ev.r * 0.24 + ev.power * 0.006));
         this.camera.glance(ev.x, ev.y, 0.25);
         break;
       }
@@ -747,16 +747,16 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 function weaponFireEffect(weapon: WeaponId): { color: string; sparks: number; kick: number } {
   switch (weapon) {
-    case "homing": return { color: "#79efff", sparks: 11, kick: 3.5 };
-    case "cluster": return { color: "#66ffd3", sparks: 10, kick: 3 };
-    case "banana": return { color: "#fff04d", sparks: 12, kick: 4 };
-    case "holy": return { color: "#fffbd1", sparks: 16, kick: 6 };
-    case "dynamite": return { color: "#ff6b45", sparks: 7, kick: 2.5 };
-    case "airstrike": return { color: "#ff745c", sparks: 12, kick: 4 };
-    case "shotgun": return { color: "#fff1bd", sparks: 15, kick: 6 };
-    case "uzi": return { color: "#bceaff", sparks: 6, kick: 1.5 };
-    case "teleport": return { color: "#be8cff", sparks: 14, kick: 2 };
-    default: return { color: "#ffe07a", sparks: 8, kick: 3 };
+    case "homing": return { color: "#79efff", sparks: 12, kick: 1.8 };
+    case "cluster": return { color: "#66ffd3", sparks: 13, kick: 1.4 };
+    case "banana": return { color: "#fff04d", sparks: 15, kick: 2 };
+    case "holy": return { color: "#fffbd1", sparks: 20, kick: 3 };
+    case "dynamite": return { color: "#ff4b35", sparks: 9, kick: 1 };
+    case "airstrike": return { color: "#ff745c", sparks: 14, kick: 1.8 };
+    case "shotgun": return { color: "#fff1bd", sparks: 18, kick: 2.5 };
+    case "uzi": return { color: "#bceaff", sparks: 6, kick: 0.7 };
+    case "teleport": return { color: "#be8cff", sparks: 16, kick: 0.6 };
+    default: return { color: "#ffe07a", sparks: 9, kick: 1.4 };
   }
 }
 
