@@ -27,6 +27,9 @@ const GLANCE_TIME = 0.6;
 /** Ile wstrząs może wyjść poza dozwolony obszar kamery (świat, px). */
 const SHAKE_SLACK = 14;
 const SHAKE_DECAY = 7.8;
+/** Część połowy kadru, którą wolno wysunąć poza mapę, aby śledzić robaka przy krawędzi. */
+const EDGE_FOLLOW_SLACK = 0.38;
+const BOTTOM_FOLLOW_SLACK = 0.34;
 
 export interface Point {
   x: number;
@@ -49,7 +52,8 @@ interface Range {
  * Kamera 2D ze śledzeniem celu, wstrząsami, zoomem i ręcznym przesuwaniem.
  *
  * Zoom bazowy (`fitZoom`) dopasowuje całą szerokość mapy do ekranu – to zarazem
- * minimalne zbliżenie, więc poza krawędziami świata nigdy nie widać pustki.
+ * minimalne zbliżenie. Przy śledzeniu na skraju dopuszcza kontrolowany margines tła,
+ * dzięki czemu aktywny robak nie przykleja się do brzegu ekranu.
  * W trybie automatycznym (`manual === false`) kamera sama kadruje akcję:
  * `focus()` na aktywnym robaku, `trackProjectile()` na pojedynczym pocisku i `frame()` na salwie,
  * `overview()` między turami.
@@ -135,8 +139,9 @@ export class Camera {
   }
 
   /** Zbliżenie na aktywnego robaka – trzymamy go w dolnej części ekranu. */
-  focus(x: number, y: number, zoom = this.focusZoom, snap = false): void {
-    if (this.manual) return;
+  focus(x: number, y: number, zoom = this.focusZoom, snap = false, force = false): void {
+    if (this.manual && !force) return;
+    if (force) this.manual = false;
     const z = clamp(zoom, this.minZoom, this.maxZoom);
     const offsetY = (FOCUS_SCREEN_Y - 0.5) * (this.viewH / z);
     this.setAuto(x, y - offsetY, z, snap);
@@ -296,14 +301,16 @@ export class Camera {
   private centerRange(zoom: number): { x: Range; y: Range } {
     const halfW = this.viewW / 2 / zoom;
     const halfH = this.viewH / 2 / zoom;
+    const edgeSlack = halfW * EDGE_FOLLOW_SLACK;
+    const bottomSlack = halfH * BOTTOM_FOLLOW_SLACK;
     const x =
       halfW * 2 >= WORLD_WIDTH
-        ? { lo: WORLD_WIDTH / 2, hi: WORLD_WIDTH / 2 }
-        : { lo: halfW, hi: WORLD_WIDTH - halfW };
+        ? { lo: WORLD_WIDTH / 2 - edgeSlack, hi: WORLD_WIDTH / 2 + edgeSlack }
+        : { lo: halfW - edgeSlack, hi: WORLD_WIDTH - halfW + edgeSlack };
     const y =
       halfH * 2 >= WORLD_HEIGHT
         ? { lo: WORLD_HEIGHT / 2, hi: WORLD_HEIGHT / 2 }
-        : { lo: halfH - SKY_MARGIN, hi: WORLD_HEIGHT - halfH };
+        : { lo: halfH - SKY_MARGIN, hi: WORLD_HEIGHT - halfH + bottomSlack };
     return { x, y };
   }
 

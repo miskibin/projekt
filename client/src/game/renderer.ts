@@ -154,8 +154,9 @@ export class Renderer {
     if (level >= WORLD_HEIGHT + 40) return;
     const t = inp.time;
     const view = inp.camera.viewRect();
-    const x0 = Math.max(-60, view.x - 60);
-    const x1 = Math.min(WORLD_WIDTH + 60, view.x + view.w + 60);
+    // Woda ciągnie się poza krawędź terenu, gdy kamera prowadzi robaka przy skraju mapy.
+    const x0 = view.x - 60;
+    const x1 = view.x + view.w + 60;
     if (x1 <= x0) return;
     const bottom = Math.max(WORLD_HEIGHT + 200, view.y + view.h + 120);
     const step = 16;

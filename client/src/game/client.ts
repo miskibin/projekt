@@ -66,6 +66,7 @@ export class GameClient {
   private myTeam = -1;
   private graves: Grave[] = [];
   private lastPos = new Map<number, { x: number; y: number; team: number; name: string }>();
+  private trackedWorm: { id: number; x: number; y: number } | null = null;
   private pending: { at: number; ev: GameEvent }[] = [];
   private raf = 0;
   private last = 0;
@@ -173,6 +174,7 @@ export class GameClient {
     this.myTeam = myTeam;
     this.graves = [];
     this.lastPos.clear();
+    this.trackedWorm = null;
     this.pending = [];
     this.buffer.clear();
     this.particles.clear();
@@ -345,6 +347,11 @@ export class GameClient {
     if (state) {
       const turn = state.turn;
       const active = state.worms.find((w) => w.id === turn.activeWormId && w.alive);
+      const previous = active && this.trackedWorm?.id === active.id ? this.trackedWorm : null;
+      const observedVx = previous ? (active!.x - previous.x) / Math.max(dt, 1 / 240) : active?.vx ?? 0;
+      const observedVy = previous ? (active!.y - previous.y) / Math.max(dt, 1 / 240) : active?.vy ?? 0;
+      const moving = !!active && (!!previous && Math.hypot(active.x - previous.x, active.y - previous.y) > 0.04);
+      const falling = !!active && (!active.onGround || Math.abs(active.vy) > 3 || Math.abs(observedVy) > 3);
       // kamera: prowadzenie pojedynczego pocisku / kadr salwy > aktywny robak > widok całej mapy
       if (state.projectiles.length === 1) {
         const p = state.projectiles[0];
@@ -352,9 +359,16 @@ export class GameClient {
       } else if (state.projectiles.length > 1) {
         const points = state.projectiles.map((p) => ({ x: p.x, y: p.y }));
         this.camera.frame(points, { maxZoom: this.camera.projectileZoom, margin: 100 });
-      } else if (active && (turn.phase === "active" || turn.phase === "retreat")) {
-        // śledzimy robaka z lekkim wyprzedzeniem w kierunku, w którym patrzy
-        this.camera.focus(active.x + active.facing * 40, active.y - 20);
+      } else if (active && (
+        turn.phase === "active" || turn.phase === "retreat" || (turn.phase === "settling" && falling)
+      )) {
+        // Ruch pieszy zmienia bezpośrednio x, więc łączymy prędkość silnika z ruchem zaobserwowanym między klatkami.
+        const vx = Math.abs(active.vx) > Math.abs(observedVx) ? active.vx : observedVx;
+        const vy = Math.abs(active.vy) > Math.abs(observedVy) ? active.vy : observedVy;
+        const leadX = Math.max(-110, Math.min(110, vx * 0.2)) + active.facing * 26;
+        const leadY = Math.max(-55, Math.min(115, vy * 0.13));
+        // Gdy robak faktycznie idzie lub spada, odzyskujemy auto-focus po wcześniejszym przesunięciu kamery.
+        this.camera.focus(active.x + leadX, active.y + leadY - 16, undefined, false, moving || falling);
       } else {
         // między turami / w odwrocie / gdy fizyka się uspokaja: widok całej mapy,
         // wycentrowany pionowo na żywych robakach (ekran bywa niższy niż świat)
@@ -362,6 +376,7 @@ export class GameClient {
         if (alive.length > 0) this.camera.frame(alive, { maxZoom: this.camera.fitZoom, margin: 60 });
         else this.camera.overview(active?.x);
       }
+      this.trackedWorm = active ? { id: active.id, x: active.x, y: active.y } : null;
       this.waterShown += (turn.waterLevel - this.waterShown) * Math.min(1, dt * 2.5);
       this.input.setContext({
         myTurn: this.isMyTurn(state.turn.activeTeam, state.turn.phase),

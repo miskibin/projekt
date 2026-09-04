@@ -107,17 +107,22 @@ describe("kamera", () => {
     expect(camera.zoom).toBeCloseTo(camera.focusZoom, 3);
   });
 
-  it("przy krawędziach mapy nie pokazuje pustki obok świata", () => {
+  it("przy krawędziach utrzymuje śledzony obiekt wewnątrz kadru", () => {
     const camera = landscape();
     camera.focus(0, 1050);
     settle(camera);
     let view = camera.viewRect();
-    expect(view.x).toBeGreaterThanOrEqual(-0.001);
-    expect(view.y + view.h).toBeLessThanOrEqual(WORLD_HEIGHT + 0.001);
+    let point = camera.worldToScreen(0, 1050);
+    expect(point.x).toBeGreaterThan(camera.viewW * 0.12);
+    expect(point.x).toBeLessThan(camera.viewW * 0.3);
+    expect(view.x).toBeGreaterThan(-view.w * 0.4);
     camera.focus(WORLD_WIDTH, 0);
     settle(camera);
     view = camera.viewRect();
-    expect(view.x + view.w).toBeLessThanOrEqual(WORLD_WIDTH + 0.001);
+    point = camera.worldToScreen(WORLD_WIDTH, 0);
+    expect(point.x).toBeGreaterThan(camera.viewW * 0.7);
+    expect(point.x).toBeLessThan(camera.viewW * 0.88);
+    expect(view.x + view.w).toBeLessThan(WORLD_WIDTH + view.w * 0.4);
     expect(view.y).toBeGreaterThanOrEqual(-200 - 0.001);
   });
 
@@ -173,7 +178,7 @@ describe("kamera", () => {
     expect(camera.x).toBeCloseTo(base, 1);
   });
 
-  it("wstrząs jest odczuwalny przy oddaleniu i nie wypycha widoku poza świat", () => {
+  it("wstrząs jest odczuwalny przy oddaleniu i pozostaje ograniczony", () => {
     const camera = landscape();
     camera.overview(undefined, undefined, true);
     camera.shake(20);
@@ -184,7 +189,17 @@ describe("kamera", () => {
       maxOut = Math.max(maxOut, -view.x, view.x + view.w - WORLD_WIDTH);
     }
     expect(maxOut).toBeGreaterThan(0); // widać, że trzęsie
-    expect(maxOut).toBeLessThanOrEqual(15);
+    expect(maxOut * camera.zoom).toBeLessThanOrEqual(24);
+  });
+
+  it("wymuszony focus odzyskuje śledzenie poruszającego się robaka", () => {
+    const camera = landscape();
+    camera.panBy(-200, 0);
+    expect(camera.manual).toBe(true);
+    camera.focus(1500, 760, undefined, false, true);
+    settle(camera, 1);
+    expect(camera.manual).toBe(false);
+    expect(camera.x).toBeGreaterThan(1200);
   });
 
   it("wstrząs szybko wygasa i nie dominuje nad kamerą", () => {
