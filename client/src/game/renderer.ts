@@ -205,6 +205,27 @@ export class Renderer {
     ctx.stroke();
     ctx.restore();
 
+    // Broken reflection bands taper into the depth; bounded by the visible water.
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.lineCap = "round";
+    for (let row = 0; row < 7; row++) {
+      const depth = 14 + row * row * 3.5;
+      ctx.strokeStyle = pal.waterFoam;
+      ctx.globalAlpha = (1 - row / 7) * 0.16;
+      ctx.lineWidth = 1 + row * 0.28;
+      ctx.beginPath();
+      for (let x = Math.floor(x0 / 110) * 110; x < x1; x += 110) {
+        const drift = Math.sin(t * 0.55 + row * 1.7 + x * 0.003) * 19;
+        const start = x + drift + row * 31;
+        const y = level + depth + Math.sin(x * 0.017 + t) * 2;
+        ctx.moveTo(start, y);
+        ctx.lineTo(start + 22 + row * 5, y);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
     // 4) piana na grzbiecie
     ctx.strokeStyle = pal.waterFoam;
     ctx.lineWidth = 1.8;
@@ -299,7 +320,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(w.x, w.y - ry - visualLift - 14);
     ctx.scale(s, s);
-    const barW = 48;
+    const barW = 54;
     const hp = Math.max(0, Math.min(1, w.hp / WORM_MAX_HP));
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
@@ -308,8 +329,12 @@ export class Renderer {
     ctx.textBaseline = "alphabetic";
     ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(6,10,16,0.85)";
+    const labelW = Math.max(barW + 12, ctx.measureText(w.name).width + 18);
+    ctx.fillStyle = "rgba(9,24,34,0.78)";
+    roundRect(ctx, -labelW / 2, -31, labelW, 35, 8);
+    ctx.fill();
     ctx.strokeText(w.name, 0, -15);
-    ctx.fillStyle = col;
+    ctx.fillStyle = lighten(col, 0.55);
     ctx.fillText(w.name, 0, -15);
 
     // tło pastylki
@@ -327,7 +352,7 @@ export class Renderer {
     roundRect(ctx, -barW / 2, -11, barW, 11, 5.5);
     ctx.stroke();
 
-    ctx.font = "800 9px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 11px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 2.4;
     ctx.strokeStyle = "rgba(6,10,16,0.55)";

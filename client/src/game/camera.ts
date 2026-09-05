@@ -8,9 +8,9 @@ const MAX_ZOOM_FACTOR = 3;
 const MAX_ZOOM_ABS = 2.5;
 /** Zbliżenie na aktywnego robaka: kadr o stałej szerokości świata (px), niezależnie od ekranu –
  *  kamera realnie podąża za robakiem, a jednocześnie widać sporo otoczenia. */
-const FOCUS_VIEW_WIDTH = 1550;
+const FOCUS_VIEW_WIDTH = 1320;
 /** Kadr śledzący pojedynczy pocisk jest trochę szerszy niż kadr ruchu robaka. */
-const PROJECTILE_VIEW_WIDTH = 1720;
+const PROJECTILE_VIEW_WIDTH = 1580;
 /** Maksymalne wyprzedzenie kamery przed lecącym pociskiem (px świata). */
 const PROJECTILE_LEAD = 150;
 /** Gdzie na ekranie trzymamy aktywnego robaka (0 = góra, 1 = dół). */

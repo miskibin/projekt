@@ -20,10 +20,10 @@ export interface HudInput {
 const FONT = "ui-sans-serif, system-ui, sans-serif";
 
 /* Wspólny język wizualny HUD-u: ciemne, półprzezroczyste granatowe karty. */
-const PANEL_FILL = "rgba(20,35,55,.72)";
-const PANEL_LINE = "rgba(190,215,255,.16)";
+const PANEL_FILL = "rgba(12,30,43,.88)";
+const PANEL_LINE = "rgba(193,226,231,.28)";
 const TEXT = "#f4f8ff";
-const MUTED = "#9db3cc";
+const MUTED = "#b4c9d6";
 const ALERT = "#ff6b5e";
 const WIND = "#8fd3ff";
 
@@ -179,7 +179,10 @@ export class Hud {
 /** Ciemna, półprzezroczysta karta HUD-u z delikatną jasną obwódką. */
 function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r = 12): void {
   roundRect(ctx, x, y, w, h, r);
-  ctx.fillStyle = PANEL_FILL;
+  const surface = ctx.createLinearGradient(x, y, x, y + h);
+  surface.addColorStop(0, "rgba(35,58,73,.94)");
+  surface.addColorStop(1, PANEL_FILL);
+  ctx.fillStyle = surface;
   ctx.fill();
   ctx.strokeStyle = PANEL_LINE;
   ctx.lineWidth = 1;

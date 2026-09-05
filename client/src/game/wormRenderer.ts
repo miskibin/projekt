@@ -751,18 +751,19 @@ export class WormSkins {
     if (s) return s;
     s = {
       base: color,
-      light: lighten(color, 0.5),
+      light: lighten(color, 0.58),
       mid: lighten(color, 0.16),
-      dark: darken(color, 0.3),
+      dark: darken(color, 0.36),
       line: darken(color, 0.6),
       belly: lighten(color, 0.66),
       bodyGrad: null,
     };
     // gradient w lokalnym układzie robaka – ważny jest transform w chwili malowania,
     // więc jeden obiekt obsługuje wszystkie robaki tej drużyny
-    const g = ctx.createLinearGradient(0, -WORM_RY, 0, WORM_RY);
+    const g = ctx.createLinearGradient(-WORM_RX, -WORM_RY, WORM_RX, WORM_RY);
     g.addColorStop(0, s.light);
-    g.addColorStop(0.45, s.mid);
+    g.addColorStop(0.38, s.mid);
+    g.addColorStop(0.72, s.base);
     g.addColorStop(1, s.dark);
     s.bodyGrad = g;
     this.map.set(color, s);
@@ -820,6 +821,25 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   ctx.beginPath();
   ctx.ellipse(facing * 0.6, ry * 0.5, rx * 0.66, ry * 0.5, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Subtle belly segments and a side highlight give the animated body volume.
+  ctx.strokeStyle = skin.dark;
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = 0.85;
+  for (let y = 5; y < 14; y += 3) {
+    ctx.beginPath();
+    ctx.moveTo(-rx * 0.48, y);
+    ctx.quadraticCurveTo(0, y + 2, rx * 0.48, y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 0.42;
+  ctx.strokeStyle = skin.belly;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-rx * 0.75, -ry * 0.45);
+  ctx.quadraticCurveTo(-rx * 0.96, 0, -rx * 0.65, ry * 0.38);
+  ctx.stroke();
   ctx.globalAlpha = 1;
 
   // bandaż przy niskim hp
