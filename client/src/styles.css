@@ -1,13 +1,13 @@
 :root {
-  --bg: #0b0f16;
+  --bg: #0b1924;
   --bg2: #121826;
   --panel: #161d2c;
-  --panel2: #1d2536;
-  --line: #2a3346;
+  --panel2: #203746;
+  --line: #395466;
   --text: #e7ecf5;
-  --muted: #93a0b8;
-  --accent: #56b6ff;
-  --accent2: #7ee787;
+  --muted: #b1c5d3;
+  --accent: #91dce7;
+  --accent2: #b6df76;
   --danger: #ff5f56;
   --radius: 14px;
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
@@ -24,7 +24,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 15px;
+  font-size: 16px;
   overflow: hidden;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
@@ -377,4 +377,49 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 @media (max-width: 900px) {
   .lobby-grid { grid-template-columns: 1fr; overflow: auto; }
   .code { font-size: 32px; letter-spacing: 6px; }
+}
+
+/* Shared expedition palette: the same landscape and tactile controls from menu to match. */
+.menu-bg {
+  background: linear-gradient(90deg, rgba(7,20,30,.68), rgba(7,20,30,.28)),
+    url("./../public/assets/alpine-valley.webp") center / cover;
+}
+.menu-bg .hill, .menu-bg::after { display: none; }
+.menu-card {
+  background: linear-gradient(155deg, rgba(32,55,68,.96), rgba(10,25,37,.96));
+  border-color: rgba(197,231,233,.32);
+  box-shadow: 0 28px 90px #04101999, inset 0 1px 0 #ffffff24;
+}
+.logo { font-size: clamp(30px, 7vw, 42px); letter-spacing: 1px; }
+.logo span { background-image: linear-gradient(#e6f5b8, #a1ca5d); }
+.tagline, .field > span, .set, .panel h2 { font-size: 14px; }
+.hint, .note, .conn-row, .badge, .code-label, .wp-hint { font-size: 12px; color: var(--muted); }
+.btn { min-height: 44px; box-shadow: inset 0 1px 0 #ffffff14, 0 3px 0 #04101966; }
+.btn-primary { background: linear-gradient(#f5d58a, #dab15d); border-color: #ffe4ab; color: #263124; }
+.btn-go { background: linear-gradient(#c3e890, #88b959); border-color: #d9f3ad; color: #203326; }
+.btn:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.panel { background: linear-gradient(150deg, #233d4bef, #102330f5); }
+#screen-game { --hud-bg: rgba(12,30,43,.86); --hud-line: rgba(193,226,231,.28); }
+.game-tool, .touch-key {
+  box-shadow: inset 0 1px 0 #ffffff20, 0 3px 8px #04101940;
+  transition: background .12s, border-color .12s, transform .12s;
+}
+.weapon-tool { border-bottom: 2px solid #c2dfa0; }
+.touch-fire { background: radial-gradient(circle at 35% 25%, #796442dd, #282c2fed); color: #fff0c9; }
+.touch-key small { font-size: 10px; letter-spacing: .3px; }
+.dialog, .weapon-panel { background: linear-gradient(145deg, #263f50f7, #102432fc); border-color: #b0d4db44; }
+.wslot { background: linear-gradient(#2f4b5bd9, #1b3445ee); padding: 10px 5px 8px; }
+.wslot .wname { font-size: 12px; line-height: 1.25; color: #e2edf3; }
+.wslot .wammo { font-size: 12px; color: #ffe0a0; }
+.wslot.sel { background: linear-gradient(#4a664f, #29483e); border-color: #c0e28f; }
+.weapon-grid { grid-template-columns: repeat(4, minmax(62px, 88px)); gap: 8px; }
+@media (max-height: 500px) and (min-width: 650px) {
+  .weapon-grid { grid-template-columns: repeat(8, 66px); }
+}
+@media (max-width: 560px) {
+  .weapon-tool { max-width: calc(100vw - 166px); font-size: 14px; }
+  .weapon-grid { gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
