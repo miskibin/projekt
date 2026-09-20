@@ -15,9 +15,8 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.114.0",
-    "@trystero-p2p/mqtt": "^0.25.2",
     "express": "^4.21.2",
-    "trystero": "^0.25.2",
+    "mqtt": "^5.15.1",
     "tsx": "^4.19.2",
     "ws": "^8.18.0"
   },

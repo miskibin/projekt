@@ -7,12 +7,6 @@ import { demoRoom } from "./game/demo";
 import { Sound } from "./game/sound";
 import { Lobby } from "./lobby";
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("./service-worker.js");
-  });
-}
-
 /**
  * Leniwy transport: rejestruje callbacki od razu, a prawdziwą implementację ładuje dopiero
  * przy `connect()`. Dzięki temu ciężki transport (Supabase) trafia do osobnego chunku,
@@ -56,7 +50,7 @@ class LazyTransport implements Transport {
 
 /**
  * Wybór transportu. Domyślnie WebSocket (self-host, serwer Node przez proxy Vite `/ws`).
- * Produkcja używa bezpośredniego WebRTC przez Trystero. Nie wymaga własnego serwera ani Supabase.
+ * Produkcja używa lekkiego publicznego brokera MQTT. Nie wymaga własnego serwera ani Supabase.
  * `VITE_TRANSPORT=ws` pozostawia tryb własnego serwera Node do developmentu/self-hostingu.
  */
 export function createTransport(): Transport {
