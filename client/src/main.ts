@@ -1,10 +1,17 @@
 import "./styles.css";
 import type { ClientMessage, GameConfig, ServerMessage } from "@shared/protocol";
 import { NetClient, WebSocketTransport, wsUrl, type ConnStatus, type Transport } from "./net";
+import { TrysteroTransport } from "./net/trysteroTransport";
 import { GameClient } from "./game/client";
 import { demoRoom } from "./game/demo";
 import { Sound } from "./game/sound";
 import { Lobby } from "./lobby";
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("./service-worker.js");
+  });
+}
 
 /**
  * Leniwy transport: rejestruje callbacki od razu, a prawdziwą implementację ładuje dopiero
@@ -49,20 +56,12 @@ class LazyTransport implements Transport {
 
 /**
  * Wybór transportu. Domyślnie WebSocket (self-host, serwer Node przez proxy Vite `/ws`).
- * Gdy ustawione są `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` i `VITE_TRANSPORT !== "ws"`,
- * ładowany jest `SupabaseTransport` (client/src/net/supabaseTransport.ts).
+ * Produkcja używa bezpośredniego WebRTC przez Trystero. Nie wymaga własnego serwera ani Supabase.
+ * `VITE_TRANSPORT=ws` pozostawia tryb własnego serwera Node do developmentu/self-hostingu.
  */
 export function createTransport(): Transport {
   const env = import.meta.env as unknown as Record<string, string | undefined>;
-  const url = env.VITE_SUPABASE_URL;
-  const key = env.VITE_SUPABASE_ANON_KEY;
-  if (env.VITE_TRANSPORT !== "ws" && url && key) {
-    return new LazyTransport(async () => {
-      const mod = await import("./net/supabaseTransport");
-      return new mod.SupabaseTransport(url, key) as unknown as Transport;
-    });
-  }
-  return new WebSocketTransport(wsUrl());
+  return env.VITE_TRANSPORT === "ws" ? new WebSocketTransport(wsUrl()) : new TrysteroTransport();
 }
 
 type Screen = "menu" | "lobby" | "game";
