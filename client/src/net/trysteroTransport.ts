@@ -1,4 +1,4 @@
-import { joinRoom, selfId, type MessageAction, type Room } from "trystero";
+import { joinRoom, selfId, type MessageAction, type Room } from "@trystero-p2p/mqtt";
 import type { ClientMessage, ServerMessage } from "@shared/protocol";
 import { createRoomHost, type Peer, type RoomHost } from "@shared/host";
 import type { ConnStatus, Transport } from "../net";
