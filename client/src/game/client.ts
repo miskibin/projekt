@@ -21,7 +21,7 @@ import { INTERP_DELAY_MS, LOCAL_INTERP_DELAY_MS, SnapshotBuffer } from "./state"
 import { TerrainRenderer } from "./terrainRenderer";
 import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
 import { canvasResolution } from "./viewport";
-import { enterFullscreen } from "./display";
+import { enterFullscreen, fullscreenHelp } from "./display";
 import type { TouchControl } from "./input";
 
 export interface GameCallbacks {
@@ -129,10 +129,10 @@ export class GameClient {
       toggleEscMenu: () => this.toggleEsc(),
       gesture: () => {
         this.sound.unlock();
-        if (this.running && !this.autoFullscreenAttempted) void this.fullscreen();
+        if (this.running && !this.autoFullscreenAttempted) void this.fullscreen(false);
       },
       toggleMap: () => this.toggleMap(),
-      fullscreen: () => { void this.fullscreen(); },
+      fullscreen: () => { void this.fullscreen(true); },
     });
 
     this.buildWeaponPanel();
@@ -642,7 +642,7 @@ export class GameClient {
   }
 
   private wireOverlays(): void {
-    byId("btn-fullscreen").addEventListener("click", () => { void this.fullscreen(); });
+    byId("btn-fullscreen").addEventListener("click", () => { void this.fullscreen(true); });
     byId("btn-menu").addEventListener("click", () => this.toggleEsc());
     byId("btn-weapons").addEventListener("click", () => this.toggleWeapons());
     byId("btn-close-weapons").addEventListener("click", () => this.setWeapons(false));
@@ -678,9 +678,12 @@ export class GameClient {
 
   // ---------------- rozmiar ----------------
 
-  async fullscreen(): Promise<void> {
+  async fullscreen(showHelp = false): Promise<void> {
     this.autoFullscreenAttempted = true;
-    await enterFullscreen();
+    const entered = await enterFullscreen();
+    if (!entered && showHelp) {
+      this.cb.toast(fullscreenHelp() ?? "Ta przeglądarka nie pozwala włączyć pełnego ekranu.");
+    }
     this.resize();
     if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
   }
@@ -719,7 +722,7 @@ export class GameClient {
         button.setPointerCapture(pointer);
         button.dataset.pressed = "true";
         this.sound.unlock();
-        if (!this.autoFullscreenAttempted) void this.fullscreen();
+        if (!this.autoFullscreenAttempted) void this.fullscreen(false);
         this.input.pressControl(control);
       });
       const release = (event: PointerEvent) => {

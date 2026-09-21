@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { enterFullscreen } from "./display";
+import { enterFullscreen, fullscreenHelp, isStandaloneDisplay } from "./display";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -8,7 +8,7 @@ describe("fullscreen", () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     const lock = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("document", { documentElement: { requestFullscreen } });
-    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(any-pointer: coarse)" }));
     vi.stubGlobal("screen", { orientation: { lock } });
     expect(await enterFullscreen()).toBe(true);
     expect(requestFullscreen).toHaveBeenCalledWith({ navigationUI: "hide" });
@@ -24,8 +24,28 @@ describe("fullscreen", () => {
 
   it("keeps fullscreen when orientation lock is unavailable", async () => {
     vi.stubGlobal("document", { documentElement: { requestFullscreen: vi.fn().mockResolvedValue(undefined) } });
-    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(any-pointer: coarse)" }));
     vi.stubGlobal("screen", { orientation: { lock: vi.fn().mockRejectedValue(new Error("Unavailable")) } });
     expect(await enterFullscreen()).toBe(true);
+  });
+
+  it("uses the prefixed fullscreen API when available", async () => {
+    const webkitRequestFullscreen = vi.fn();
+    vi.stubGlobal("document", { documentElement: { webkitRequestFullscreen } });
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.stubGlobal("screen", { orientation: {} });
+    expect(await enterFullscreen()).toBe(true);
+    expect(webkitRequestFullscreen).toHaveBeenCalledOnce();
+  });
+
+  it("recognises iOS standalone mode and explains Safari fullscreen", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: false }));
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone) Safari", standalone: false });
+    expect(isStandaloneDisplay()).toBe(false);
+    expect(fullscreenHelp()).toContain("Do ekranu początkowego");
+
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone) Safari", standalone: true });
+    expect(isStandaloneDisplay()).toBe(true);
+    expect(fullscreenHelp()).toBeNull();
   });
 });

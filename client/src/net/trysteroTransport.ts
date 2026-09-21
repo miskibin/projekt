@@ -13,6 +13,7 @@ const FLUSH_MS = 16;
 const HOST_WAIT_MS = 12_000;
 const HOST_HEARTBEAT_MS = 2_000;
 const HOST_STALE_MS = 8_000;
+const HOST_DISCONNECT_MS = 60_000;
 
 function randomId(): string {
   return crypto.randomUUID().replaceAll("-", "");
@@ -36,6 +37,7 @@ export class TrysteroTransport implements Transport {
   private joinTimer: number | null = null;
   private heartbeatTimer: number | null = null;
   private lastHostHeartbeat = 0;
+  private hostRecoveryPending = false;
   private msgCbs: ((msg: ServerMessage) => void)[] = [];
   private statusCbs: ((status: ConnStatus) => void)[] = [];
   private closedByUser = false;
@@ -145,7 +147,13 @@ export class TrysteroTransport implements Transport {
       this.teardownRoom();
     }, HOST_WAIT_MS);
     this.heartbeatTimer = window.setInterval(() => {
-      if (!this.hostPeerId || Date.now() - this.lastHostHeartbeat <= HOST_STALE_MS) return;
+      if (!this.hostPeerId) return;
+      const silenceMs = Date.now() - this.lastHostHeartbeat;
+      if (silenceMs <= HOST_STALE_MS) return;
+      // A short host-side network wobble must not destroy the guest's game.
+      // Keep the current state and request a full terrain sync when the host returns.
+      this.hostRecoveryPending = true;
+      if (silenceMs <= HOST_DISCONNECT_MS) return;
       this.msgCb({ t: "error", message: "Host opuścił pokój" });
       this.msgCb({ t: "leftRoom" });
       this.teardownRoom();
@@ -168,7 +176,14 @@ export class TrysteroTransport implements Transport {
         const presence = JSON.parse(payload) as HostPresence;
         if (Date.now() - presence.at > HOST_STALE_MS) return;
         this.lastHostHeartbeat = Date.now();
-        if (!this.hostPeerId) this.connectToHost(presence.peerId);
+        if (!this.hostPeerId) {
+          this.connectToHost(presence.peerId);
+        } else if (this.hostRecoveryPending) {
+          this.hostRecoveryPending = false;
+          this.publish(`${base}/c2s/${this.peerId}`, {
+            msgs: [{ t: "requestTerrainSync" }],
+          } satisfies WireC2S);
+        }
       } catch { /* ignore malformed public-broker traffic */ }
       return;
     }
@@ -297,6 +312,7 @@ export class TrysteroTransport implements Transport {
     this.heartbeatTimer = null;
     this.hostWorker = null;
     this.lastHostHeartbeat = 0;
+    this.hostRecoveryPending = false;
   }
 
   private msgCb(msg: ServerMessage): void { for (const cb of this.msgCbs) cb(msg); }
