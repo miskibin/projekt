@@ -21,6 +21,7 @@ function randomId(): string {
 /** Browser-hosted game with a public TLS MQTT broker used only as its relay. */
 export class TrysteroTransport implements Transport {
   private readonly peerId = randomId();
+  private readonly selfPeer: Peer = { id: this.peerId, send: (msg) => this.msgCb(msg) };
   private client: MqttClient | null = null;
   private host: RoomHost | null = null;
   private hostPeerId: string | null = null;
@@ -64,13 +65,13 @@ export class TrysteroTransport implements Transport {
 
     return new Promise((resolve) => {
       client.on("connect", () => {
+        this.restoreRoomSubscriptions();
         this.statusCb("open");
         if (!this.welcomed) {
           this.welcomed = true;
           this.msgCb({ t: "welcome", playerId: this.peerId });
           resolve();
         }
-        if (this.role === "host") this.publishHostPresence();
       });
     });
   }
@@ -78,7 +79,16 @@ export class TrysteroTransport implements Transport {
   send(msg: ClientMessage): void {
     if (msg.t === "hello") this.lastHello = msg;
     if (msg.t === "createRoom") return this.createRoom(msg);
-    if (msg.t === "joinRoom") return this.joinExistingRoom(msg.code.toUpperCase().trim());
+    if (msg.t === "joinRoom") {
+      const code = msg.code.toUpperCase().trim();
+      // NetClient asks to rejoin after every broker reconnect. The room host lives
+      // in this browser, so tearing it down here would destroy the whole lobby.
+      if (this.roomCode === code && (this.role === "host" || this.role === "guest")) {
+        this.restoreRoomSubscriptions();
+        return;
+      }
+      return this.joinExistingRoom(code);
+    }
     if (msg.t === "leaveRoom") {
       this.deliverToHost(msg);
       this.teardownRoom();
@@ -234,6 +244,17 @@ export class TrysteroTransport implements Transport {
     this.publish(`${this.baseTopic()}/host`, { peerId: this.peerId, at: Date.now() } satisfies HostPresence, true);
   }
 
+  private restoreRoomSubscriptions(): void {
+    if (!this.client || !this.roomCode || !this.role) return;
+    const base = this.baseTopic();
+    if (this.role === "host") {
+      this.client.subscribe(`${base}/c2s/+`);
+      this.publishHostPresence();
+      return;
+    }
+    this.client.subscribe([`${base}/host`, `${base}/s2c/${this.peerId}`]);
+  }
+
   private publish(topic: string, payload: object, retain = false): void {
     this.client?.publish(topic, JSON.stringify(payload), { qos: 0, retain });
   }
@@ -252,7 +273,7 @@ export class TrysteroTransport implements Transport {
     }
   }
 
-  private localPeer(): Peer { return { id: this.peerId, send: (msg) => this.msgCb(msg) }; }
+  private localPeer(): Peer { return this.selfPeer; }
 
   private teardownRoom(): void {
     const base = this.roomCode ? this.baseTopic() : null;
