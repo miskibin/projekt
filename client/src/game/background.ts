@@ -216,7 +216,7 @@ export class Background {
   draw(ctx: CanvasRenderingContext2D, inp: BackgroundInput): void {
     const { palette: pal, width: W, height: H } = inp;
     if (W <= 0 || H <= 0) return;
-    if (this.drawLandscape(ctx, inp)) return;
+    if (pal.bgStyle === "mountains" && this.drawLandscape(ctx, inp)) return;
     if (this.builtFor !== pal) this.build(pal);
 
     // --- niebo ---
@@ -370,13 +370,13 @@ export class Background {
     const landscape = new Image();
     landscape.decoding = "async";
     landscape.onload = () => { this.landscapeReady = true; };
-    landscape.src = "/assets/alpine-valley.webp";
+    landscape.src = `${import.meta.env.BASE_URL}assets/alpine-valley.webp`;
     this.landscape = landscape;
 
     const foreground = new Image();
     foreground.decoding = "async";
     foreground.onload = () => { this.foregroundReady = true; };
-    foreground.src = "/assets/alpine-valley-foreground.webp";
+    foreground.src = `${import.meta.env.BASE_URL}assets/alpine-valley-foreground.webp`;
     this.foreground = foreground;
   }
 
@@ -400,7 +400,11 @@ export class Background {
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+    ctx.filter = "saturate(0.82) brightness(1.06)";
     ctx.drawImage(image, back.x, back.y, back.width, back.height);
+    ctx.filter = "none";
+    ctx.fillStyle = "rgba(157,207,225,0.10)";
+    ctx.fillRect(0, 0, W, H);
 
     const front = this.foreground;
     if (this.foregroundReady && front?.naturalWidth && front.naturalHeight) {

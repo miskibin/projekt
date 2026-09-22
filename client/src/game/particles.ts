@@ -614,7 +614,17 @@ export class Particles {
         ctx.rotate(p.rot);
         ctx.globalAlpha = Math.min(1, (1 - t) * 2.6);
         ctx.fillStyle = p.color;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.8);
+        ctx.beginPath();
+        ctx.moveTo(-p.size * 0.5, -p.size * 0.25);
+        ctx.lineTo(p.size * 0.12, -p.size * 0.5);
+        ctx.lineTo(p.size * 0.5, p.size * 0.05);
+        ctx.lineTo(p.size * 0.15, p.size * 0.4);
+        ctx.lineTo(-p.size * 0.42, p.size * 0.28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,230,185,0.35)";
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
         ctx.restore();
       } else if (p.kind === "water") {
         ctx.globalAlpha = Math.min(1, (1 - t) * 1.8);
@@ -632,6 +642,15 @@ export class Particles {
     for (const p of this.ps) {
       if (p.kind !== "ember" && p.kind !== "spark") continue;
       const t = p.life / p.max;
+      // Velocity-aligned streaks make the impulse visible without extra particles.
+      if (p.kind === "spark") {
+        ctx.strokeStyle = withAlpha(p.color, (1 - t) * 0.65);
+        ctx.lineWidth = Math.max(0.6, p.size * 0.7);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 0.025, p.y - p.vy * 0.025);
+        ctx.stroke();
+      }
       ctx.fillStyle = withAlpha(p.color, 1 - t);
       ctx.beginPath();
       ctx.arc(p.x, p.y, Math.max(0.3, p.size * (1 - t * 0.5)), 0, Math.PI * 2);

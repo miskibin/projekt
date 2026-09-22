@@ -31,7 +31,7 @@ export class PostProcess {
 
       ctx.save();
       ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = 0.1 + this.impact * 0.1;
+      ctx.globalAlpha = 0.045 + this.impact * 0.085;
       ctx.filter = `blur(${8 + this.impact * 7}px) saturate(${1.18 + this.impact * 0.45})`;
       ctx.drawImage(this.buffer, 0, 0, bw, bh, 0, 0, width, height);
 
@@ -49,7 +49,7 @@ export class PostProcess {
     // Stały, delikatny grading spaja niebo, teren i efekty.
     ctx.save();
     ctx.globalCompositeOperation = "soft-light";
-    ctx.fillStyle = "rgba(38,72,122,0.1)";
+    ctx.fillStyle = "rgba(38,72,122,0.055)";
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
 
@@ -59,7 +59,7 @@ export class PostProcess {
         width / 2, height * 0.48, Math.max(width, height) * 0.72);
       value.addColorStop(0, "rgba(3,8,16,0)");
       value.addColorStop(0.7, "rgba(3,8,16,0.035)");
-      value.addColorStop(1, "rgba(3,8,16,0.3)");
+      value.addColorStop(1, "rgba(3,8,16,0.20)");
       this.vignette = { key, value };
     }
     ctx.fillStyle = this.vignette.value;

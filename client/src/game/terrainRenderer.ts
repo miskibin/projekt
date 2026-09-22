@@ -74,9 +74,9 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     cloud: "rgba(210, 230, 248, 0.5)",
     stars: false,
     embers: false,
-    topA: [142, 209, 58],
-    topB: [64, 132, 40],
-    topDepth: 14,
+    topA: [158, 214, 87],
+    topB: [59, 123, 58],
+    topDepth: 17,
     soil: [150, 104, 62],
     soilDark: [96, 64, 38],
     rim: [186, 140, 88],
@@ -88,11 +88,11 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     topHi: [190, 235, 116],
     topEdge: [42, 96, 30],
     outline: [44, 27, 16],
-    stoneA: [158, 110, 65],
-    stoneB: [100, 67, 40],
+    stoneA: [174, 128, 88],
+    stoneB: [115, 80, 60],
     mortar: [58, 37, 22],
-    pebble: 24,
-    tufts: 0.3,
+    pebble: 43,
+    tufts: 0.46,
     bgStyle: "mountains",
     bgFar: "#8fb0cd",
     bgPeak: "#d6e6f4",
@@ -126,7 +126,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [190, 148, 92],
     stoneB: [138, 102, 60],
     mortar: [104, 74, 44],
-    pebble: 28,
+    pebble: 52,
     tufts: 0.06,
     bgStyle: "dunes",
     bgFar: "#d1a179",
@@ -161,7 +161,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [134, 154, 180],
     stoneB: [86, 106, 134],
     mortar: [46, 60, 82],
-    pebble: 26,
+    pebble: 46,
     tufts: 0.08,
     bgStyle: "peaks",
     bgFar: "#42597c",
@@ -196,7 +196,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneA: [68, 52, 58],
     stoneB: [38, 28, 34],
     mortar: [16, 10, 14],
-    pebble: 22,
+    pebble: 38,
     tufts: 0.22,
     bgStyle: "spires",
     bgFar: "#6d2619",
@@ -223,7 +223,7 @@ const FAR = 60;
 /** Ile pikseli poza przemalowywany prostokąt liczymy pola pomocnicze. */
 const MARGIN = 30;
 /** Maksymalna wysokość kępki trawy nad powierzchnią. */
-const TUFT_MAX = 4;
+const TUFT_MAX = 6;
 /** Zasięg miękkiego cienia wewnątrz krateru. */
 const SHADOW_REACH = 11;
 
@@ -794,7 +794,9 @@ export class TerrainRenderer {
           r *= mul;
           g *= mul;
           b *= mul;
-          const gr = (fine(x, y) - 128) * 0.055;
+          // Broad sediment bands and restrained grain keep the cross-section organic.
+          const strata = Math.sin(y * 0.075 + sm[i] * 0.025) * 4;
+          const gr = (fine(x, y) - 128) * 0.025 + strata;
           r += gr;
           g += gr;
           b += gr;
@@ -909,7 +911,7 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
   const tint = new Uint8Array(w * h);
   const lx = -0.7071;
   const ly = -0.7071;
-  const mortarW = Math.max(1.7, cell * 0.17);
+  const mortarW = Math.max(1.2, cell * 0.055);
   for (let y = 0; y < h; y++) {
     const gy = ((y / cell) | 0) + 1;
     const row = y * w;
@@ -947,12 +949,12 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
       let round = (d1 - (R - 2.4)) / 2.4;
       if (round < 0) round = 0;
       else if (round > 1) round = 1;
-      const dark = Math.max(seam * seam, round * round);
+      const dark = Math.max(seam * seam, round * round * 0.18);
       let rr = d1 / R;
       if (rr > 1) rr = 1;
       const inv = d1 > 0.001 ? 1 / d1 : 0;
       const lam = (x - fx[bj]) * inv * lx + (y - fy[bj]) * inv * ly;
-      const v = 128 + lam * rr * 52 - rr * rr * 10 - dark * 80;
+      const v = 128 + lam * rr * 34 - rr * rr * 8 - dark * 65;
       stone[row + x] = v < 0 ? 0 : v > 255 ? 255 : v | 0;
       tint[row + x] = ft[bj];
     }
