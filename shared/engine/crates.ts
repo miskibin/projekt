@@ -73,7 +73,7 @@ export function spawnInitialMines(ctx: EngineCtx): void {
   }
 }
 
-export function placeMine(ctx: EngineCtx, x: number, y: number): Mine {
+export function placeMine(ctx: EngineCtx, x: number, y: number, triggerFuse = MINE_FUSE): Mine {
   const m: Mine = {
     id: ctx.nextId(),
     x,
@@ -82,6 +82,7 @@ export function placeMine(ctx: EngineCtx, x: number, y: number): Mine {
     vy: 0,
     armed: false,
     armTimer: MINE_ARM_TIME,
+    triggerFuse,
     onGround: false,
     dead: false,
   };
@@ -175,7 +176,7 @@ export function stepMines(ctx: EngineCtx, dt: number): void {
         const dx = w.x - m.x;
         const dy = w.y - m.y;
         if (dx * dx + dy * dy <= MINE_TRIGGER_DIST * MINE_TRIGGER_DIST) {
-          m.fuse = MINE_FUSE;
+          m.fuse = m.triggerFuse ?? MINE_FUSE;
           ctx.emit({ t: "sound", name: "tick", x: m.x, y: m.y });
           break;
         }

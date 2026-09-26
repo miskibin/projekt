@@ -191,6 +191,9 @@ export type GameEvent =
   | { t: "damage"; wormId: number; amount: number; x: number; y: number }
   | { t: "wormDied"; wormId: number; reason: "explosion" | "drown" | "fall" | "surrender" }
   | { t: "shot"; weapon: WeaponId; x: number; y: number }
+  | { t: "bulletTrace"; weapon: "shotgun" | "uzi"; x0: number; y0: number; x: number; y: number; hit: boolean }
+  | { t: "batHit"; x: number; y: number; dx: number; dy: number }
+  | { t: "teleport"; fromX: number; fromY: number; toX: number; toY: number }
   | { t: "crateSpawn"; crate: CrateSnapshot }
   | { t: "cratePickup"; wormId: number; kind: CrateSnapshot["kind"]; weapon?: WeaponId; amount?: number }
   | { t: "turnStart"; team: number; wormId: number; wind: number }

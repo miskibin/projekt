@@ -91,6 +91,8 @@ export interface Mine {
   armTimer: number;
   /** odliczanie po wykryciu robaka */
   fuse?: number;
+  /** wybrana długość zapalnika po wykryciu */
+  triggerFuse?: number;
   onGround: boolean;
   dead: boolean;
 }

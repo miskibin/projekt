@@ -938,8 +938,7 @@ export class GameImpl implements Game, EngineCtx {
           y: my,
           vx: dirX * speed * 0.68,
           vy: dirY * speed * 0.68,
-          fuse: 3,
-          restFuse: 1,
+          fuse: ts.weaponTimer,
           radius: def.radius,
           damage: def.damage,
           power: def.power,
@@ -962,7 +961,7 @@ export class GameImpl implements Game, EngineCtx {
           y: w.y,
           vx: 0,
           vy: 0,
-          fuse: 5,
+          fuse: ts.weaponTimer,
           radius: def.radius,
           damage: def.damage,
           power: def.power,
@@ -977,12 +976,24 @@ export class GameImpl implements Game, EngineCtx {
       }
       case "mine": {
         this.emitShot(id, w);
-        placeMine(this, w.x, w.y + WORM_RADIUS - MINE_RADIUS);
+        placeMine(this, w.x, w.y + WORM_RADIUS - MINE_RADIUS, ts.weaponTimer);
         break;
       }
       case "shotgun": {
         this.emitShot(id, w);
-        this.hitscan(w, dirX, dirY, def, "shotgun");
+        const hits = new Map<Worm, number>();
+        // Pięć niezależnych śrucin: blisko boli mocniej, na dystansie rozrzut.
+        for (let i = -2; i <= 2; i++) {
+          const angle = w.aim + i * 0.035 + this.rng.range(-0.009, 0.009);
+          const victim = this.traceBullet(w, Math.cos(angle) * w.facing, Math.sin(angle), "shotgun", i === 0);
+          if (victim) hits.set(victim, (hits.get(victim) ?? 0) + 6);
+        }
+        for (const [victim, damage] of hits) {
+          victim.vx += dirX * def.power * damage / 30;
+          victim.vy += dirY * def.power * damage / 30 - 35;
+          victim.onGround = false;
+          this.damageWorm(victim, damage, "explosion");
+        }
         break;
       }
       case "uzi": {
@@ -1003,8 +1014,8 @@ export class GameImpl implements Game, EngineCtx {
             kind: "airstrikeBomb",
             x: clamp(tx + off, 4, WORLD_WIDTH - 4),
             y: -60 - i * 14,
-            vx: w.facing * 60,
-            vy: 140,
+            vx: 0,
+            vy: 280,
             radius: def.radius,
             damage: def.damage,
             power: def.power,
@@ -1025,6 +1036,19 @@ export class GameImpl implements Game, EngineCtx {
         if (!this.target) return;
         const gx = Math.round(clamp(this.target.x, 0, WORLD_WIDTH - 1));
         const gy = Math.round(clamp(this.target.y, 0, WORLD_HEIGHT - 1));
+        const halfW = 40;
+        const ca = Math.cos(this.girderAngle);
+        const sa = Math.sin(this.girderAngle);
+        if (this.worms.some((other) => {
+          if (!other.alive) return false;
+          const dx = other.x - gx;
+          const dy = other.y - gy;
+          return Math.abs(dx * ca + dy * sa) < halfW + WORM_RADIUS &&
+            Math.abs(-dx * sa + dy * ca) < 5 + WORM_RADIUS;
+        })) {
+          this.emit({ t: "message", text: "Belka nie może przygnieść robaka!" });
+          return;
+        }
         this.terrain.paintRotatedRect(gx, gy, 80, 10, this.girderAngle, 1);
         this.emit({ t: "carveRect", x: gx, y: gy, w: 80, h: 10, angle: this.girderAngle, add: true });
         this.emit({ t: "sound", name: "pickup", x: gx, y: gy });
@@ -1054,12 +1078,14 @@ export class GameImpl implements Game, EngineCtx {
 
   private emitShot(id: WeaponId, w: Worm): void {
     this.emit({ t: "shot", weapon: id, x: Math.round(w.x), y: Math.round(w.y) });
-    this.emit({ t: "sound", name: "shot", x: w.x, y: w.y });
+    this.emit({ t: "sound", name: id === "shotgun" ? "shotgun" : id === "holy" ? "hallelujah" : "shot", x: w.x, y: w.y });
   }
 
-  private hitscan(w: Worm, dirX: number, dirY: number, def: WeaponDef, style: "shotgun" | "uzi"): void {
-    let px = w.x + dirX * (WORM_RADIUS + 2);
-    let py = w.y + dirY * (WORM_RADIUS + 2);
+  private traceBullet(w: Worm, dirX: number, dirY: number, style: "shotgun" | "uzi", carveTerrain: boolean): Worm | null {
+    const x0 = w.x + dirX * (WORM_RADIUS + 2);
+    const y0 = w.y + dirY * (WORM_RADIUS + 2);
+    let px = x0;
+    let py = y0;
     let target: Worm | null = null;
     let terrainHit = false;
     for (let d = 0; d < HITSCAN_RANGE; d++) {
@@ -1068,7 +1094,7 @@ export class GameImpl implements Game, EngineCtx {
       if (px < 0 || px >= WORLD_WIDTH) break;
       if (py > this.waterLevel) {
         this.emit({ t: "sound", name: "splash", x: px, y: this.waterLevel });
-        return;
+        break;
       }
       if (py >= 0 && this.terrain.isSolid(px, py)) {
         terrainHit = true;
@@ -1085,22 +1111,12 @@ export class GameImpl implements Game, EngineCtx {
       }
       if (target) break;
     }
-    if (target) {
-      this.emit({
-        t: "explosion",
-        x: Math.round(px),
-        y: Math.round(py),
-        r: Math.max(1, Math.round(def.radius)),
-        power: Math.round(def.power),
-        style,
-      });
-      target.vx += dirX * def.power * 0.6;
-      target.vy += dirY * def.power * 0.6 - 40;
-      target.onGround = false;
-      this.damageWorm(target, def.damage, "explosion");
-    } else if (terrainHit && def.radius > 0) {
+    this.emit({ t: "bulletTrace", weapon: style, x0: r2(x0), y0: r2(y0), x: r2(px), y: r2(py), hit: !!target || terrainHit });
+    if (terrainHit && carveTerrain) {
+      const def = WEAPONS[style];
       this.explode(px, py, def.radius, def.damage, def.power, style);
     }
+    return target;
   }
 
   private swingBat(w: Worm, dirX: number, dirY: number): void {
@@ -1119,21 +1135,26 @@ export class GameImpl implements Game, EngineCtx {
       o.vy = dirY * 500 - 120;
       o.onGround = false;
       this.damageWorm(o, WEAPONS.bat.damage, "explosion");
+      this.emit({ t: "batHit", x: r2(o.x), y: r2(o.y), dx: r2(dirX), dy: r2(dirY) });
     }
   }
 
   private doTeleport(w: Worm, x: number, y: number): boolean {
     const tx = clamp(x, WORM_RADIUS, WORLD_WIDTH - 1 - WORM_RADIUS);
     const ty = clamp(y, WORM_RADIUS, WORLD_HEIGHT + 100);
-    if (circleHits(this.terrain, tx, ty, WORM_RADIUS)) {
+    if (ty + WORM_RADIUS >= this.waterLevel || circleHits(this.terrain, tx, ty, WORM_RADIUS) ||
+      this.worms.some((other) => other.alive && other.id !== w.id && Math.hypot(other.x - tx, other.y - ty) < WORM_RADIUS * 2)) {
       this.emit({ t: "message", text: "Tam się nie da teleportować!" });
       return false;
     }
+    const fromX = w.x;
+    const fromY = w.y;
     w.x = tx;
     w.y = ty;
     w.vx = 0;
     w.vy = 0;
     w.onGround = groundBelow(this.terrain, tx, ty, WORM_RADIUS, 2);
+    this.emit({ t: "teleport", fromX: r2(fromX), fromY: r2(fromY), toX: r2(tx), toY: r2(ty) });
     this.emit({ t: "sound", name: "teleport", x: tx, y: ty });
     return true;
   }
@@ -1153,8 +1174,14 @@ export class GameImpl implements Game, EngineCtx {
         const dirX = Math.cos(a) * w.facing;
         const dirY = Math.sin(a);
         this.emit({ t: "shot", weapon: "uzi", x: Math.round(w.x), y: Math.round(w.y) });
-        this.emit({ t: "sound", name: "shot", x: w.x, y: w.y });
-        this.hitscan(w, dirX, dirY, WEAPONS.uzi, "uzi");
+        this.emit({ t: "sound", name: "uzi", x: w.x, y: w.y });
+        const target = this.traceBullet(w, dirX, dirY, "uzi", true);
+        if (target) {
+          target.vx += dirX * WEAPONS.uzi.power * 0.6;
+          target.vy += dirY * WEAPONS.uzi.power * 0.6 - 40;
+          target.onGround = false;
+          this.damageWorm(target, WEAPONS.uzi.damage, "explosion");
+        }
       }
     }
     if (b.remaining <= 0) this.burst = null;

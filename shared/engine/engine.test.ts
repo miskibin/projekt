@@ -252,6 +252,79 @@ describe("bronie", () => {
     expect(g.snapshot().turn.phase).toBe("retreat");
   });
 
+  it("śrut ma rozrzut i trafienie robaka nie wycina terenu tylko na kliencie", () => {
+    const g = createGame(cfg({ seed: 606 }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    const team = g.snapshot().turn.activeTeam;
+    const shooter = gi.worms.find((w) => w.id === g.snapshot().turn.activeWormId)!;
+    const victim = gi.worms.find((w) => w.team !== team)!;
+    shooter.x = 200; shooter.y = 60; shooter.facing = 1;
+    victim.x = 270; victim.y = 60;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "shotgun" });
+    g.applyInput(team, { ...NEUTRAL, aim: 0 });
+    g.drainEvents();
+    const before = g.terrainSync().rle;
+    g.applyAction(team, { kind: "fire", power: 1 });
+    const evs = g.drainEvents();
+    const traces = evs.filter((e) => e.t === "bulletTrace");
+    expect(traces).toHaveLength(5);
+    expect(new Set(traces.map((e) => e.t === "bulletTrace" ? e.y : 0)).size).toBeGreaterThan(1);
+    expect(evs.filter((e) => e.t === "damage" && e.wormId === victim.id)).toHaveLength(1);
+    expect(victim.hp).toBeLessThan(100);
+    expect(evs.some((e) => e.t === "explosion")).toBe(false);
+    expect(g.terrainSync().rle).toEqual(before);
+  });
+
+  it("UZI emituje ślad każdego pocisku bez fałszywych eksplozji na trafionym robaku", () => {
+    const g = createGame(cfg({ seed: 607 }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    const team = g.snapshot().turn.activeTeam;
+    const shooter = gi.worms.find((w) => w.id === g.snapshot().turn.activeWormId)!;
+    const victim = gi.worms.find((w) => w.team !== team)!;
+    shooter.x = 200; shooter.y = 60; shooter.facing = 1;
+    victim.x = 270; victim.y = 60;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "uzi" });
+    g.applyInput(team, { ...NEUTRAL, aim: 0 });
+    g.drainEvents();
+    g.applyAction(team, { kind: "fire", power: 1 });
+    const evs: GameEvent[] = [];
+    stepN(g, 12, evs);
+    expect(evs.filter((e) => e.t === "bulletTrace" && e.weapon === "uzi").length).toBeGreaterThanOrEqual(2);
+    expect(evs.some((e) => e.t === "explosion" && e.style === "uzi")).toBe(false);
+    expect(victim.hp).toBeLessThan(100);
+  });
+
+  it("święty granat, dynamit i mina respektują wybrany zapalnik", () => {
+    for (const weapon of ["holy", "dynamite", "mine"] as const) {
+      const g = createGame(cfg({ seed: 710 }), setups(2));
+      const gi = g as GameImpl;
+      toActive(g);
+      clearMines(g);
+      const team = g.snapshot().turn.activeTeam;
+      g.applyAction(team, { kind: "selectWeapon", weapon });
+      g.applyAction(team, { kind: "setTimer", seconds: 4 });
+      g.applyAction(team, { kind: "fire", power: 0.5 });
+      if (weapon === "mine") expect(gi.mines[0].triggerFuse).toBe(4);
+      else expect(gi.projectiles.find((p) => p.kind === weapon)?.fuse).toBe(4);
+    }
+  });
+
+  it("nalot bombarduje wskazane miejsce niezależnie od kierunku robaka", () => {
+    const g = createGame(cfg({ seed: 701 }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    const team = g.snapshot().turn.activeTeam;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "airstrike" });
+    g.applyAction(team, { kind: "target", x: 500, y: 350 });
+    const bombs = gi.projectiles.filter((p) => p.kind === "airstrikeBomb");
+    expect(bombs).toHaveLength(6);
+    expect(bombs.every((p) => p.vx === 0 && Math.abs(p.x - 500) < 115)).toBe(true);
+  });
+
   it("girder dokłada teren i nie kończy tury", () => {
     const g = createGame(cfg({ seed: 4711 }), setups(2));
     const events: GameEvent[] = [];
@@ -268,6 +341,22 @@ describe("bronie", () => {
     expect(countSolid(g.terrain, gx - 60, gy - 60, gx + 60, gy + 60)).toBeGreaterThan(before);
     expect(events.some((e) => e.t === "carveRect" && e.add)).toBe(true);
     expect(g.snapshot().turn.phase).toBe("active");
+  });
+
+  it("belka nie przygniata robaka ani nie zużywa amunicji przy złym celu", () => {
+    const g = createGame(cfg({ seed: 4711 }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    const team = g.snapshot().turn.activeTeam;
+    const worm = gi.worms.find((w) => w.id === g.snapshot().turn.activeWormId)!;
+    const ammo = gi.teams[team].ammo.girder;
+    const before = g.terrainSync().rle;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "girder" });
+    g.drainEvents();
+    g.applyAction(team, { kind: "target", x: worm.x, y: worm.y });
+    expect(gi.teams[team].ammo.girder).toBe(ammo);
+    expect(g.terrainSync().rle).toEqual(before);
+    expect(g.drainEvents().some((e) => e.t === "message" && e.text.includes("przygnieść"))).toBe(true);
   });
 
   it("teleport przenosi robaka i kończy turę", () => {

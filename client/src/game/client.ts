@@ -518,6 +518,21 @@ export class GameClient {
         if (shooter !== undefined) this.renderer.onShot(shooter);
         break;
       }
+      case "bulletTrace": {
+        this.particles.bulletTrace(ev.x0, ev.y0, ev.x, ev.y, ev.weapon, ev.hit);
+        break;
+      }
+      case "batHit": {
+        this.particles.batHit(ev.x, ev.y, ev.dx, ev.dy);
+        this.camera.shake(5);
+        break;
+      }
+      case "teleport": {
+        this.particles.teleport(ev.fromX, ev.fromY);
+        this.particles.teleport(ev.toX, ev.toY);
+        this.camera.glance(ev.toX, ev.toY, 0.35);
+        break;
+      }
       case "crateSpawn": {
         this.hud.banner("Zrzut zaopatrzenia!", 1.6);
         break;

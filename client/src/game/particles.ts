@@ -81,12 +81,23 @@ interface ImpactBurst {
   color: string;
 }
 
+interface Tracer {
+  x0: number;
+  y0: number;
+  x: number;
+  y: number;
+  life: number;
+  max: number;
+  color: string;
+}
+
 const MAX_PARTICLES = 1400;
 const MAX_TEXTS = 40;
 const MAX_FLASHES = 24;
 const MAX_FIREBALLS = 16;
 const MAX_RINGS = 24;
 const MAX_BURSTS = 24;
+const MAX_TRACERS = 48;
 
 type FireColors = readonly [string, string, string, string];
 
@@ -137,13 +148,14 @@ export class Particles {
   private fireballs: Fireball[] = [];
   private rings: Ring[] = [];
   private bursts: ImpactBurst[] = [];
+  private tracers: Tracer[] = [];
 
   /** pre-renderowane sprity (żeby nie tworzyć gradientów co klatkę) */
   private soft = new Map<string, HTMLCanvasElement | null>();
   private fireSprites = new Map<string, HTMLCanvasElement | null>();
 
   get count(): number {
-    return this.ps.length + this.flashes.length + this.fireballs.length + this.rings.length + this.bursts.length;
+    return this.ps.length + this.flashes.length + this.fireballs.length + this.rings.length + this.bursts.length + this.tracers.length;
   }
 
   clear(): void {
@@ -153,6 +165,7 @@ export class Particles {
     this.fireballs.length = 0;
     this.rings.length = 0;
     this.bursts.length = 0;
+    this.tracers.length = 0;
   }
 
   private add(p: Particle): void {
@@ -161,6 +174,26 @@ export class Particles {
   }
 
   // ---------------- publiczne efekty ----------------
+
+  /** Ślad śruciny albo pocisku UZI nie modyfikuje terenu. */
+  bulletTrace(x0: number, y0: number, x: number, y: number, weapon: "shotgun" | "uzi", hit: boolean): void {
+    if (this.tracers.length >= MAX_TRACERS) this.tracers.shift();
+    const color = weapon === "shotgun" ? "#ffe3a3" : "#a9edff";
+    this.tracers.push({ x0, y0, x, y, life: 0, max: weapon === "shotgun" ? 0.17 : 0.11, color });
+    if (hit) this.sparks(x, y, weapon === "shotgun" ? 3 : 2, color);
+  }
+
+  batHit(x: number, y: number, dx: number, dy: number): void {
+    this.flash(x, y, 24, "#fff2ba", 0.18);
+    this.sparks(x + dx * 4, y + dy * 4, 22, "#ffc45c");
+    this.pushRing({ x, y, r0: 4, r1: 32, life: 0, max: 0.21, color: "rgba(255,224,158,1)", width: 3, flat: false, additive: true });
+  }
+
+  teleport(x: number, y: number): void {
+    this.flash(x, y, 30, "#b4edff", 0.32);
+    this.pushRing({ x, y, r0: 3, r1: 42, life: 0, max: 0.42, color: "rgba(111,214,255,1)", width: 2.5, flat: false, additive: true });
+    this.sparks(x, y, 18, "#a7ecff");
+  }
 
   /** Wybuch: rozbłysk, kula ognia, fala, odłamki, dym i żarzące się iskry. */
   explosion(x: number, y: number, r: number, debrisColor: string, style?: ExplosionStyle): void {
@@ -570,12 +603,31 @@ export class Particles {
       b.life += dt;
       if (b.life >= b.max) this.bursts.splice(i, 1);
     }
+    for (let i = this.tracers.length - 1; i >= 0; i--) {
+      const trace = this.tracers[i];
+      trace.life += dt;
+      if (trace.life >= trace.max) this.tracers.splice(i, 1);
+    }
   }
 
   // ---------------- rysowanie ----------------
 
   /** Rysuje w koordynatach świata (transformacja kamery już nałożona). */
   draw(ctx: CanvasRenderingContext2D, zoom: number): void {
+    // Krótkie linie kierunkowe pokazują rozrzut i faktyczne miejsce trafienia.
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.lineCap = "round";
+    for (const trace of this.tracers) {
+      ctx.globalAlpha = (1 - trace.life / trace.max) * 0.9;
+      ctx.strokeStyle = trace.color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(trace.x0, trace.y0);
+      ctx.lineTo(trace.x, trace.y);
+      ctx.stroke();
+    }
+    ctx.restore();
     // 1) zwykłe pierścienie (fale na wodzie) – pod cząsteczkami
     for (const r of this.rings) {
       if (r.additive) continue;
