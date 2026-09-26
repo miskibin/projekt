@@ -47,6 +47,17 @@ describe("kamera", () => {
     expect(camera.viewRect().w).toBeLessThan(800);
   });
 
+  it("w poziomie na telefonie zbliża akcję, ale kadr pocisku zostaje szerszy", () => {
+    const camera = new Camera();
+    camera.setViewport(844, 390);
+    expect(camera.focusZoom).toBeGreaterThan(camera.fitZoom * 2);
+    expect(camera.projectileZoom).toBeLessThan(camera.focusZoom);
+    camera.focus(900, 600, undefined, true);
+    expect(camera.viewRect().w).toBeLessThan(900);
+    camera.trackProjectile(950, 500, 300, -100, true);
+    expect(camera.viewRect().w).toBeGreaterThan(900);
+  });
+
   it("auto-focus zbliża na aktywnego robaka i trzyma go poniżej środka ekranu", () => {
     const camera = landscape();
     camera.overview(undefined, undefined, true);

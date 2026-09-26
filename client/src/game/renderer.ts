@@ -70,6 +70,8 @@ export class Renderer {
   private theme: ThemeId = "grass";
   /** ostatnio użyta moc – do długości celownika zanim gracz zacznie ładować */
   private lastPower = DEFAULT_PREVIEW_POWER;
+  /** Emisja smug zależna od czasu, a nie liczby klatek (120 Hz nie dubluje cząstek). */
+  private readonly lastTrail = new Map<number, number>();
 
   constructor(seed = 1) {
     this.background = new Background(seed);
@@ -80,6 +82,7 @@ export class Renderer {
     this.animator.reset();
     this.lastTime = -1;
     this.postProcess.clear();
+    this.lastTrail.clear();
   }
 
   // --- zdarzenia gry -> reakcje postaci (wołane z client.ts) ---
@@ -518,7 +521,23 @@ export class Renderer {
 
   // ---------------- pociski ----------------
   private drawProjectiles(ctx: CanvasRenderingContext2D, inp: RenderInput): void {
-    for (const p of inp.state.projectiles) this.drawProjectile(ctx, p, inp);
+    const visible = inp.camera.viewRect();
+    const active = new Set<number>();
+    for (const p of inp.state.projectiles) {
+      active.add(p.id);
+      // Salwy mogą mieć wiele obiektów poza kadrem; nie produkujemy tam cząstek.
+      if (p.x < visible.x - 80 || p.x > visible.x + visible.w + 80 ||
+          p.y < visible.y - 80 || p.y > visible.y + visible.h + 80) continue;
+      this.drawProjectile(ctx, p, inp);
+    }
+    for (const id of this.lastTrail.keys()) if (!active.has(id)) this.lastTrail.delete(id);
+  }
+
+  private emitTrail(id: number, time: number, rate: number): boolean {
+    const last = this.lastTrail.get(id);
+    if (last !== undefined && time - last < 1 / rate) return false;
+    this.lastTrail.set(id, time);
+    return true;
   }
 
   private drawProjectile(ctx: CanvasRenderingContext2D, p: ProjectileSnapshot, inp: RenderInput): void {
@@ -531,7 +550,7 @@ export class Renderer {
       case "bazooka":
       case "homing": {
         const homing = p.kind === "homing";
-        inp.particles.smokeTrail(
+        if (this.emitTrail(p.id, inp.time, 32)) inp.particles.smokeTrail(
           p.x - Math.cos(ang) * 8,
           p.y - Math.sin(ang) * 8,
           homing ? 1.3 : 0.9,
@@ -662,7 +681,7 @@ export class Renderer {
       case "clusterlet":
       case "bananalet": {
         if (p.kind === "bananalet") {
-          inp.particles.sparks(p.x, p.y, 1, "#fff04d");
+          if (this.emitTrail(p.id, inp.time, 24)) inp.particles.sparks(p.x, p.y, 1, "#fff04d");
           ctx.rotate(ang + inp.time * 6 + p.id);
           ctx.strokeStyle = "#b98112";
           ctx.lineWidth = 4.2;
@@ -676,7 +695,7 @@ export class Renderer {
           ctx.arc(0, -0.5, 5.4, 0.58, Math.PI - 0.58);
           ctx.stroke();
         } else {
-          inp.particles.sparks(p.x, p.y, 1, "#69ffe0");
+          if (this.emitTrail(p.id, inp.time, 24)) inp.particles.sparks(p.x, p.y, 1, "#69ffe0");
           ctx.fillStyle = "#2bbd9d";
           ctx.beginPath();
           ctx.arc(0, 0, 4.1, 0, Math.PI * 2);
@@ -755,7 +774,7 @@ export class Renderer {
         ctx.moveTo(0, -8);
         ctx.quadraticCurveTo(5, -13, 2, -15);
         ctx.stroke();
-        inp.particles.sparks(p.x + 2, p.y - 15, 1, "#ffd76a");
+        if (this.emitTrail(p.id, inp.time, 20)) inp.particles.sparks(p.x + 2, p.y - 15, 1, "#ffd76a");
         break;
       }
       case "mine": {
@@ -765,7 +784,7 @@ export class Renderer {
         break;
       }
       case "airstrikeBomb": {
-        inp.particles.smokeTrail(p.x, p.y - 6, 0.7, "rgba(90,76,78,0.82)");
+        if (this.emitTrail(p.id, inp.time, 30)) inp.particles.smokeTrail(p.x, p.y - 6, 0.7, "rgba(90,76,78,0.82)");
         ctx.rotate(ang + Math.PI / 2);
         const bgr = ctx.createLinearGradient(-4, 0, 4, 0);
         bgr.addColorStop(0, "#2d333d");

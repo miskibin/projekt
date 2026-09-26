@@ -19,7 +19,7 @@ import { Renderer, teamColor, type Grave } from "./renderer";
 import type { Sound } from "./sound";
 import { INTERP_DELAY_MS, LOCAL_INTERP_DELAY_MS, SnapshotBuffer } from "./state";
 import { TerrainRenderer } from "./terrainRenderer";
-import { drawWeaponIcon, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
+import { drawWeaponIcon, WEAPON_COLORS, WEAPON_HINTS, WEAPON_NAMES, WEAPON_ORDER } from "./weapons";
 import { canvasResolution } from "./viewport";
 import { enterFullscreen, fullscreenHelp } from "./display";
 import type { TouchControl } from "./input";
@@ -87,6 +87,8 @@ export class GameClient {
   private touchResetters: Array<() => void> = [];
   private readonly resizeObserver = new ResizeObserver(() => this.resize());
   private slots = new Map<WeaponId, { el: HTMLButtonElement; ammo: HTMLElement; count?: number; selected?: boolean }>();
+  private readonly weaponBadge: HTMLCanvasElement;
+  private weaponBadgeWeapon: WeaponId | null = null;
   private onResize = (): void => this.resize();
 
   constructor(
@@ -112,6 +114,11 @@ export class GameClient {
     const ctx = this.els.canvas.getContext("2d");
     if (!ctx) throw new Error("Brak kontekstu 2D");
     this.ctx = ctx;
+    this.weaponBadge = document.createElement("canvas");
+    this.weaponBadge.className = "weapon-badge";
+    this.weaponBadge.width = 84;
+    this.weaponBadge.height = 84;
+    byId("btn-weapons").prepend(this.weaponBadge);
 
     this.input = new InputController(this.els.canvas, this.camera, {
       sendInput: (state) => {
@@ -557,7 +564,8 @@ export class GameClient {
       slot.type = "button";
       slot.setAttribute("aria-label", WEAPON_NAMES[id]);
       slot.className = "wslot";
-      slot.title = WEAPON_NAMES[id];
+      slot.title = `${WEAPON_NAMES[id]} – ${WEAPON_HINTS[id]}`;
+      slot.style.setProperty("--weapon-color", WEAPON_COLORS[id]);
       const c = document.createElement("canvas");
       c.width = 120;
       c.height = 120;
@@ -565,6 +573,10 @@ export class GameClient {
       if (cx) {
         cx.scale(3, 3);
         cx.translate(20, 20);
+        cx.fillStyle = "rgba(255,255,255,.08)";
+        cx.beginPath();
+        cx.arc(0, 0, 18, 0, Math.PI * 2);
+        cx.fill();
         drawWeaponIcon(cx, id, 34);
       }
       const name = document.createElement("div");
@@ -573,6 +585,9 @@ export class GameClient {
       const ammo = document.createElement("span");
       ammo.className = "wammo";
       slot.append(c, name, ammo);
+      slot.addEventListener("pointerenter", () => this.showWeaponTip(id));
+      slot.addEventListener("focus", () => this.showWeaponTip(id));
+      slot.addEventListener("pointerleave", () => this.showWeaponTip(this.selectedWeapon));
       slot.addEventListener("click", () => {
         if (slot.classList.contains("empty")) return;
         this.selectedWeapon = id;
@@ -606,8 +621,24 @@ export class GameClient {
     const ammo = my?.ammo?.[this.selectedWeapon];
     const label = WEAPON_NAMES[this.selectedWeapon];
     if (this.els.currentWeapon.textContent !== label) this.els.currentWeapon.textContent = label;
+    if (this.weaponBadgeWeapon !== this.selectedWeapon) {
+      this.weaponBadgeWeapon = this.selectedWeapon;
+      const cx = this.weaponBadge.getContext("2d");
+      if (cx) {
+        cx.clearRect(0, 0, 84, 84);
+        cx.translate(42, 42);
+        drawWeaponIcon(cx, this.selectedWeapon, 68);
+        cx.setTransform(1, 0, 0, 1, 0, 0);
+      }
+      byId("btn-weapons").style.setProperty("--weapon-color", WEAPON_COLORS[this.selectedWeapon]);
+      this.showWeaponTip(this.selectedWeapon);
+    }
     const ammoLabel = ammo === undefined ? "" : ammo < 0 ? "∞" : String(ammo);
     if (this.els.currentAmmo.textContent !== ammoLabel) this.els.currentAmmo.textContent = ammoLabel;
+  }
+
+  private showWeaponTip(id: WeaponId): void {
+    byId("weapon-tip").textContent = `${WEAPON_NAMES[id]} · ${WEAPON_HINTS[id]}`;
   }
 
   private toggleWeapons(): void {
@@ -749,8 +780,8 @@ export class GameClient {
     const w = this.els.canvas.clientWidth || window.innerWidth;
     const h = this.els.canvas.clientHeight || window.innerHeight;
     const resolution = canvasResolution(w, h, this.pixelRatio);
-    this.els.canvas.width = resolution.width;
-    this.els.canvas.height = resolution.height;
+    if (this.els.canvas.width !== resolution.width) this.els.canvas.width = resolution.width;
+    if (this.els.canvas.height !== resolution.height) this.els.canvas.height = resolution.height;
     this.ctx.setTransform(resolution.width / w, 0, 0, resolution.height / h, 0, 0);
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "high";

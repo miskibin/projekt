@@ -233,10 +233,13 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   position: absolute; z-index: 12;
   top: max(10px, env(safe-area-inset-top));
   left: max(12px, env(safe-area-inset-left));
-  height: 48px; padding: 0 16px; gap: 12px;
+  height: 48px; padding: 0 14px 0 8px; gap: 8px;
   font-size: 15px; font-weight: 700; letter-spacing: .2px;
-  max-width: min(220px, calc(100vw - 90px));
+  max-width: min(250px, calc(100vw - 90px));
+  border-color: color-mix(in srgb, var(--weapon-color, #ff9961), transparent 50%);
+  box-shadow: 0 7px 24px rgba(5, 13, 23, .3), inset 0 1px 0 rgba(255,255,255,.08);
 }
+.weapon-badge { flex: none; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--weapon-color, #ff9961), transparent 80%); }
 #current-weapon { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #current-ammo { color: #6ee06e; font-weight: 800; font-variant-numeric: tabular-nums; }
 
@@ -290,7 +293,8 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   #screen-game { --hud-r: 10px; }
   .game-tools { gap: 6px; top: max(8px, env(safe-area-inset-top)); }
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
-  .weapon-tool { height: 40px; padding: 0 12px; gap: 8px; font-size: 12.5px; max-width: min(170px, calc(100vw - 66px)); }
+  .weapon-tool { height: 40px; padding: 0 9px 0 5px; gap: 5px; font-size: 12.5px; max-width: min(196px, calc(100vw - 66px)); }
+  .weapon-badge { width: 30px; height: 30px; }
 }
 @media (max-height: 460px), (max-width: 430px) {
   .touch-move { left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }
@@ -335,9 +339,9 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 
 .weapon-panel {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-  background: rgba(16,28,45,.95); border: 1px solid var(--hud-line); border-radius: 16px;
+  background: linear-gradient(155deg, rgba(25,44,69,.98), rgba(10,21,37,.98)); border: 1px solid rgba(183,217,255,.28); border-radius: 18px;
   padding: 14px; z-index: 15; box-shadow: 0 24px 70px rgba(0,0,0,.7);
-  max-width: calc(100vw - 24px);
+  width: max-content; max-width: calc(100vw - 24px);
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
@@ -345,22 +349,27 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .wp-head { font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px; display: flex; justify-content: space-between; gap: 20px; align-items: center; }
 .wp-head .game-tool { height: 30px; min-width: 30px; width: 30px; padding: 0; border-radius: 9px; font-size: 18px; }
 .wp-hint { text-transform: none; letter-spacing: 0; font-size: 11px; color: #5c6880; }
-.weapon-grid { display: grid; grid-template-columns: repeat(4, minmax(55px, 78px)); gap: 6px; }
+.weapon-grid { display: grid; grid-template-columns: repeat(4, minmax(55px, 78px)); gap: 7px; }
 @media (max-height: 500px) and (min-width: 650px) {
   .weapon-grid { grid-template-columns: repeat(8, 64px); }
   .weapon-panel { padding: 10px; }
 }
 .wslot {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: rgba(30,48,73,.78); border: 1px solid var(--hud-line); border-radius: 12px; padding: 7px 4px 5px;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--weapon-color), transparent 83%), rgba(17,31,51,.91));
+  border: 1px solid color-mix(in srgb, var(--weapon-color), transparent 70%); border-radius: 12px; padding: 7px 4px 5px;
   cursor: pointer; transition: transform .07s, border-color .12s, background .12s;
 }
-.wslot:hover { border-color: var(--accent); background: rgba(46,78,116,.85); }
-.wslot.sel { border-color: var(--accent2); box-shadow: 0 0 0 2px rgba(126,231,135,.25) inset; }
+.wslot:hover { border-color: var(--weapon-color); transform: translateY(-2px); filter: brightness(1.2); }
+.wslot.sel { border-color: var(--weapon-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--weapon-color), transparent 68%) inset, 0 0 18px color-mix(in srgb, var(--weapon-color), transparent 80%); }
 .wslot.empty { opacity: .32; cursor: not-allowed; }
 .wslot canvas { width: 40px; height: 40px; }
 .wslot .wname { font-size: 10.5px; color: #b6c7dd; text-align: center; line-height: 1.15; }
-.wslot .wammo { position: absolute; top: 3px; right: 6px; font-size: 10.5px; font-weight: 700; color: #ffd24d; }
+.wslot .wammo { position: absolute; top: 3px; right: 6px; font-size: 10.5px; font-weight: 800; color: var(--weapon-color); }
+.weapon-tip { margin-top: 10px; max-width: 340px; min-height: 32px; color: #c6d8ed; font-size: 11.5px; line-height: 1.35; text-align: center; text-wrap: balance; }
+@media (max-height: 500px) and (min-width: 650px) {
+  .weapon-tip { max-width: 100%; min-height: 20px; margin-top: 6px; }
+}
 
 /* ---------------- TOASTY ---------------- */
 .toasts { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 9px; z-index: 100; pointer-events: none; }

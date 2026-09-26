@@ -26,6 +26,34 @@ export const WEAPON_NAMES: Record<WeaponId, string> = {
   skip: "Pomiń turę",
 };
 
+/** Kolor rozpoznawczy: kafel wyboru, amunicja i aktywna broń w HUD. */
+export const WEAPON_COLORS: Record<WeaponId, string> = {
+  bazooka: "#ff9961", grenade: "#9de47f", cluster: "#66f2d1", banana: "#ffe467",
+  shotgun: "#f6cb96", uzi: "#b9dbff", holy: "#ffecaa", dynamite: "#ff7368",
+  mine: "#aab8c7", airstrike: "#ff8c75", homing: "#71e8ff", bat: "#d9a274",
+  teleport: "#c99dff", girder: "#e3a471", jetpack: "#85d9ff", skip: "#bdc4d1",
+};
+
+/** Jednozdaniowa podpowiedź w arsenale, szczególnie przydatna na dotyku. */
+export const WEAPON_HINTS: Record<WeaponId, string> = {
+  bazooka: "Przytrzymaj strzał, by ustawić siłę. Uważaj na wiatr.",
+  grenade: "Odbija się od podłoża. Zapalnik ustawiasz cyframi 1–5.",
+  cluster: "Po wybuchu rozsypuje mniejsze ładunki.",
+  banana: "Pozornie niewinny. Rozrzuca wybuchowe kawałki.",
+  shotgun: "Dwa szybkie strzały w jednej turze.",
+  uzi: "Krótka seria; dobry wybór z bliska.",
+  holy: "Ogromny wybuch po odliczaniu. Odejdź jak najdalej.",
+  dynamite: "Połóż przy przeciwniku i uciekaj.",
+  mine: "Pułapka czeka na robaka, który podejdzie zbyt blisko.",
+  airstrike: "Wskaż miejsce na mapie, by wezwać nalot.",
+  homing: "Wskaż cel; rakieta skoryguje lot.",
+  bat: "Mocny cios z bliska – zepchnij rywala do wody.",
+  teleport: "Wskaż bezpieczne miejsce na mapie.",
+  girder: "Postaw belkę jako osłonę lub most.",
+  jetpack: "Lataj przyciskami ruchu, pilnując paliwa.",
+  skip: "Oddaj turę bez strzału.",
+};
+
 /** Bronie strzelające natychmiast (bez ładowania mocy). */
 export const NO_CHARGE: ReadonlySet<WeaponId> = new Set<WeaponId>([
   "shotgun", "uzi", "bat", "dynamite", "mine", "jetpack", "skip",

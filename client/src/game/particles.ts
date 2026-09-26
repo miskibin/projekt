@@ -69,11 +69,24 @@ interface Ring {
   additive: boolean;
 }
 
+/** Krótki, rysowany wektorowo rozprysk – sygnatura broni widoczna nawet na telefonie. */
+interface ImpactBurst {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  max: number;
+  rays: number;
+  rotation: number;
+  color: string;
+}
+
 const MAX_PARTICLES = 1400;
 const MAX_TEXTS = 40;
 const MAX_FLASHES = 24;
 const MAX_FIREBALLS = 16;
 const MAX_RINGS = 24;
+const MAX_BURSTS = 24;
 
 type FireColors = readonly [string, string, string, string];
 
@@ -85,6 +98,7 @@ interface ExplosionVisual {
   fire: FireColors;
   fireballs: number;
   extraRings: number;
+  rays?: number;
 }
 
 const DEFAULT_EXPLOSION: ExplosionVisual = {
@@ -95,20 +109,21 @@ const DEFAULT_EXPLOSION: ExplosionVisual = {
   fire: ["#fffce8", "#ffe082", "#ff962c", "#c63a10"],
   fireballs: 1,
   extraRings: 0,
+  rays: 10,
 };
 
 const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
   bazooka: { ...DEFAULT_EXPLOSION, flash: "#fff0c4", ring: "rgba(255,176,76,1)", fire: ["#fff8d8", "#ffd05a", "#ff7a20", "#a9280c"] },
   homing: { ...DEFAULT_EXPLOSION, flash: "#c9f8ff", ring: "rgba(77,224,255,1)", embers: ["#edfdff", "#70eaff", "#ff557c"], fire: ["#effeff", "#82efff", "#2e9fff", "#7833b8"], extraRings: 1 },
   grenade: { ...DEFAULT_EXPLOSION, flash: "#efffc0", ring: "rgba(183,238,102,1)", embers: ["#f7ffc5", "#c7eb58", "#ffb137"], fire: ["#ffffdc", "#d9ed73", "#e68d26", "#75561a"] },
-  cluster: { ...DEFAULT_EXPLOSION, flash: "#c9fff5", ring: "rgba(65,255,207,1)", embers: ["#effffb", "#63f4ce", "#4aa8ff"], fire: ["#edfffb", "#61f0ca", "#3397d8", "#135172"], extraRings: 2 },
-  banana: { ...DEFAULT_EXPLOSION, flash: "#fff86a", ring: "rgba(255,226,45,1)", embers: ["#fffbd0", "#fff12f", "#ff9d1f"], smoke: ["rgba(170,147,55,1)", "rgba(93,76,32,1)"], fire: ["#ffffe0", "#fff22f", "#ffad18", "#c76b08"], fireballs: 2, extraRings: 1 },
-  holy: { ...DEFAULT_EXPLOSION, flash: "#fffde8", ring: "rgba(255,245,158,1)", embers: ["#ffffff", "#fff8bb", "#ffd75a"], smoke: ["rgba(236,228,192,1)", "rgba(153,137,106,1)"], fire: ["#ffffff", "#fffbc2", "#ffd85d", "#b78622"], fireballs: 2, extraRings: 3 },
+  cluster: { ...DEFAULT_EXPLOSION, flash: "#c9fff5", ring: "rgba(65,255,207,1)", embers: ["#effffb", "#63f4ce", "#4aa8ff"], fire: ["#edfffb", "#61f0ca", "#3397d8", "#135172"], extraRings: 2, rays: 14 },
+  banana: { ...DEFAULT_EXPLOSION, flash: "#fff86a", ring: "rgba(255,226,45,1)", embers: ["#fffbd0", "#fff12f", "#ff9d1f"], smoke: ["rgba(170,147,55,1)", "rgba(93,76,32,1)"], fire: ["#ffffe0", "#fff22f", "#ffad18", "#c76b08"], fireballs: 2, extraRings: 1, rays: 16 },
+  holy: { ...DEFAULT_EXPLOSION, flash: "#fffde8", ring: "rgba(255,245,158,1)", embers: ["#ffffff", "#fff8bb", "#ffd75a"], smoke: ["rgba(236,228,192,1)", "rgba(153,137,106,1)"], fire: ["#ffffff", "#fffbc2", "#ffd85d", "#b78622"], fireballs: 2, extraRings: 3, rays: 18 },
   dynamite: { ...DEFAULT_EXPLOSION, flash: "#ffd0bd", ring: "rgba(255,78,44,1)", embers: ["#fff2cf", "#ff704a", "#e42020"], smoke: ["rgba(112,76,70,1)", "rgba(54,43,43,1)"], fire: ["#fff5df", "#ffad58", "#ff3e24", "#8b0710"], fireballs: 2 },
   mine: { ...DEFAULT_EXPLOSION, flash: "#e6edf2", ring: "rgba(205,220,229,1)", embers: ["#ffffff", "#d5dde3", "#ff9138"], smoke: ["rgba(105,113,119,1)", "rgba(45,50,54,1)"], fire: ["#ffffff", "#dce4e8", "#ff9138", "#4c4643"] },
   airstrike: { ...DEFAULT_EXPLOSION, flash: "#ffe0cf", ring: "rgba(255,95,52,1)", embers: ["#fff2d5", "#ff883d", "#ff3428"], smoke: ["rgba(97,86,84,1)", "rgba(36,35,39,1)"], fire: ["#fff4d2", "#ff9a48", "#e62d22", "#68121b"], fireballs: 2, extraRings: 1 },
-  shotgun: { ...DEFAULT_EXPLOSION, flash: "#fff9dc", ring: "rgba(255,232,171,1)", embers: ["#ffffff", "#ffe1a1", "#d8c39b"], fire: ["#ffffff", "#ffe7ae", "#d29c62", "#75553c"], fireballs: 0 },
-  uzi: { ...DEFAULT_EXPLOSION, flash: "#d9f5ff", ring: "rgba(137,217,255,1)", embers: ["#f5fdff", "#8fddff", "#9ea9b8"], fire: ["#f2fcff", "#9ee5ff", "#7798b8", "#3b4c62"], fireballs: 0 },
+  shotgun: { ...DEFAULT_EXPLOSION, flash: "#fff9dc", ring: "rgba(255,232,171,1)", embers: ["#ffffff", "#ffe1a1", "#d8c39b"], fire: ["#ffffff", "#ffe7ae", "#d29c62", "#75553c"], fireballs: 0, rays: 4 },
+  uzi: { ...DEFAULT_EXPLOSION, flash: "#d9f5ff", ring: "rgba(137,217,255,1)", embers: ["#f5fdff", "#8fddff", "#9ea9b8"], fire: ["#f2fcff", "#9ee5ff", "#7798b8", "#3b4c62"], fireballs: 0, rays: 4 },
 };
 
 /**
@@ -121,13 +136,14 @@ export class Particles {
   private flashes: Flash[] = [];
   private fireballs: Fireball[] = [];
   private rings: Ring[] = [];
+  private bursts: ImpactBurst[] = [];
 
   /** pre-renderowane sprity (żeby nie tworzyć gradientów co klatkę) */
   private soft = new Map<string, HTMLCanvasElement | null>();
   private fireSprites = new Map<string, HTMLCanvasElement | null>();
 
   get count(): number {
-    return this.ps.length + this.flashes.length + this.fireballs.length + this.rings.length;
+    return this.ps.length + this.flashes.length + this.fireballs.length + this.rings.length + this.bursts.length;
   }
 
   clear(): void {
@@ -136,6 +152,7 @@ export class Particles {
     this.flashes.length = 0;
     this.fireballs.length = 0;
     this.rings.length = 0;
+    this.bursts.length = 0;
   }
 
   private add(p: Particle): void {
@@ -152,6 +169,12 @@ export class Particles {
 
     // jasny rdzeń + kula ognia + fala uderzeniowa
     this.flash(x, y, r * 1.7, visual.flash, 0.16);
+    if (this.bursts.length >= MAX_BURSTS) this.bursts.shift();
+    this.bursts.push({
+      x, y, radius: Math.max(12, r), life: 0, max: style === "holy" ? 0.48 : 0.33,
+      rays: visual.rays ?? 10, rotation: (Math.abs(x * 13 + y * 7) % 360) * Math.PI / 180,
+      color: visual.flash,
+    });
     for (let i = 0; i < visual.fireballs; i++) {
       const offset = i === 0 ? 0 : r * 0.22;
       const angle = i * 2.4;
@@ -542,6 +565,11 @@ export class Particles {
       r.life += dt;
       if (r.life >= r.max) this.rings.splice(i, 1);
     }
+    for (let i = this.bursts.length - 1; i >= 0; i--) {
+      const b = this.bursts[i];
+      b.life += dt;
+      if (b.life >= b.max) this.bursts.splice(i, 1);
+    }
   }
 
   // ---------------- rysowanie ----------------
@@ -588,7 +616,33 @@ export class Particles {
     }
     ctx.globalAlpha = 1;
 
-    // 4) rozbłyski + addytywne pierścienie (fala uderzeniowa)
+    // 4) promienie wybuchu: każdy typ ma własny kolor i rytm, bez bitmap / alokacji.
+    for (const burst of this.bursts) {
+      const progress = burst.life / burst.max;
+      const expansion = 0.45 + 1.3 * (1 - (1 - progress) ** 3);
+      ctx.save();
+      ctx.translate(burst.x, burst.y);
+      ctx.rotate(burst.rotation + progress * 0.12);
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = Math.max(0, (1 - progress) ** 2 * 0.72);
+      ctx.fillStyle = burst.color;
+      const outer = burst.radius * expansion;
+      const inner = burst.radius * (0.38 + progress * 0.6);
+      for (let i = 0; i < burst.rays; i++) {
+        const angle = i * Math.PI * 2 / burst.rays;
+        const length = outer * (i % 3 === 0 ? 1.35 : i % 2 === 0 ? 0.8 : 1);
+        const spread = Math.PI / burst.rays * 0.18;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle - spread) * inner, Math.sin(angle - spread) * inner);
+        ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+        ctx.lineTo(Math.cos(angle + spread) * inner, Math.sin(angle + spread) * inner);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 5) rozbłyski + addytywne pierścienie (fala uderzeniowa)
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
     for (const f of this.flashes) {
