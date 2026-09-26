@@ -509,6 +509,10 @@ export class GameClient {
       case "shot": {
         const fx = weaponFireEffect(ev.weapon);
         this.particles.sparks(ev.x, ev.y, fx.sparks, fx.color);
+        if (ev.weapon === "bazooka" || ev.weapon === "homing" ||
+            ev.weapon === "shotgun" || ev.weapon === "uzi") {
+          this.particles.muzzleFlash(ev.x, ev.y, ev.weapon === "shotgun" ? 1.2 : 0.9, fx.color);
+        }
         this.camera.shake(fx.kick);
         const shooter = this.buffer.latest?.turn.activeWormId;
         if (shooter !== undefined) this.renderer.onShot(shooter);

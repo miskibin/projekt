@@ -241,7 +241,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 }
 .weapon-badge { flex: none; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--weapon-color, #ff9961), transparent 80%); }
 #current-weapon { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-#current-ammo { color: #6ee06e; font-weight: 800; font-variant-numeric: tabular-nums; }
+#current-ammo { color: var(--weapon-color, #ff9961); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* --- sterowanie dotykowe --- */
 .touch-controls { position: absolute; inset: 0; pointer-events: none; z-index: 11; }
