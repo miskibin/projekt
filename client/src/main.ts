@@ -160,6 +160,7 @@ const game = new GameClient(sound, {
     showScreen(roomCode ? "lobby" : "menu");
   },
   rtt: () => net.rtt,
+  connected: () => net.status === "open",
   toast,
 });
 
