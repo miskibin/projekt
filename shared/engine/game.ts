@@ -66,6 +66,8 @@ const JET_MAX = 230;
 
 const BAT_RANGE = 25 + WORM_RADIUS;
 const HITSCAN_RANGE = 800;
+/** Klient podtrzymuje wejście co 0.5 s; po zaniku transmisji nie trzymaj ruchu ani ładowania w nieskończoność. */
+const INPUT_TIMEOUT = 0.9;
 
 const NEUTRAL_INPUT: InputState = { left: false, right: false, aim: 0, charge: false };
 
@@ -121,6 +123,7 @@ export class GameImpl implements Game, EngineCtx {
   private activeTeam = -1;
   private activeWormId = -1;
   private input: InputState = { ...NEUTRAL_INPUT };
+  private inputAge = 0;
   private charging = false;
   private chargePower = 0;
   private shotsLeft = 1;
@@ -250,6 +253,11 @@ export class GameImpl implements Game, EngineCtx {
     this.tick++;
     this.time += dt;
     if (this.phase === "gameOver") return;
+
+    this.inputAge += dt;
+    if (this.inputAge > INPUT_TIMEOUT && (this.input.left || this.input.right || this.input.charge)) {
+      this.input = { ...this.input, left: false, right: false, charge: false };
+    }
 
     this.applyControl(dt);
     this.updateBurst(dt);
@@ -599,6 +607,7 @@ export class GameImpl implements Game, EngineCtx {
     this.girderAngle = 0;
     this.burst = null;
     this.input = { ...NEUTRAL_INPUT };
+    this.inputAge = 0;
     if (ts.ammo[ts.selectedWeapon] === 0) ts.selectedWeapon = "bazooka";
     this.shotsLeft = WEAPONS[ts.selectedWeapon].shots;
 
@@ -741,6 +750,7 @@ export class GameImpl implements Game, EngineCtx {
       aim,
       charge: !!state.charge,
     };
+    this.inputAge = 0;
     const w = this.activeWorm();
     if (w && w.alive) w.aim = aim;
   }

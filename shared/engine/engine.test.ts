@@ -157,6 +157,17 @@ describe("rozstawienie robaków", () => {
 // ---------------------------------------------------------------- bronie
 
 describe("bronie", () => {
+  it("host puszcza ruch i ładowanie po utracie sygnału sterowania", () => {
+    const g = createGame(cfg({ seed: 999 }), setups(2));
+    const gi = g as unknown as { input: InputState };
+    toActive(g);
+    const team = g.snapshot().turn.activeTeam;
+    g.applyInput(team, { left: false, right: true, aim: -0.3, charge: true });
+    stepN(g, 65);
+    expect(gi.input).toMatchObject({ right: false, charge: false, aim: -0.3 });
+    g.applyInput(team, { left: true, right: false, aim: 0.2, charge: false });
+    expect(gi.input).toMatchObject({ left: true, aim: 0.2 });
+  });
   it("bazooka w dół zadaje obrażenia i wycina teren", () => {
     const g = createGame(cfg({ seed: 31337 }), setups(2));
     const events: GameEvent[] = [];
