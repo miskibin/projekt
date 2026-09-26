@@ -15,6 +15,7 @@ import { DemoDriver, type LocalMode } from "./demo";
 import { Hud } from "./hud";
 import { InputController } from "./input";
 import { Particles } from "./particles";
+import { LocalPrediction } from "./prediction";
 import { Renderer, teamColor, type Grave } from "./renderer";
 import type { Sound } from "./sound";
 import { INTERP_DELAY_MS, LOCAL_INTERP_DELAY_MS, SnapshotBuffer } from "./state";
@@ -29,6 +30,7 @@ export interface GameCallbacks {
   leaveRoom(): void;
   backToLobby(): void;
   rtt(): number;
+  connected(): boolean;
   toast(text: string, kind?: "info" | "err" | "ok"): void;
 }
 
@@ -55,6 +57,7 @@ export class GameClient {
   private ctx: CanvasRenderingContext2D;
   private camera = new Camera();
   private particles = new Particles();
+  private prediction = new LocalPrediction();
   private hud = new Hud();
   private renderer = new Renderer();
   private buffer = new SnapshotBuffer();
@@ -128,7 +131,7 @@ export class GameClient {
       sendAction: (action) => {
         if (action.kind === "selectWeapon") this.selectedWeapon = action.weapon;
         this.sendAction(action);
-        if (action.kind === "fire") this.sound.play("shot");
+        if (action.kind === "fire" && (this.demo || this.cb.connected())) this.sound.play("shot");
         if (action.kind === "jump" || action.kind === "backflip") this.sound.play("jump");
       },
       toggleWeaponPanel: () => this.toggleWeapons(),
@@ -184,6 +187,7 @@ export class GameClient {
     this.trackedWorm = null;
     this.pending = [];
     this.buffer.clear();
+    this.prediction.reset();
     this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
     this.particles.clear();
     this.hud.clear();
@@ -232,6 +236,7 @@ export class GameClient {
     window.visualViewport?.removeEventListener("resize", this.onResize);
     this.resizeObserver.disconnect();
     this.demo = null;
+    this.prediction.reset();
     this.els.demoControls.hidden = true;
     this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
   }
@@ -246,6 +251,7 @@ export class GameClient {
 
   onSnapshot(s: GameSnapshot): void {
     this.buffer.push(s);
+    this.prediction.onSnapshot(s);
     if (this.demo) {
       this.myTeam = this.demo.controlledTeam;
       const team = s.teams.find((t) => t.team === this.myTeam);
@@ -348,7 +354,21 @@ export class GameClient {
     this.flushEvents(now);
 
     // 2) stan do wyrenderowania
-    const state = this.buffer.sample(now);
+    let state = this.buffer.sample(now);
+    if (state) {
+      const activeId = state.turn.activeWormId;
+      const active = state.worms.find((w) => w.id === activeId && w.alive);
+      this.input.setContext({
+        myTurn: this.isMyTurn(state.turn.activeTeam, state.turn.phase),
+        worm: active ?? null,
+        weapon: this.selectedWeapon,
+        blocked: this.panelOpen || this.escOpen || this.overOpen,
+      });
+    }
+    this.input.update(dt);
+    if (state && !this.demo) {
+      state = this.prediction.apply(state, this.terrain, this.input.currentState, this.myTeam, dt, now);
+    }
     this.particles.update(dt);
     this.hud.update(dt);
 
@@ -386,14 +406,7 @@ export class GameClient {
       }
       this.trackedWorm = active ? { id: active.id, x: active.x, y: active.y } : null;
       this.waterShown += (turn.waterLevel - this.waterShown) * Math.min(1, dt * 2.5);
-      this.input.setContext({
-        myTurn: this.isMyTurn(state.turn.activeTeam, state.turn.phase),
-        worm: active ?? null,
-        weapon: this.selectedWeapon,
-        blocked: this.panelOpen || this.escOpen || this.overOpen,
-      });
     }
-    this.input.update(dt);
     const charge = Math.round(this.input.chargePower * 360);
     if (charge !== this.shownCharge) {
       this.shownCharge = charge;
@@ -435,6 +448,7 @@ export class GameClient {
         demo: this.demo !== null,
         showMap: this.showMap,
         touch: this.touchEnabled,
+        stale: !this.demo && this.prediction.ageMs > 800,
       });
     } else {
       this.ctx.fillStyle = "#0a0e15";
@@ -451,6 +465,10 @@ export class GameClient {
   }
 
   private sendAction(action: InputAction): void {
+    if (!this.demo && !this.cb.connected() && action.kind !== "selectWeapon" && action.kind !== "setTimer") {
+      this.cb.toast("Brak połączenia. Poczekaj na synchronizację przed ruchem.", "err");
+      return;
+    }
     if (this.demo) this.demo.applyAction(action);
     else this.cb.send({ t: "action", action });
   }
@@ -487,11 +505,13 @@ export class GameClient {
         const w = this.lastPos.get(ev.wormId);
         const col = w ? teamColor(w.team) : "#ff6a6a";
         this.particles.floatText(ev.x, ev.y - 18, `-${Math.round(ev.amount)}`, col, 19);
+        this.particles.hitFeedback(ev.x, ev.y, ev.amount, col);
         this.renderer.onDamage(ev.wormId, ev.amount);
         break;
       }
       case "wormDied": {
         this.renderer.onKill(ev.wormId);
+        this.sound.play("died");
         const w = this.lastPos.get(ev.wormId);
         if (w) {
           if (ev.reason === "drown") {

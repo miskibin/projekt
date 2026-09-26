@@ -180,8 +180,9 @@ export class NetClient {
   send(msg: ClientMessage): void {
     if (this.status === "open") {
       this.transport.send(msg);
-    } else if (msg.t !== "ping" && msg.t !== "input") {
-      // wejście gracza szybko się dezaktualizuje – nie ma sensu go kolejkować
+    } else if (msg.t !== "ping" && msg.t !== "input" && msg.t !== "action") {
+      // Strzał, skok lub wybór celu po powrocie sieci mógłby wykonać się
+      // w cudzej turze. Zostawiamy tylko kontrolne wiadomości pokoju.
       if (this.queue.length < 64) this.queue.push(msg);
     }
   }

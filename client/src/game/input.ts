@@ -82,6 +82,11 @@ export class InputController {
     return this.pitch;
   }
 
+  /** Aktualne sterowanie do lokalnego przewidywania położenia własnego robaka. */
+  get currentState(): InputState {
+    return { ...this.state };
+  }
+
   setContext(c: InputContext): void {
     const turnStarted = c.myTurn && (!this.ctxInfo.myTurn || c.worm?.id !== this.ctxInfo.worm?.id);
     if (turnStarted || !c.myTurn || c.blocked) this.cancelControls();

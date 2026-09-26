@@ -15,6 +15,7 @@ export interface HudInput {
   demo: boolean;
   showMap: boolean;
   touch: boolean;
+  stale: boolean;
 }
 
 const FONT = "ui-sans-serif, system-ui, sans-serif";
@@ -60,6 +61,8 @@ export class Hud {
     ctx.textBaseline = "middle";
     const clockBottom = this.drawClock(ctx, inp, W, narrow);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
+    else this.drawOffscreenEnemies(ctx, inp, W, H);
+    if (inp.stale) this.drawBanner(ctx, "Słaby sygnał · czekam na synchronizację", W, clockBottom + 28, narrow);
 
     // Krótkie komunikaty zamiast stałych podpisów i dużych kart na środku ekranu.
     if (this.notice) {
@@ -88,6 +91,46 @@ export class Hud {
     });
     ctx.globalAlpha = 1;
     ctx.restore();
+  }
+
+  /** Kierunek do najbliższych przeciwników bez oddalania całej sceny. */
+  private drawOffscreenEnemies(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, height: number): void {
+    const active = inp.state.worms.find((w) => w.id === inp.state.turn.activeWormId && w.alive);
+    if (!active) return;
+    const used: { x: number; y: number }[] = [];
+    const rivals = inp.state.worms.filter((w) => w.alive && w.team !== active.team)
+      .sort((a, b) => Math.hypot(a.x - active.x, a.y - active.y) - Math.hypot(b.x - active.x, b.y - active.y))
+      .slice(0, 3);
+    for (const rival of rivals) {
+      const target = inp.camera.worldToScreen(rival.x, rival.y);
+      if (target.x >= 26 && target.x <= width - 26 && target.y >= 92 && target.y <= height - 72) continue;
+      let x = Math.max(35, Math.min(width - 35, target.x));
+      let y = Math.max(108, Math.min(height - 90, target.y));
+      for (const usedPoint of used) {
+        if (Math.hypot(x - usedPoint.x, y - usedPoint.y) < 42) y = Math.min(height - 90, y + 36);
+      }
+      used.push({ x, y });
+      const angle = Math.atan2(target.y - height / 2, target.x - width / 2);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = "rgba(10,24,39,.74)";
+      ctx.strokeStyle = teamColor(rival.team);
+      ctx.lineWidth = 2;
+      roundRect(ctx, -24, -13, 48, 26, 12);
+      ctx.fill(); ctx.stroke();
+      ctx.save();
+      ctx.rotate(angle);
+      ctx.fillStyle = teamColor(rival.team);
+      ctx.beginPath();
+      ctx.moveTo(16, 0); ctx.lineTo(4, -6); ctx.lineTo(4, 6);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = TEXT;
+      ctx.font = "800 10px " + FONT;
+      ctx.textAlign = "center";
+      ctx.fillText(String(Math.round(Math.hypot(rival.x - active.x, rival.y - active.y))), -6, 1);
+      ctx.restore();
+    }
   }
 
   /** Jeden zwarty panel: runda, czas oraz wiatr. */

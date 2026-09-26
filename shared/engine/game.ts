@@ -190,10 +190,12 @@ export class GameImpl implements Game, EngineCtx {
   private spawnWorm(team: number, name: string): Worm {
     let px = -1;
     let py = -1;
-    const dists = [160, 120, 90, 60, 35, 0];
+    // Mecz na telefonie zaczyna się w środkowym sektorze mapy: częściej widać
+    // rywala bez ręcznego oddalania, a nadal jest miejsce na dalekie strzały.
+    const dists = [110, 90, 70, 50, 35, 0];
     for (const minDist of dists) {
       for (let attempt = 0; attempt < 300; attempt++) {
-        const x = this.rng.int(30, WORLD_WIDTH - 30);
+        const x = this.rng.int(420, WORLD_WIDTH - 420);
         const surf = this.terrain.surfaceY(x);
         if (surf >= WORLD_HEIGHT) continue;
         if (surf >= this.waterLevel - WORM_RADIUS - 6) continue; // ląd pod wodą
@@ -459,7 +461,7 @@ export class GameImpl implements Game, EngineCtx {
     const ri = Math.max(1, Math.round(r));
     this.terrain.carveCircle(xi, yi, ri);
     this.emit({ t: "explosion", x: xi, y: yi, r: ri, power: Math.round(power), style });
-    this.emit({ t: "sound", name: "explosion", x: xi, y: yi });
+    this.emit({ t: "sound", name: style ? `explosion:${style}` : "explosion", x: xi, y: yi });
 
     const reach = ri * 1.5;
     for (const w of this.worms) {

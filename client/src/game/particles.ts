@@ -189,6 +189,14 @@ export class Particles {
     this.pushRing({ x, y, r0: 4, r1: 32, life: 0, max: 0.21, color: "rgba(255,224,158,1)", width: 3, flat: false, additive: true });
   }
 
+  hitFeedback(x: number, y: number, damage: number, color: string): void {
+    const strength = Math.min(1, damage / 75);
+    this.flash(x, y, 12 + strength * 16, "#ffffff", 0.12);
+    this.pushRing({ x, y, r0: 4, r1: 13 + strength * 22, life: 0, max: 0.24,
+      color, width: 2 + strength * 2, flat: false, additive: true });
+    this.sparks(x, y, Math.min(14, Math.round(3 + damage / 7)), color);
+  }
+
   teleport(x: number, y: number): void {
     this.flash(x, y, 30, "#b4edff", 0.32);
     this.pushRing({ x, y, r0: 3, r1: 42, life: 0, max: 0.42, color: "rgba(111,214,255,1)", width: 2.5, flat: false, additive: true });

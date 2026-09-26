@@ -113,6 +113,12 @@ describe("determinizm", () => {
 // ---------------------------------------------------------------- rozstawienie
 
 describe("rozstawienie robaków", () => {
+  it("dwuosobowy mecz skupia startowe robaki w czytelnej części mapy", () => {
+    for (const seed of [1, 77, 4242, 999999]) {
+      const g = createGame(cfg({ seed, wormsPerTeam: 3 }), setups(2));
+      expect(g.snapshot().worms.every((w) => w.x >= 420 && w.x <= WORLD_WIDTH - 420)).toBe(true);
+    }
+  });
   it("robaki nie startują w terenie ani w wodzie i mają unikalne imiona", () => {
     for (const seed of [1, 77, 4242, 999999]) {
       const g = createGame(cfg({ seed, wormsPerTeam: 4 }), setups(4));

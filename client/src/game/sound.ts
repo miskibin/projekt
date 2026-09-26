@@ -7,6 +7,7 @@ export class Sound {
   private master: GainNode | null = null;
   private noiseBuf: AudioBuffer | null = null;
   private lastJet = 0;
+  private lastBlast = -Infinity;
   private unlocked = false;
   private _volume = 0.6;
 
@@ -64,6 +65,30 @@ export class Sound {
     if (!ctx || !this.master) return;
     if (ctx.state === "suspended") void ctx.resume();
     const t = ctx.currentTime;
+    if (name.startsWith("explosion:")) {
+      // Salwy odłamków nie mogą nakładać kilkunastu identycznych głośnych dźwięków.
+      if (t - this.lastBlast < 0.065) return;
+      this.lastBlast = t;
+      const style = name.slice(10);
+      if (style === "holy") {
+        this.noise(t, 0.95, 650, 0.65, "lowpass", 120);
+        this.tone(t, "sine", 160, 34, 0.68, 0.85);
+        for (const [i, f] of [523, 659, 784].entries()) this.tone(t + i * 0.035, "sine", f, f * 0.74, 0.12, 0.65);
+      } else if (style === "dynamite" || style === "mine") {
+        this.noise(t, 0.85, 850, 0.84, "lowpass", 95);
+        this.tone(t, "sine", 115, 37, 0.65, 0.7);
+        this.noise(t + 0.075, 0.4, 1300, 0.18, "bandpass", 300);
+      } else if (style === "cluster" || style === "banana" || style === "airstrike") {
+        this.noise(t, 0.26, style === "banana" ? 1900 : 1350, 0.52, "bandpass", 250);
+        this.tone(t, "triangle", style === "banana" ? 310 : 170, 60, 0.3, 0.32);
+      } else if (style === "shotgun" || style === "uzi") {
+        this.noise(t, 0.14, 2500, 0.26, "highpass");
+      } else {
+        this.noise(t, 0.57, 1100, 0.68, "lowpass", 150);
+        this.tone(t, "sine", 150, 48, 0.46, 0.46);
+      }
+      return;
+    }
     switch (name) {
       case "explosion":
         this.noise(t, 0.75, 900, 0.9, "lowpass");
@@ -76,8 +101,12 @@ export class Sound {
         this.tone(t, "sawtooth", 320, 90, 0.22, 0.18);
         break;
       case "uzi":
+        this.noise(t, 0.065, 4300, 0.23, "highpass");
+        this.tone(t, "square", 460, 170, 0.12, 0.06);
+        break;
       case "shotgun":
-        this.noise(t, 0.1, 3200, 0.4, "highpass");
+        this.noise(t, 0.34, 2100, 0.62, "bandpass", 180);
+        this.tone(t, "sine", 170, 48, 0.38, 0.27);
         break;
       case "jump":
         this.tone(t, "sine", 320, 620, 0.18, 0.14);

@@ -55,7 +55,16 @@ describe("kamera", () => {
     camera.focus(900, 600, undefined, true);
     expect(camera.viewRect().w).toBeLessThan(900);
     camera.trackProjectile(950, 500, 300, -100, true);
-    expect(camera.viewRect().w).toBeGreaterThan(900);
+    expect(camera.viewRect().w).toBeGreaterThan(800);
+  });
+
+  it("na telefonie w pionie kamera zbliża postać ponad ogólny widok", () => {
+    const camera = new Camera();
+    camera.setViewport(390, 844);
+    expect(camera.focusZoom).toBeGreaterThan(camera.fitZoom * 1.5);
+    expect(camera.projectileZoom).toBeLessThan(camera.focusZoom);
+    camera.focus(900, 650, undefined, true);
+    expect(camera.viewRect().w).toBeLessThan(400);
   });
 
   it("auto-focus zbliża na aktywnego robaka i trzyma go poniżej środka ekranu", () => {

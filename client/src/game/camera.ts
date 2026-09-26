@@ -13,8 +13,8 @@ const FOCUS_VIEW_WIDTH = 1550;
 const PROJECTILE_VIEW_WIDTH = 1720;
 /** Mały ekran nie powinien pokazywać tej samej szerokości świata co monitor.
  * W przeciwnym razie robaki i pociski stają się mikroskopijne. */
-const PHONE_FOCUS_VIEW_WIDTH = 820;
-const PHONE_PROJECTILE_VIEW_WIDTH = 1040;
+const PHONE_FOCUS_VIEW_WIDTH = 660;
+const PHONE_PROJECTILE_VIEW_WIDTH = 860;
 /** Maksymalne wyprzedzenie kamery przed lecącym pociskiem (px świata). */
 const PROJECTILE_LEAD = 150;
 /** Gdzie na ekranie trzymamy aktywnego robaka (0 = góra, 1 = dół). */
@@ -102,12 +102,15 @@ export class Camera {
   /** Zbliżenie na aktywnego robaka (widać celownik i szczegóły). */
   get focusZoom(): number {
     const width = this.viewW < 1000 ? PHONE_FOCUS_VIEW_WIDTH : FOCUS_VIEW_WIDTH;
-    return clamp(this.viewW / width, this.minZoom, this.maxZoom);
+    // W pionie width / 660 dawałoby mniejszy zoom niż fitZoom zależny od wysokości.
+    const portraitFloor = this.viewW < this.viewH && this.viewW < 1000 ? 1.05 : 0;
+    return clamp(Math.max(this.viewW / width, portraitFloor), this.minZoom, this.maxZoom);
   }
 
   get projectileZoom(): number {
     const width = this.viewW < 1000 ? PHONE_PROJECTILE_VIEW_WIDTH : PROJECTILE_VIEW_WIDTH;
-    return clamp(this.viewW / width, this.minZoom, this.focusZoom);
+    const portraitFloor = this.viewW < this.viewH && this.viewW < 1000 ? 0.85 : 0;
+    return clamp(Math.max(this.viewW / width, portraitFloor), this.minZoom, this.focusZoom);
   }
 
   setViewport(w: number, h: number): void {
