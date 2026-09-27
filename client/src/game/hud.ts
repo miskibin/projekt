@@ -65,7 +65,7 @@ export class Hud {
       ? (narrow ? clockBottom + 12 : 74) + (this.feed.length - 1) * (narrow ? 25 : 27) + 22
       : clockBottom;
     const bannerY = Math.max(clockBottom + (narrow ? 28 : 32), feedBottom + (narrow ? 10 : 12));
-    if (inp.stale) this.drawBanner(ctx, "Słaby sygnał · czekam na synchronizację", W, bannerY, narrow);
+    if (inp.stale) this.drawBanner(ctx, "Czekam na synchronizację gry…", W, bannerY, narrow);
 
     // Krótkie komunikaty zamiast stałych podpisów i dużych kart na środku ekranu.
     if (this.notice) {

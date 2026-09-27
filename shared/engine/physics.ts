@@ -93,11 +93,17 @@ export function pushOut(t: Terrain, pos: { x: number; y: number }, r: number, ma
 /** Czy pod okręgiem (w odległości do `depth` px) jest ziemia? */
 export function groundBelow(t: Terrain, x: number, y: number, r: number, depth = 2): boolean {
   // A wall beside the worm touches its collision circle too, but it is not
-  // ground. Sample the feet, including two points for the edge of a slope.
+  // ground. Sample the feet and the outer toes only when there is air just
+  // above them. The outer toes let a worm climb onto a short crater ledge
+  // before its centre has crossed the ledge's vertical wall.
   for (let d = 1; d <= depth; d++) {
     const footY = y + r + d;
     if (t.isSolid(x, footY) || t.isSolid(x - r * 0.5, footY - 1) ||
         t.isSolid(x + r * 0.5, footY - 1)) return true;
+    const leftToe = x - r * 0.92;
+    const rightToe = x + r * 0.92;
+    if ((!t.isSolid(leftToe, y + r - 1) && t.isSolid(leftToe, footY)) ||
+        (!t.isSolid(rightToe, y + r - 1) && t.isSolid(rightToe, footY))) return true;
   }
   return false;
 }
@@ -117,13 +123,21 @@ export function walkStep(
   maxDown: number,
 ): WalkResult {
   const nx = clamp(pos.x + dx, r, t.width - 1 - r);
-  for (let dy = -maxUp; dy <= maxDown; dy++) {
+  // Najpierw sąsiednia wysokość, później coraz większe stopnie. Próba od
+  // największego wejścia powodowała podskakiwanie na nierównościach krateru.
+  const moveAt = (dy: number): boolean => {
     const ny = pos.y + dy;
     if (!circleHits(t, nx, ny, r) && groundBelow(t, nx, ny, r, 2)) {
       pos.x = nx;
       pos.y = ny;
-      return "moved";
+      return true;
     }
+    return false;
+  };
+  if (moveAt(0)) return "moved";
+  for (let d = 1; d <= Math.max(maxUp, maxDown); d++) {
+    if (d <= maxUp && moveAt(-d)) return "moved";
+    if (d <= maxDown && moveAt(d)) return "moved";
   }
   if (!circleHits(t, nx, pos.y, r)) {
     pos.x = nx;

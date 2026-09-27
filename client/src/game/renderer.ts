@@ -72,6 +72,7 @@ export class Renderer {
   private lastPower = DEFAULT_PREVIEW_POWER;
   /** Emisja smug zależna od czasu, a nie liczby klatek (120 Hz nie dubluje cząstek). */
   private readonly lastTrail = new Map<number, number>();
+  private readonly lowPower = typeof matchMedia !== "undefined" && matchMedia("(any-pointer: coarse)").matches;
 
   constructor(seed = 1) {
     this.background = new Background(seed);
@@ -134,7 +135,7 @@ export class Renderer {
     camera.apply(ctx);
 
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    ctx.imageSmoothingQuality = this.lowPower ? "medium" : "high";
     ctx.drawImage(inp.terrainTex, 0, 0);
 
     this.updateAnimator(inp, dt);
@@ -149,7 +150,7 @@ export class Renderer {
     this.drawWater(ctx, inp, pal);
 
     ctx.restore();
-    this.postProcess.draw(ctx, W, H, dt);
+    this.postProcess.draw(ctx, W, H, dt, this.lowPower);
     ctx.restore();
   }
 

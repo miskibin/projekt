@@ -3,7 +3,7 @@ import { FIXED_DT, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH, WORM_RADIUS } f
 import type { GameConfig, GameEvent, InputState, WeaponId } from "../protocol";
 import { createGame, type Game, type TeamSetup } from "./index";
 import { GameImpl } from "./game";
-import { circleHits, groundBelow } from "./physics";
+import { circleHits, groundBelow, walkStep } from "./physics";
 import { placeMine } from "./crates";
 import { detonateProjectile } from "./projectiles";
 import { Terrain } from "./terrain";
@@ -32,6 +32,34 @@ describe("skok i kolizje", () => {
     for (let y = 20; y < 75; y++) for (let x = 52; x < 75; x++) t.set(x, y, 1);
     expect(circleHits(t, 45, 45, 8)).toBe(true);
     expect(groundBelow(t, 45, 45, 8, 3)).toBe(false);
+  });
+
+  it("wchodzi na niski brzeg krateru bez zaklinowania o pionowy piksel", () => {
+    const t = new Terrain(120, 100);
+    for (let y = 60; y < 100; y++) t.data.fill(1, y * 120, (y + 1) * 120);
+    for (let y = 51; y < 60; y++) t.data.fill(1, y * 120 + 60, y * 120 + 80);
+    const worm = { x: 48, y: 51 };
+    let blocked = 0;
+    for (let i = 0; i < 25; i++) {
+      if (walkStep(t, worm, WORM_RADIUS, 1.33, 10, 8) === "blocked") blocked++;
+    }
+    expect(blocked).toBe(0);
+    expect(worm.x).toBeGreaterThan(75);
+    expect(circleHits(t, worm.x, worm.y, WORM_RADIUS)).toBe(false);
+  });
+
+  it("pozwala skoczyć z krawędzi, gdy stopy są nad podłożem, ale onGround jest fałszywe", () => {
+    const game = createGame(cfg(), setups(2));
+    const gi = game as GameImpl;
+    toActive(game);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const worm = gi.worms.find((w) => w.id === game.snapshot().turn.activeWormId)!;
+    worm.x = 500; worm.y = 438; worm.vy = 45; worm.onGround = false;
+    (gi as unknown as { lastGroundedAt: Map<number, number> }).lastGroundedAt.clear();
+    game.applyAction(worm.team, { kind: "jump" });
+    expect(worm.vy).toBeLessThan(-300);
   });
 
   it("skok naciśnięty tuż przed lądowaniem wykonuje się po kontakcie z podłożem", () => {

@@ -286,9 +286,9 @@ export class TrysteroTransport implements Transport {
     this.hostOut.clear();
     if (!this.roomCode) return;
     for (const [peerId, msgs] of entries) {
-      // Snapshoty są zastępowalne; akcje i zmiany terenu muszą dotrzeć.
-      const critical = msgs.some((msg) => msg.t !== "snapshot" && msg.t !== "pong");
-      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { id: ++this.hostBatchId, msgs } satisfies WireS2C, false, critical ? 1 : 0);
+      // MQTT QoS 0 gubił okresowe migawki na mobilnej sieci. Odbiorca ignoruje
+      // stare/zdublowane ticki, a QoS 1 pozwala brokerowi dosłać brakującą paczkę.
+      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { id: ++this.hostBatchId, msgs } satisfies WireS2C, false, 1);
     }
   }
 

@@ -11,13 +11,13 @@ import type {
 } from "@shared/protocol";
 
 /** Online render stays behind the host long enough to absorb normal Realtime jitter. */
-export const INTERP_DELAY_MS = Math.max(120, 2 * (1000 / SNAPSHOT_RATE));
+export const INTERP_DELAY_MS = Math.max(220, 4 * (1000 / SNAPSHOT_RATE));
 /** Local demo produces a snapshot every simulation step and does not need a network buffer. */
 export const LOCAL_INTERP_DELAY_MS = 1000 / 30;
 
 const HISTORY_SIZE = 12;
 const OFFSET_SAMPLES = 32;
-const MAX_EXTRAPOLATION_MS = 80;
+const MAX_EXTRAPOLATION_MS = 160;
 
 export interface RenderState {
   tick: number;

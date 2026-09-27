@@ -12,13 +12,16 @@ export class PostProcess {
     this.impact = Math.max(this.impact, Math.max(0, Math.min(1, strength)));
   }
 
-  draw(ctx: CanvasRenderingContext2D, width: number, height: number, dt: number): void {
+  draw(ctx: CanvasRenderingContext2D, width: number, height: number, dt: number, lowPower = false): void {
     if (width <= 0 || height <= 0) return;
     this.impact *= Math.exp(-dt * 5.2);
 
     // Copy/blur the full frame only during a fresh impact. The smaller buffer
     // keeps the short bloom pulse affordable on mobile GPUs.
-    if (this.impact > 0.035) {
+    // Filtr CSS blur wymusza kosztowny pełnoekranowy przebieg na Safari/Android.
+    // Na telefonie używamy go tylko w pierwszych klatkach po uderzeniu; resztę
+    // wybuchu nadal tworzą normalne cząstki i jasny impuls.
+    if (this.impact > (lowPower ? 0.7 : 0.035)) {
       const scale = Math.min(0.42, 360 / Math.max(width, height));
       const bw = Math.max(1, Math.round(width * scale));
       const bh = Math.max(1, Math.round(height * scale));
@@ -38,7 +41,7 @@ export class PostProcess {
         ctx.filter = `blur(${7 + this.impact * 6}px) saturate(${1.25 + this.impact * 0.65})`;
         ctx.drawImage(this.buffer, 0, 0, bw, bh, 0, 0, width, height);
 
-        if (this.impact > 0.24) {
+        if (!lowPower && this.impact > 0.24) {
           const shift = 1 + this.impact * 4;
           ctx.globalAlpha = this.impact * 0.065;
           ctx.filter = "hue-rotate(150deg) saturate(2.8)";

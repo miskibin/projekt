@@ -899,7 +899,13 @@ export class GameImpl implements Game, EngineCtx {
       w.jetThrust = 0.2;
       return;
     }
-    if (!w.onGround && (this.time - (this.lastGroundedAt.get(w.id) ?? -Infinity) > JUMP_GRACE_TIME || w.vy > 150)) {
+    // Na krawędzi bitmapa bywa 2–4 px pod stopami, a kolizja boczna trzyma
+    // onGround=false. Pozwól odbić się od takiego podparcia zamiast uwięzić robaka.
+    const ledgeSupport = w.vy >= 0 && w.vy < 150 &&
+      !circleHits(this.terrain, w.x, w.y, WORM_RADIUS) &&
+      groundBelow(this.terrain, w.x, w.y, WORM_RADIUS, 4);
+    if (!w.onGround && !ledgeSupport &&
+        (this.time - (this.lastGroundedAt.get(w.id) ?? -Infinity) > JUMP_GRACE_TIME || w.vy > 150)) {
       this.bufferedJump = { wormId: w.id, back, until: this.time + JUMP_GRACE_TIME };
       return;
     }

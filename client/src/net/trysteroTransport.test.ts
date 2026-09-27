@@ -55,7 +55,7 @@ describe("MQTT: dostarczanie gry", () => {
     expect(subscribe).toHaveBeenCalledWith(expect.any(Array), { qos: 1 }, expect.any(Function));
   });
 
-  it("zdarzenia zmieniające teren są niezawodne, snapshoty mogą być zastąpione nowszymi", () => {
+  it("zdarzenia i snapshoty docierają przez niezawodną subskrypcję", () => {
     const { transport, publish } = connected("host");
     transport.hostOut = new Map([["guest", [{ t: "events", events: [] }]]]);
     transport.flushHost();
@@ -64,7 +64,7 @@ describe("MQTT: dostarczanie gry", () => {
     transport.hostOut = new Map([["guest", [{ t: "snapshot", snapshot: {} as never }]]]);
     transport.flushHost();
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
-      expect.any(String), expect.objectContaining({ qos: 0 }));
+      expect.any(String), expect.objectContaining({ qos: 1 }));
   });
 
   it("nie powtarza zdarzeń, gdy broker dostarczy tę samą paczkę dwa razy", () => {

@@ -477,7 +477,7 @@ export class GameClient {
         demo: this.demo !== null,
         showMap: this.showMap,
         touch: this.touchEnabled,
-        stale: !this.demo && this.prediction.ageMs > 800,
+        stale: !this.demo && this.prediction.ageMs > 1_500,
       });
     } else {
       this.ctx.fillStyle = "#0a0e15";

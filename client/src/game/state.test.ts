@@ -71,7 +71,7 @@ describe("SnapshotBuffer", () => {
     const shortlyLate = buffer.sample(1000 + INTERP_DELAY_MS + 80);
     const veryLate = buffer.sample(1000 + INTERP_DELAY_MS + 500);
     expect(shortlyLate?.worms[0].x).toBeCloseTo(8, 5);
-    expect(veryLate?.worms[0].x).toBeCloseTo(13, 5);
+    expect(veryLate?.worms[0].x).toBeCloseTo(21, 5);
   });
 
   it("keeps local mode delay configurable without changing the online default", () => {
