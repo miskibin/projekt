@@ -337,7 +337,7 @@ describe("start gry", () => {
     b.send({ t: "setReady", ready: true });
     a.send({ t: "startGame" });
     a.send({ t: "requestTerrainSync" });
-    expect(a.last("terrainSync")!.terrain).toEqual({ width: 4, height: 2, rle: [4, 0, 2, 2] });
+    expect(a.last("terrainSync")!.terrain).toEqual({ width: 4, height: 2, rle: [4, 0, 2, 2], eventSeq: 0 });
   });
 
   it("odrzuca nieprawidłowy input/akcję", () => {

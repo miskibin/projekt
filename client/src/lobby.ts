@@ -29,6 +29,7 @@ export class Lobby {
     leave: byId<HTMLButtonElement>("btn-leave"),
     conn: byId("lobby-conn"),
     list: byId("player-list"),
+    status: byId("lobby-status"),
     ready: byId<HTMLButtonElement>("btn-ready"),
     start: byId<HTMLButtonElement>("btn-start"),
     worms: byId<HTMLInputElement>("set-worms"),
@@ -145,14 +146,20 @@ export class Lobby {
 
     // przyciski
     const me = this.me();
-    this.el.ready.textContent = me?.ready ? "Nie jestem gotowy" : "Gotowy";
+    this.el.ready.textContent = me?.ready ? "Cofnij gotowość" : "Jestem gotowy";
     this.el.ready.classList.toggle("btn-primary", !me?.ready);
     const host = this.isHost();
+    this.el.ready.hidden = host;
     this.el.start.hidden = !host;
     const connected = room.players.filter((p) => p.connected);
     const allReady = connected.length >= 2 && connected.every((p) => p.ready || p.isHost);
     this.el.start.disabled = !allReady;
     this.el.start.title = allReady ? "" : "Potrzeba min. 2 połączonych i gotowych graczy";
+    this.el.status.textContent = connected.length < 2
+      ? "Wyślij link drugiej osobie i poczekaj, aż dołączy."
+      : host
+        ? allReady ? "Oboje jesteście gotowi. Rozpocznij grę." : "Druga osoba musi wybrać „Jestem gotowy”."
+        : me?.ready ? "Gotowe. Czekam, aż host rozpocznie grę." : "Wybierz „Jestem gotowy”, żeby host mógł rozpocząć grę.";
 
     // ustawienia
     const c = room.config;

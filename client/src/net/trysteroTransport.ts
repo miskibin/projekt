@@ -44,6 +44,8 @@ export class TrysteroTransport implements Transport {
   private hostPeers = new Map<string, Peer>();
   private hostOut = new Map<string, ServerMessage[]>();
   private hostBatchId = 0;
+  private lastInput: Extract<ClientMessage, { t: "input" }>["state"] | null = null;
+  private lastInputTurn: string | null = null;
   private readonly seenBatches = new Set<number>();
   private lastHello: ClientMessage | null = null;
   private roomCode: string | null = null;
@@ -78,6 +80,8 @@ export class TrysteroTransport implements Transport {
     client.on("message", (topic, payload) => this.onBrokerMessage(topic, payload.toString()));
     client.on("reconnect", () => this.statusCb("reconnecting"));
     client.on("close", () => {
+      this.lastInput = null;
+      this.lastInputTurn = null;
       if (!this.closedByUser) this.statusCb("reconnecting");
     });
     client.on("error", () => {
@@ -257,7 +261,18 @@ export class TrysteroTransport implements Transport {
   private deliverToHost(msg: ClientMessage): void {
     if (this.host) this.host.handleMessage(this.localPeer(), msg);
     else if (this.hostPeerId && this.roomCode) {
-      this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs: [msg] } satisfies WireC2S, false, 1);
+      // Movement start/stop and charge transitions must arrive reliably. The
+      // controller repeats unchanged state, so frequent aim/held-key updates
+      // can take the fast, disposable path; seq rejects delayed older packets.
+      let qos: 0 | 1 = 1;
+      if (msg.t === "input") {
+        const prev = this.lastInput;
+        const turn = msg.turn ? `${msg.turn.round}:${msg.turn.wormId}` : null;
+        qos = !prev || turn !== this.lastInputTurn || prev.left !== msg.state.left || prev.right !== msg.state.right || prev.charge !== msg.state.charge ? 1 : 0;
+        this.lastInput = { ...msg.state };
+        this.lastInputTurn = turn;
+      }
+      this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs: [msg] } satisfies WireC2S, false, qos);
     } else if (msg.t !== "hello" && msg.t !== "ping") {
       this.msgCb({ t: "error", message: "Nie jesteś w pokoju" });
     }
@@ -286,9 +301,12 @@ export class TrysteroTransport implements Transport {
     this.hostOut.clear();
     if (!this.roomCode) return;
     for (const [peerId, msgs] of entries) {
-      // MQTT QoS 0 gubił okresowe migawki na mobilnej sieci. Odbiorca ignoruje
-      // stare/zdublowane ticki, a QoS 1 pozwala brokerowi dosłać brakującą paczkę.
-      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { id: ++this.hostBatchId, msgs } satisfies WireS2C, false, 1);
+      // A late snapshot has no value once a newer one is available. Keeping
+      // every 20 Hz snapshot in MQTT's QoS 1 retransmit queue made mobile
+      // receivers play through old frames in bursts. Never downgrade events,
+      // terrain, game lifecycle, or action acknowledgements.
+      const reliable = msgs.some((msg) => msg.t !== "snapshot");
+      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { id: ++this.hostBatchId, msgs } satisfies WireS2C, false, reliable ? 1 : 0);
     }
   }
 
@@ -357,6 +375,8 @@ export class TrysteroTransport implements Transport {
     this.hostWorker = null;
     this.lastHostHeartbeat = 0;
     this.hostRecoveryPending = false;
+    this.lastInput = null;
+    this.lastInputTurn = null;
     this.seenBatches.clear();
   }
 

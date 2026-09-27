@@ -25,6 +25,7 @@ interface MockGame extends Game {
   inputs: Array<[number, unknown]>;
   actions: Array<[number, unknown]>;
   pending: GameEvent[];
+  nextTurn?: GameSnapshot["turn"];
 }
 
 function makeSnapshot(round = 1): GameSnapshot {
@@ -74,7 +75,11 @@ function makeMockGame(config: GameConfig): MockGame {
     applyAction(team, action) {
       game.actions.push([team, action]);
     },
-    snapshot: () => makeSnapshot(2),
+    snapshot: () => {
+      const snap = makeSnapshot(2);
+      if (game.nextTurn) snap.turn = game.nextTurn;
+      return snap;
+    },
     drainEvents() {
       const e = game.pending;
       game.pending = [];
@@ -210,7 +215,27 @@ describe("GameLoop – kolejność wiadomości", () => {
 
     const eventMsgs = h.sent.filter((m) => m.t === "events");
     expect(eventMsgs).toHaveLength(3); // po jednym na krok symulacji
-    expect(eventMsgs[0]).toEqual({ t: "events", events: [explosion] });
+    expect(eventMsgs[0]).toEqual({ t: "events", events: [explosion], seq: 1 });
+    expect(h.loop.snapshotMessage()).toMatchObject({ snapshot: { eventSeq: 3 } });
+  });
+
+  it("na początku następnej tury rozsyła pełny teren i stan po wszystkich zdarzeniach", () => {
+    const h = setup((g) => {
+      const originalStep = g.step;
+      g.step = (dt) => {
+        originalStep(dt);
+        if (g.steps === 2) g.nextTurn = { ...makeSnapshot(3).turn, activeTeam: 1, activeWormId: 9 };
+      };
+      g.eventsPerStep = [{ t: "carveRect", x: 25, y: 30, w: 40, h: 5, angle: 0, add: true }];
+    });
+    h.start();
+    h.advance(SNAPSHOT_MS + 1);
+    h.tick();
+    const turnSync = h.sent.findIndex((m) => m.t === "terrainSync");
+    expect(turnSync).toBeGreaterThan(0);
+    expect(h.sent[turnSync - 1]).toMatchObject({ t: "events", seq: 2 });
+    expect(h.sent[turnSync]).toMatchObject({ t: "terrainSync", terrain: { eventSeq: 2 } });
+    expect(h.sent[turnSync + 1]).toMatchObject({ t: "snapshot", snapshot: { eventSeq: 2, turn: { activeTeam: 1 } } });
   });
 
   it("nie wysyła pustych `events`", () => {
@@ -255,7 +280,7 @@ describe("GameLoop – koniec gry", () => {
     h.advance(TICK_MS + 1);
     h.tick();
     const types = h.sent.map((m) => m.t);
-    expect(types).toEqual(["events", "snapshot", "gameOver"]);
+    expect(types).toEqual(["events", "terrainSync", "snapshot", "gameOver"]);
   });
 
   it("removeTeam kończy grę gdy silnik uzna ją za skończoną", () => {
@@ -315,7 +340,23 @@ describe("GameLoop – wejście gracza", () => {
 
   it("terrainSync bierze dane z silnika", () => {
     const h = setup();
-    expect(h.loop.terrainSync()).toEqual({ width: 10, height: 4, rle: [10, 0, 5, 5] });
+    expect(h.loop.terrainSync()).toEqual({ width: 10, height: 4, rle: [10, 0, 5, 5], eventSeq: 0 });
+  });
+
+  it("gasi ruch gdy zniknie heartbeat, a nowy input ponownie włącza sterowanie", () => {
+    const h = setup();
+    h.start();
+    const moving = { left: false, right: true, aim: -0.3, charge: false };
+    h.loop.applyInput(0, moving, 1);
+    h.advance(651);
+    h.tick();
+    expect(h.game.inputs.at(-1)).toEqual([0, { left: false, right: false, charge: false, aim: 0 }]);
+    const count = h.game.inputs.length;
+    h.advance(651);
+    h.tick();
+    expect(h.game.inputs).toHaveLength(count);
+    h.loop.applyInput(0, moving, 2);
+    expect(h.game.inputs.at(-1)).toEqual([0, moving]);
   });
 });
 

@@ -50,18 +50,37 @@ describe("MQTT: dostarczanie gry", () => {
     transport.send({ t: "input", seq: 3, state: { left: false, right: true, aim: 0, charge: false } });
     expect(publish).toHaveBeenCalledWith(expect.stringContaining("/c2s/"),
       expect.stringContaining('"seq":3'), expect.objectContaining({ qos: 1 }));
+    transport.send({ t: "input", seq: 4, state: { left: false, right: true, aim: 0.3, charge: false } });
+    expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
+      expect.stringContaining('"seq":4'), expect.objectContaining({ qos: 0 }));
+    transport.send({ t: "input", seq: 5, state: { left: false, right: false, aim: 0.3, charge: false } });
+    expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
+      expect.stringContaining('"seq":5'), expect.objectContaining({ qos: 1 }));
+    transport.send({ t: "input", seq: 6, turn: { round: 2, wormId: 7 }, state: { left: false, right: false, aim: 0.3, charge: false } });
+    expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
+      expect.stringContaining('"seq":6'), expect.objectContaining({ qos: 1 }));
+    transport.send({ t: "action", seq: 6, action: { kind: "jump" } });
+    expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
+      expect.stringContaining('"kind":"jump"'), expect.objectContaining({ qos: 1 }));
     // Po wznowieniu subskrypcja musi przyjmować pakiety z QoS 1, inaczej publikacja nie wystarczy.
     transport.restoreRoomSubscriptions();
     expect(subscribe).toHaveBeenCalledWith(expect.any(Array), { qos: 1 }, expect.any(Function));
   });
 
-  it("zdarzenia i snapshoty docierają przez niezawodną subskrypcję", () => {
+  it("potwierdza zdarzenia, ale nie tworzy kolejki retransmisji dla samych migawek", () => {
     const { transport, publish } = connected("host");
     transport.hostOut = new Map([["guest", [{ t: "events", events: [] }]]]);
     transport.flushHost();
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
       expect.any(String), expect.objectContaining({ qos: 1 }));
     transport.hostOut = new Map([["guest", [{ t: "snapshot", snapshot: {} as never }]]]);
+    transport.flushHost();
+    expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
+      expect.any(String), expect.objectContaining({ qos: 0 }));
+    transport.hostOut = new Map([["guest", [
+      { t: "events", events: [] },
+      { t: "snapshot", snapshot: {} as never },
+    ]]]);
     transport.flushHost();
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
       expect.any(String), expect.objectContaining({ qos: 1 }));

@@ -62,7 +62,7 @@ export class Hud {
     const clockBottom = this.drawClock(ctx, inp, W, narrow);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
     const feedBottom = this.feed.length
-      ? (narrow ? clockBottom + 12 : 74) + (this.feed.length - 1) * (narrow ? 25 : 27) + 22
+      ? clockBottom + 12 + (this.feed.length - 1) * (narrow ? 25 : 27) + 22
       : clockBottom;
     const bannerY = Math.max(clockBottom + (narrow ? 28 : 32), feedBottom + (narrow ? 10 : 12));
     if (inp.stale) this.drawBanner(ctx, "Czekam na synchronizację gry…", W, bannerY, narrow);
@@ -77,7 +77,7 @@ export class Hud {
     // Kill feed – pod przyciskami w prawym górnym rogu, z kropką w kolorze drużyny.
     ctx.font = "650 " + (narrow ? 11 : 12) + "px " + FONT;
     ctx.textAlign = "right";
-    const feedTop = narrow ? clockBottom + 12 : 74;
+    const feedTop = clockBottom + 12;
     const rowWidth = Math.min(Math.max(132, W * 0.38), 242);
     const textWidth = rowWidth - 40;
     this.feed.forEach((item, index) => {
@@ -96,29 +96,29 @@ export class Hud {
     ctx.restore();
   }
 
-  /** Jeden zwarty panel: runda, czas oraz wiatr. */
+  /** Stała informacja o tym, kto steruje oraz czy gra rozlicza strzał. */
   private drawClock(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, narrow: boolean): number {
     const turn = inp.state.turn;
-    const pw = narrow ? 210 : 270;
-    const ph = narrow ? 40 : 46;
+    const pw = narrow ? Math.min(248, width - 88) : 292;
+    const ph = narrow ? 68 : 76;
     const py = narrow ? 52 : 8;
     const px = Math.round(width / 2 - pw / 2);
     panel(ctx, px, py, pw, ph, narrow ? 10 : 13);
 
-    const cy = py + ph / 2;
+    const cy = py + (narrow ? 20 : 23);
     const seconds = Math.max(0, Math.ceil(turn.timeLeft));
     const hot = seconds <= 10 && turn.phase === "active";
 
     // Three clear zones keep round, timer, and wind readable at phone scale.
-    const leftEdge = px + (narrow ? 49 : 62);
-    const rightEdge = px + (narrow ? 113 : 136);
+    const leftEdge = px + (narrow ? 51 : 65);
+    const rightEdge = px + (narrow ? 115 : 143);
     ctx.strokeStyle = "rgba(190,215,255,.13)";
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(leftEdge, py + 8);
-    ctx.lineTo(leftEdge, py + ph - 8);
+    ctx.lineTo(leftEdge, py + (narrow ? 36 : 42));
     ctx.moveTo(rightEdge, py + 8);
-    ctx.lineTo(rightEdge, py + ph - 8);
+    ctx.lineTo(rightEdge, py + (narrow ? 36 : 42));
     ctx.stroke();
 
     const roundW = narrow ? 36 : 44;
@@ -139,9 +139,9 @@ export class Hud {
     ctx.textAlign = "center";
     ctx.font = "800 " + (narrow ? 22 : 27) + "px " + FONT;
     ctx.fillStyle = hot ? ALERT : TEXT;
-    ctx.fillText(String(seconds).padStart(2, "0"), px + (narrow ? 81 : 99), cy + 1);
+    ctx.fillText(String(seconds).padStart(2, "0"), px + (narrow ? 83 : 104), cy + 1);
 
-    const cx = px + (narrow ? 162 : 204);
+    const cx = px + (narrow ? pw - 49 : pw - 57);
     const half = narrow ? 23 : 30;
     ctx.font = "750 " + (narrow ? 7 : 8) + "px " + FONT;
     ctx.fillStyle = MUTED;
@@ -161,6 +161,31 @@ export class Hud {
     ctx.fillRect(cx - 0.5, cy + 1, 1, 10);
     arrow(ctx, cx - half - 5, cy + 6, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
     arrow(ctx, cx + half + 5, cy + 6, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
+
+    ctx.strokeStyle = "rgba(190,215,255,.18)";
+    ctx.beginPath();
+    const separatorY = py + (narrow ? 41 : 47);
+    ctx.moveTo(px + 10, separatorY);
+    ctx.lineTo(px + pw - 10, separatorY);
+    ctx.stroke();
+    const acting = turn.phase === "active" || turn.phase === "retreat";
+    const mine = turn.activeTeam === inp.myTeam;
+    const name = inp.state.teams.find((team) => team.team === turn.activeTeam)?.name
+      ?? `Drużyna ${turn.activeTeam + 1}`;
+    const action = turn.phase === "active"
+      ? (mine ? "TWOJA TURA" : `GRA ${name.toLocaleUpperCase("pl")}`)
+      : turn.phase === "retreat"
+        ? (mine ? "TWÓJ STRZAŁ" : `STRZAŁ: ${name.toLocaleUpperCase("pl")}`)
+        : turn.phase === "gameOver" ? "KONIEC GRY" : "TRWA AKCJA / ZMIANA TURY";
+    const labelY = py + (narrow ? 55 : 62);
+    ctx.fillStyle = acting ? teamColor(turn.activeTeam) : WIND;
+    ctx.beginPath();
+    ctx.arc(px + 18, labelY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `800 ${narrow ? 11 : 12}px ${FONT}`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = TEXT;
+    ctx.fillText(action, px + 29, labelY + 1, pw - 43);
     return py + ph;
   }
 

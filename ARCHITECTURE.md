@@ -37,7 +37,7 @@ klienci w przeglądarce (Canvas 2D). Wszystko w TypeScript, jeden pakiet npm.
   w snapshotach (tylko przy `gameStart` seed, a opcjonalnie pełna bitmapa RLE przy `terrainSync`
   gdy gracz dołącza w trakcie / do resynchronizacji).
 
-## Wdrożenie bez własnego serwera (Vercel + Supabase) – tryb domyślny
+## Wdrożenie Vercel – obecny tryb
 
 Vercel serwuje tylko statycznego klienta (`dist/client`), więc nie ma trwałego procesu serwera.
 Zamiast tego:
@@ -45,10 +45,13 @@ Zamiast tego:
 - logika pokoju i pętla gry są w `shared/host/` (czysty TS, bez Node) i uruchamia je w przeglądarce
   gracz, który tworzy pokój (**host**). `server/index.ts` to tylko cienka warstwa Node (ws + express)
   wokół tego samego `RoomHost` dla trybu self-host (`VITE_TRANSPORT=ws`).
-- transportem jest Supabase Realtime (`client/src/net/supabaseTransport.ts`): kanał `worms:<KOD>`,
-  broadcast `c2s` (gość → host, `{from, msgs[]}`) i `s2c` (host → gość, `{to|"*", msgs[]}`),
-  presence do wykrywania rozłączeń. Wiadomości są batchowane co 50 ms, żeby zmieścić się w limitach
-  Realtime (domyślnie 100 zdarzeń/s na projekt).
-- host gra lokalnie przez pętlę zwrotną (bez sieci), więc ma zerowe opóźnienie; goście widzą snapshoty
-  z interpolacją. Gdy host wyjdzie, pokój znika.
-- klucze w `.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) to klucze publiczne.
+- Domyślny transport to MQTT przez publiczny `broker.emqx.io` (`client/src/net/trysteroTransport.ts`).
+  `VITE_TRANSPORT=ws` wybiera własny serwer Node. Stary `SupabaseTransport` jest nieaktywny,
+  nawet jeśli `.env` zawiera `VITE_TRANSPORT=supabase`; on również uruchamia grę na telefonie hosta.
+- Host gra lokalnie przez pętlę zwrotną, a gość wysyła sterowanie do hosta i dostaje migawki
+  stanu. Aktywny gość renderuje najnowszy stan i ograniczoną lokalną predykcję ruchu; obserwator
+  interpoluje obraz. QoS 1 chroni akcje, zmiany sterowania i zdarzenia, migawki okresowe używają
+  QoS 0, aby zaległe klatki nie tworzyły kolejki. Każda tura kończy się pełnym uzgodnieniem terenu.
+- To nadal zależy od karty hosta i publicznego brokera; zmiana samego transportu na Supabase
+  nie daje niezależnego serwera. Docelowa architektura dla płynnego i trwałego multiplayera
+  wymaga procesu symulacji na dedykowanym serwerze WebSocket (`server/index.ts` już obsługuje WS).

@@ -47,7 +47,8 @@ describe("lokalna predykcja", () => {
     let predicted = state;
     for (let i = 1; i <= 42; i++) predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1000 + i * 16);
     const x = predicted.worms[0].x;
-    expect(x).toBeLessThan(90); // bez potwierdzenia nie idzie setki pikseli do przodu
+    expect(x).toBeGreaterThan(100); // płynny ruch trwa podczas krótkiej przerwy w odbiorze
+    expect(x).toBeLessThan(112); // ale przewidywanie jest ograniczone do ~0.35 s
     predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1900);
     expect(predicted.worms[0].x).toBeCloseTo(x, 3);
     predictor.onSnapshot({ ...snapshot, tick: 2, inputAcks: { 0: 1 }, worms: [{ ...snapshot.worms[0], x: 82 }, snapshot.worms[1]] }, 1900);
@@ -65,6 +66,21 @@ describe("lokalna predykcja", () => {
     let predicted = state;
     for (let i = 1; i <= 40; i++) predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1000 + i * 16);
     expect(predicted.worms[0].x).toBeLessThan(110);
+  });
+
+  it("heartbeat co 180 ms nie hamuje animacji pomiędzy potwierdzeniami hosta", () => {
+    const { terrain, snapshot, state } = setup();
+    const predictor = new LocalPrediction();
+    predictor.onSnapshot(snapshot, 1000);
+    let previous = 80;
+    for (let i = 1; i <= 24; i++) {
+      const now = 1000 + i * 16;
+      if (i === 1 || i === 12 || i === 23) predictor.onInputSent(i, input, now);
+      const x = predictor.apply(state, terrain, input, 0, 1 / 60, now, 180).worms[0].x;
+      expect(x).toBeGreaterThanOrEqual(previous);
+      previous = x;
+    }
+    expect(previous).toBeGreaterThan(99);
   });
 
   it("opóźniony snapshot nie powoduje cofnięcia podczas marszu, a STOP nie cofa do starej pozycji", () => {

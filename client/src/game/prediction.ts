@@ -4,9 +4,9 @@ import type { Terrain } from "@shared/engine/terrain";
 import type { GameSnapshot, InputState } from "@shared/protocol";
 import type { RenderState } from "./state";
 
-const MAX_CONFIRMED_LEAD = 0.14;
-const MAX_UNCONFIRMED_LEAD = 0.08;
-const STALE_MS = 300;
+/** Krótkie zerwanie może trwać dłużej niż pojedynczy heartbeat 180 ms. */
+const MAX_LEAD = 0.35;
+const STALE_MS = 900;
 
 /** Pozycja własnego robaka oparta o snapshot hosta i potwierdzone wejścia. */
 export class LocalPrediction {
@@ -18,6 +18,7 @@ export class LocalPrediction {
   private sentSeq = 0;
   private sentDirection = 0;
   private directionChangedAt = 0;
+  private behindSince = 0;
 
   onInputSent(seq: number, input: InputState, now = performance.now()): void {
     const direction = Number(input.right) - Number(input.left);
@@ -39,6 +40,7 @@ export class LocalPrediction {
     this.sentSeq = 0;
     this.sentDirection = 0;
     this.directionChangedAt = 0;
+    this.behindSince = 0;
   }
 
   get ageMs(): number {
@@ -49,6 +51,7 @@ export class LocalPrediction {
     dt: number, now = performance.now(), rttMs = 0): RenderState {
     if (state.turn.activeTeam !== team || (state.turn.phase !== "active" && state.turn.phase !== "retreat")) {
       this.id = -1;
+      this.behindSince = 0;
       return state;
     }
     const active = state.worms.find((w) => w.id === state.turn.activeWormId && w.alive);
@@ -65,12 +68,12 @@ export class LocalPrediction {
     // Po zaniku snapshotów zamrażamy pozycję. Nie pokazujemy ruchu, którego host nie widział.
     if (ageMs < STALE_MS) {
       const ack = this.latest?.inputAcks?.[team] ?? -1;
-      const confirmed = this.sentSeq > 0 && direction === this.sentDirection && ack >= this.sentSeq;
-      const lead = confirmed
-        ? Math.min(MAX_CONFIRMED_LEAD, ageMs / 1000 + Math.min(0.08, Math.max(0.025, rttMs / 2000)))
-        : direction === this.sentDirection && this.sentSeq > 0
-          ? Math.min(MAX_UNCONFIRMED_LEAD, Math.max(0, (now - this.directionChangedAt) / 1000))
-          : 0;
+      const confirmed = this.sentSeq > 0 && ack >= this.sentSeq;
+      // Heartbeat przy chodzeniu co 180 ms nie oznacza nowej zmiany kierunku.
+      // Nie hamujemy postaci do 80 ms przewidywania przy każdym nowym numerze seq.
+      const lead = direction === this.sentDirection && this.sentSeq > 0
+        ? Math.min(MAX_LEAD, ageMs / 1000 + Math.min(0.11, Math.max(0.025, rttMs / 2000)))
+        : 0;
       const target = { x: authoritative.x, y: authoritative.y };
       if (direction && authoritative.onGround && authoritative.anim !== "jetpack") {
         // Ta sama fizyka kroku co u hosta, na bazie najnowszego stanu autorytatywnego.
@@ -80,15 +83,18 @@ export class LocalPrediction {
           if (walkStep(terrain, target, WORM_RADIUS, direction * WORM_WALK_SPEED * span,
             WORM_MAX_STEP_UP, 8) !== "moved") break;
         }
-      } else if (!confirmed && !direction && this.sentSeq > 0 && now - this.directionChangedAt < 250) {
-        // Puściła ruch; nie cofamy jej do spóźnionego snapshotu przed potwierdzeniem STOP.
+      } else if (!confirmed && !direction && this.sentSeq > 0) {
+        // STOP czeka na potwierdzenie hosta – stare migawki nie mogą cofać postaci.
         target.x = this.x;
         target.y = this.y;
       }
       // Wahania czasu dostarczenia snapshotów nie mogą szarpać idącej postaci wstecz.
       // Dużą rozbieżność nadal korygujemy: wtedy host naprawdę ma inny stan.
-      if (direction && confirmed && (target.x - this.x) * direction < 0 &&
-        Math.abs(target.x - this.x) < 16) {
+      const hostBehind = direction && (target.x - this.x) * direction < 0;
+      if (hostBehind && confirmed && !this.behindSince) this.behindSince = now;
+      if (!hostBehind) this.behindSince = 0;
+      if (hostBehind && Math.abs(target.x - this.x) < 28 &&
+        (!confirmed || now - this.behindSince < 500)) {
         target.x = this.x;
         target.y = this.y;
       }

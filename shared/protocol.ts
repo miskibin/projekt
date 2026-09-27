@@ -171,6 +171,8 @@ export interface TurnInfo {
 export interface GameSnapshot {
   tick: number;
   time: number;
+  /** Numer ostatniej wysłanej paczki zdarzeń; pozwala wykryć utracone zmiany terenu. */
+  eventSeq?: number;
   worms: WormSnapshot[];
   projectiles: ProjectileSnapshot[];
   crates: CrateSnapshot[];
@@ -218,6 +220,8 @@ export type GameEvent =
 export interface TerrainSync {
   width: number;
   height: number;
+  /** Zmiany terenu do tego numeru są już uwzględnione w bitmapie. */
+  eventSeq?: number;
   /** RLE: naprzemienne długości ciągów [pusto, ziemia, pusto, ziemia, ...] po wierszach */
   rle: number[];
 }
@@ -231,6 +235,6 @@ export type ServerMessage =
   | { t: "gameStart"; config: GameConfig; players: PlayerInfo[]; yourTeam: number }
   | { t: "snapshot"; snapshot: GameSnapshot }
   | { t: "actionAck"; seq: number }
-  | { t: "events"; events: GameEvent[] }
+  | { t: "events"; events: GameEvent[]; seq?: number }
   | { t: "terrainSync"; terrain: TerrainSync }
   | { t: "gameOver"; winnerTeam: number | null; winnerName: string | null; stats: Record<string, unknown> };

@@ -73,7 +73,12 @@ export class GameClient {
   private trackedWorm: { id: number; x: number; y: number } | null = null;
   private homingImpact: { x: number; y: number } | null = null;
   private homingImpactUntil = 0;
-  private pending: { at: number; ev: GameEvent }[] = [];
+  private pending: { at: number; ev: GameEvent; seq: number }[] = [];
+  private lastEventSeq = 0;
+  private terrainSyncSeq = 0;
+  private appliedTerrainSeq = 0;
+  private missingEventsSince = 0;
+  private resyncRequestedAt = 0;
   private raf = 0;
   private last = 0;
   private time = 0;
@@ -196,6 +201,11 @@ export class GameClient {
     this.homingImpact = null;
     this.homingImpactUntil = 0;
     this.pending = [];
+    this.lastEventSeq = 0;
+    this.terrainSyncSeq = 0;
+    this.appliedTerrainSeq = 0;
+    this.missingEventsSince = 0;
+    this.resyncRequestedAt = 0;
     this.buffer.clear();
     this.prediction.reset();
     this.inputSeq = 0;
@@ -263,6 +273,10 @@ export class GameClient {
   onSnapshot(s: GameSnapshot): void {
     this.buffer.push(s);
     this.prediction.onSnapshot(s);
+    if (!this.demo && s.eventSeq !== undefined && s.eventSeq > this.lastEventSeq) {
+      if (!this.missingEventsSince) this.missingEventsSince = performance.now();
+      if (performance.now() - this.missingEventsSince > 250) this.requestTerrainRepair();
+    } else this.missingEventsSince = 0;
     if (this.demo) {
       this.myTeam = this.demo.controlledTeam;
       const team = s.teams.find((t) => t.team === this.myTeam);
@@ -283,15 +297,39 @@ export class GameClient {
     this.refreshWeaponPanel();
   }
 
-  onEvents(events: GameEvent[]): void {
+  onEvents(events: GameEvent[], seq?: number): void {
+    if (seq !== undefined) {
+      if (seq <= this.lastEventSeq) return;
+      if (seq > this.lastEventSeq + 1) this.requestTerrainRepair();
+      this.lastEventSeq = seq;
+      this.missingEventsSince = 0;
+    }
     // opóźniamy o bufor interpolacji, żeby efekty pasowały do rysowanych pozycji
-    const at = performance.now() + this.buffer.interpolationDelayMs;
-    for (const ev of events) this.pending.push({ at, ev });
+    const at = performance.now() + (this.demo ? this.buffer.interpolationDelayMs :
+      this.buffer.latest?.turn.activeTeam === this.myTeam ? 0 : this.buffer.interpolationDelayMs);
+    for (const ev of events) this.pending.push({ at, ev, seq: seq ?? 0 });
   }
 
   onTerrainSync(sync: TerrainSync): void {
+    if (sync.eventSeq !== undefined && sync.eventSeq < this.appliedTerrainSeq) {
+      this.requestTerrainRepair();
+      return;
+    }
     this.terrain = Terrain.fromRLE(sync.width, sync.height, sync.rle);
     this.terrainTex?.setTerrain(this.terrain);
+    if (sync.eventSeq !== undefined) {
+      this.terrainSyncSeq = Math.max(this.terrainSyncSeq, sync.eventSeq);
+      this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, sync.eventSeq);
+      this.lastEventSeq = Math.max(this.lastEventSeq, sync.eventSeq);
+      this.missingEventsSince = 0;
+    }
+  }
+
+  private requestTerrainRepair(): void {
+    const now = performance.now();
+    if (!this.cb.connected() || now - this.resyncRequestedAt < 1500) return;
+    this.resyncRequestedAt = now;
+    this.cb.send({ t: "requestTerrainSync" });
   }
 
   onGameOver(winnerTeam: number | null, winnerName: string | null, stats: Record<string, unknown>): void {
@@ -368,7 +406,9 @@ export class GameClient {
     this.flushEvents(now);
 
     // 2) stan do wyrenderowania
-    let state = this.buffer.sample(now);
+    // Sterujący widzi najświeższy stan. Bufor 220 ms jest wyłącznie dla obserwatora.
+    let state = !this.demo && this.buffer.latest?.turn.activeTeam === this.myTeam
+      ? this.buffer.latest : this.buffer.sample(now);
     if (state) {
       const activeId = state.turn.activeWormId;
       const active = state.worms.find((w) => w.id === activeId && w.alive);
@@ -509,17 +549,22 @@ export class GameClient {
 
   private flushEvents(now: number): void {
     while (this.pending.length > 0 && this.pending[0].at <= now) {
-      const { ev } = this.pending.shift()!;
-      this.applyEvent(ev);
+      const { ev, seq } = this.pending.shift()!;
+      const mutateTerrain = seq === 0 || seq > this.terrainSyncSeq;
+      this.applyEvent(ev, mutateTerrain);
+      if (mutateTerrain && (ev.t === "explosion" || ev.t === "carveRect"))
+        this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, seq);
     }
   }
 
-  private applyEvent(ev: GameEvent): void {
+  private applyEvent(ev: GameEvent, mutateTerrain = true): void {
     const pal = this.terrainTex?.palette;
     switch (ev.t) {
       case "explosion": {
-        this.terrain.carveCircle(ev.x, ev.y, ev.r);
-        this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
+        if (mutateTerrain) {
+          this.terrain.carveCircle(ev.x, ev.y, ev.r);
+          this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
+        }
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.renderer.onExplosion(ev.r, ev.power);
         this.camera.shake(Math.min(22, 2 + ev.r * 0.24 + ev.power * 0.006));
@@ -530,9 +575,11 @@ export class GameClient {
         break;
       }
       case "carveRect": {
-        this.terrain.paintRotatedRect(ev.x, ev.y, ev.w, ev.h, ev.angle, ev.add ? 1 : 0);
-        const ext = Math.ceil(Math.hypot(ev.w, ev.h) / 2) + 2;
-        this.terrainTex?.markDirty(ev.x - ext, ev.y - ext, ext * 2, ext * 2);
+        if (mutateTerrain) {
+          this.terrain.paintRotatedRect(ev.x, ev.y, ev.w, ev.h, ev.angle, ev.add ? 1 : 0);
+          const ext = Math.ceil(Math.hypot(ev.w, ev.h) / 2) + 2;
+          this.terrainTex?.markDirty(ev.x - ext, ev.y - ext, ext * 2, ext * 2);
+        }
         if (ev.add) this.particles.sparks(ev.x, ev.y, 10, "#ffd08a");
         break;
       }

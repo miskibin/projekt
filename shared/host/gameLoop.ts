@@ -10,6 +10,8 @@ export const TICK_MS = 1000 / TICK_RATE;
 export const SNAPSHOT_MS = 1000 / SNAPSHOT_RATE;
 /** Maksymalna liczba kroków symulacji na jeden tick – zabezpieczenie przed spiralą śmierci. */
 export const MAX_STEPS_PER_TICK = 5;
+/** Zatrzymaj ciągły ruch po utracie heartbeatów aktywnego gracza. */
+export const INPUT_TIMEOUT_MS = 650;
 
 /** Runtime'owa lista broni (protocol.ts eksportuje tylko typ WeaponId). */
 export const WEAPON_IDS = [
@@ -99,6 +101,11 @@ export class GameLoop {
   private now = 0;
   private readonly inputSeq = new Map<number, number>();
   private readonly actionSeq = new Map<number, number>();
+  private lastInputAt = Number.NaN;
+  private lastInputTeam = -1;
+  private inputTimedOut = false;
+  private eventSeq = 0;
+  private previousTurn: string | null = null;
 
   constructor(
     config: GameConfig,
@@ -119,6 +126,11 @@ export class GameLoop {
     this.acc = 0;
     this.snapAcc = 0;
     this.ticks = 0;
+    this.eventSeq = 0;
+    this.previousTurn = null;
+    this.lastInputAt = Number.NaN;
+    this.lastInputTeam = -1;
+    this.inputTimedOut = false;
     this.last = isFiniteNumber(nowMs) ? nowMs : Number.NaN;
     this.startedAt = isFiniteNumber(nowMs) ? nowMs : 0;
     this.now = this.startedAt;
@@ -149,14 +161,28 @@ export class GameLoop {
     while (this.acc >= TICK_MS && steps < MAX_STEPS_PER_TICK) {
       this.acc -= TICK_MS;
       steps++;
+      const currentTurn = this.game.snapshot().turn;
+      if (!this.inputTimedOut && currentTurn.activeTeam === this.lastInputTeam &&
+        Number.isFinite(this.lastInputAt) && nowMs - this.lastInputAt > INPUT_TIMEOUT_MS) {
+        this.game.applyInput(this.lastInputTeam, { left: false, right: false, charge: false, aim: 0 });
+        this.inputTimedOut = true;
+      }
       this.game.step(FIXED_DT);
       // Zdarzenia MUSZĄ dotrzeć przed kolejnym snapshotem (klient rzeźbi teren).
       const events = this.game.drainEvents();
-      if (events.length > 0) this.deps.broadcast({ t: "events", events });
+      if (events.length > 0) this.deps.broadcast({ t: "events", events, seq: ++this.eventSeq });
       if (this.game.isOver()) {
         this.finish();
         return;
       }
+      const turn = this.game.snapshot().turn;
+      const turnKey = `${turn.round}:${turn.activeTeam}:${turn.activeWormId}`;
+      if (this.previousTurn !== null && turnKey !== this.previousTurn) {
+        // Pewny punkt uzgodnienia na każdej turze, również po utraconym zdarzeniu kraty/wybuchu.
+        this.deps.broadcast({ t: "terrainSync", terrain: this.terrainSync() });
+        this.sendSnapshot();
+      }
+      this.previousTurn = turnKey;
     }
     // Nie odrabiamy zaległości w nieskończoność – porzucamy nadmiar.
     if (this.acc > TICK_MS * MAX_STEPS_PER_TICK) this.acc = 0;
@@ -189,6 +215,9 @@ export class GameLoop {
       this.inputSeq.set(team, seq);
     }
     this.game.applyInput(team, state);
+    this.lastInputAt = this.now;
+    this.lastInputTeam = team;
+    this.inputTimedOut = false;
     return true;
   }
 
@@ -211,11 +240,12 @@ export class GameLoop {
   }
 
   terrainSync(): TerrainSync {
-    return this.game.terrainSync();
+    return { ...this.game.terrainSync(), eventSeq: this.eventSeq };
   }
 
   snapshotMessage(): ServerMessage {
-    return { t: "snapshot", snapshot: { ...this.game.snapshot(), inputAcks: Object.fromEntries(this.inputSeq) } };
+    return { t: "snapshot", snapshot: { ...this.game.snapshot(), eventSeq: this.eventSeq,
+      inputAcks: Object.fromEntries(this.inputSeq) } };
   }
 
   /** Kończy grę: ostatni snapshot + `gameOver`, zatrzymuje pętlę. */
@@ -226,7 +256,9 @@ export class GameLoop {
     try {
       const snap = this.game.snapshot();
       round = snap.turn?.round ?? 0;
-      this.deps.broadcast({ t: "snapshot", snapshot: { ...snap, inputAcks: Object.fromEntries(this.inputSeq) } });
+      this.deps.broadcast({ t: "terrainSync", terrain: this.terrainSync() });
+      this.deps.broadcast({ t: "snapshot", snapshot: { ...snap, eventSeq: this.eventSeq,
+        inputAcks: Object.fromEntries(this.inputSeq) } });
     } catch {
       /* silnik może już nie dać snapshotu – trudno */
     }

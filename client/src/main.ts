@@ -256,7 +256,7 @@ function handle(msg: ServerMessage): void {
       break;
 
     case "events":
-      game.onEvents(msg.events);
+      game.onEvents(msg.events, msg.seq);
       break;
 
     case "terrainSync":
