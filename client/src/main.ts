@@ -71,6 +71,18 @@ let DEMO = params.get("demo") === "1" || COMPUTER;
 const DEMO_LOBBY = params.get("demoLobby") === "1";
 const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+// Jedna karta zachowuje tożsamość przez odświeżenie i zmianę WebSocket.
+const reconnectToken = (() => {
+  try {
+    const saved = sessionStorage.getItem("worms.reconnectToken");
+    if (saved && /^[a-f0-9-]{36}$/i.test(saved)) return saved;
+    const token = crypto.randomUUID();
+    sessionStorage.setItem("worms.reconnectToken", token);
+    return token;
+  } catch {
+    return crypto.randomUUID();
+  }
+})();
 
 const el = {
   menu: byId("screen-menu"),
@@ -192,7 +204,7 @@ net.onStatus((s: ConnStatus) => {
 net.onReady = (reconnected) => {
   if (DEMO) return;
   const name = nick();
-  if (name) net.send({ t: "hello", name });
+  if (name) net.send({ t: "hello", name, reconnectToken });
   if (reconnected) {
     toast("Połączono ponownie", "ok");
     if (roomCode) {
@@ -216,6 +228,13 @@ function handle(msg: ServerMessage): void {
 
     case "error":
       toast(msg.message, "err");
+      if (msg.message.startsWith("Nie ma pokoju o kodzie ")) {
+        roomCode = "";
+        inGame = false;
+        game.stop();
+        history.replaceState(null, "", location.pathname);
+        showScreen("menu");
+      }
       break;
 
     case "roomState": {
@@ -290,7 +309,7 @@ el.create.addEventListener("click", () => {
   sound.unlock();
   if (!requireNick()) return;
   saveNick();
-  net.send({ t: "hello", name: nick() });
+  net.send({ t: "hello", name: nick(), reconnectToken });
   net.send({ t: "createRoom" });
 });
 
@@ -304,7 +323,7 @@ el.join.addEventListener("click", () => {
     return;
   }
   saveNick();
-  net.send({ t: "hello", name: nick() });
+  net.send({ t: "hello", name: nick(), reconnectToken });
   roomCode = code;
   net.send({ t: "joinRoom", code });
 });

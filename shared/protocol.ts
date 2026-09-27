@@ -70,7 +70,7 @@ export type InputAction =
   | { kind: "surrender" };
 
 export type ClientMessage =
-  | { t: "hello"; name: string }
+  | { t: "hello"; name: string; reconnectToken?: string }
   | { t: "createRoom"; config?: Partial<GameConfig> }
   | { t: "joinRoom"; code: string }
   | { t: "leaveRoom" }

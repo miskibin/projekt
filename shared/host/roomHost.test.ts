@@ -150,7 +150,7 @@ describe("API dla transportu", () => {
     host.handleMessage(clone, { t: "ping", ts: 123 });
     expect(a.last("pong")!.ts).toBe(123);
     host.handleDisconnect(clone);
-    expect(roomOf(code)).toBeUndefined();
+    expect(roomOf(code)!.players[0]!.connected).toBe(false);
   });
 });
 
@@ -365,7 +365,7 @@ describe("rozłączenia i reconnect", () => {
     return { a, b, code, room: roomOf(code)! };
   }
 
-  it("w lobby rozłączenie usuwa gracza", () => {
+  it("w lobby krótka utrata połączenia nie kasuje pokoju ani miejsca gracza", () => {
     const a = client("A");
     a.send({ t: "createRoom" });
     const code = host.roomCodes()[0]!;
@@ -373,8 +373,51 @@ describe("rozłączenia i reconnect", () => {
     b.send({ t: "joinRoom", code });
 
     b.disconnect();
-    expect(roomOf(code)!.players).toHaveLength(1);
-    expect(a.last("roomState")!.room.players).toHaveLength(1);
+    expect(roomOf(code)!.players).toHaveLength(2);
+    expect(a.last("roomState")!.room.players[1]!.connected).toBe(false);
+    const back = client("B");
+    back.send({ t: "joinRoom", code });
+    expect(back.last("roomState")!.room.players).toHaveLength(2);
+    expect(roomOf(code)!.players[1]!.connected).toBe(true);
+  });
+
+  it("host odzyskuje lobby po reconnect, także gdy gość zdąży dołączyć", () => {
+    const a = client("A");
+    const token = "12345678-1234-4234-8234-123456789abc";
+    a.send({ t: "hello", name: "A", reconnectToken: token });
+    a.send({ t: "createRoom" });
+    const code = host.roomCodes()[0]!;
+    const originalId = a.playerId;
+    host.tick(1000);
+    a.disconnect();
+    expect(roomOf(code)!.players[0]!.connected).toBe(false);
+
+    const b = client("B");
+    b.send({ t: "joinRoom", code });
+    expect(b.last("roomState")!.room.players).toHaveLength(2);
+
+    const back = client("A");
+    back.send({ t: "hello", name: "A", reconnectToken: token });
+    back.send({ t: "joinRoom", code });
+    expect(back.playerId).toBe(originalId);
+    expect(back.last("roomState")!.room.players[0]).toMatchObject({ id: originalId, isHost: true, connected: true });
+    expect(roomOf(code)!.players).toHaveLength(2);
+
+    const impersonator = client("A");
+    impersonator.send({ t: "joinRoom", code });
+    expect(impersonator.playerId).not.toBe(originalId);
+  });
+
+  it("po upływie okna łaski pusty pokój w lobby jest usuwany", () => {
+    const a = client("A");
+    a.send({ t: "createRoom" });
+    const code = host.roomCodes()[0]!;
+    host.tick(1000);
+    a.disconnect();
+    host.tick(1000 + RECONNECT_GRACE_MS - 1);
+    expect(roomOf(code)).toBeDefined();
+    host.tick(1000 + RECONNECT_GRACE_MS + 1);
+    expect(roomOf(code)).toBeUndefined();
   });
 
   it("w grze rozłączenie oznacza connected=false w stanie pokoju", () => {
@@ -431,10 +474,13 @@ describe("rozłączenia i reconnect", () => {
     expect(hooks.removed).toContain(1);
   });
 
-  it("gdy wszyscy się rozłączą, pokój znika", () => {
+  it("gdy wszyscy się rozłączą, pokój przetrwa krótki zanik sieci", () => {
     const { a, b, code } = startedGame();
+    host.tick(1000);
     a.disconnect();
     b.disconnect();
+    expect(roomOf(code)).toBeDefined();
+    host.tick(1000 + RECONNECT_GRACE_MS + 1);
     expect(roomOf(code)).toBeUndefined();
     expect(host.roomCodes()).toEqual([]);
   });

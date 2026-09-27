@@ -9,7 +9,6 @@ import {
   RoomManager,
   broadcast,
   broadcastRoomState,
-  connectedPlayers,
   randomId,
   sanitizeName,
   toPlayerInfo,
@@ -61,6 +60,7 @@ export interface HostSession {
   peer: Peer;
   playerId: string;
   name: string;
+  reconnectToken?: string;
   room: Room | null;
   player: RoomPlayer | null;
 }
@@ -132,18 +132,10 @@ export class RoomHost {
 
     player.peer = null;
 
-    if (room.phase === "playing") {
-      player.connected = false;
-      player.disconnectedAt = this.nowMs;
-      this.log(`[pokój] ${player.name} rozłączył się z ${room.code}`);
-      broadcastRoomState(room);
-      this.checkAbandoned(room);
-      return;
-    }
-
-    const alive = this.rooms.removePlayer(room, player.id);
-    this.log(`[pokój] ${player.name} wyszedł z ${room.code}`);
-    if (alive) broadcastRoomState(room);
+    player.connected = false;
+    player.disconnectedAt = this.nowMs;
+    this.log(`[pokój] ${player.name} rozłączył się z ${room.code}`);
+    broadcastRoomState(room);
   }
 
   /** Krok czasu: okna reconnectu + pętle gier wszystkich pokoi. */
@@ -151,11 +143,9 @@ export class RoomHost {
     if (this.destroyed) return;
     this.nowMs = nowMs;
     for (const room of this.rooms.list()) {
-      if (room.phase === "playing") {
-        for (const player of [...room.players]) {
-          if (player.connected || player.disconnectedAt === null) continue;
-          if (nowMs - player.disconnectedAt >= this.graceMs) this.dropPlayer(room, player);
-        }
+      for (const player of [...room.players]) {
+        if (player.connected || player.disconnectedAt === null) continue;
+        if (nowMs - player.disconnectedAt >= this.graceMs) this.dropPlayer(room, player);
       }
       room.loop?.tick(nowMs);
     }
@@ -193,7 +183,7 @@ export class RoomHost {
   private dispatch(s: HostSession, msg: ClientMessage): void {
     switch (msg.t) {
       case "hello":
-        return this.onHello(s, msg.name);
+        return this.onHello(s, msg.name, msg.reconnectToken);
       case "createRoom":
         return this.onCreateRoom(s, msg.config);
       case "joinRoom":
@@ -226,8 +216,11 @@ export class RoomHost {
 
   // ---------- lobby ----------
 
-  private onHello(s: HostSession, name: unknown): void {
+  private onHello(s: HostSession, name: unknown, reconnectToken?: unknown): void {
     s.name = sanitizeName(name);
+    if (typeof reconnectToken === "string" && /^[a-f0-9-]{36}$/i.test(reconnectToken)) {
+      s.reconnectToken = reconnectToken;
+    }
     if (s.player) {
       s.player.name = s.name;
       if (s.room) broadcastRoomState(s.room);
@@ -252,6 +245,7 @@ export class RoomHost {
     const room = this.rooms.createRoom({ id: s.playerId, name: s.name, peer: s.peer }, patch, this.nowMs);
     s.room = room;
     s.player = room.players[0]!;
+    s.player.reconnectToken = s.reconnectToken;
     this.log(`[pokój] utworzono ${room.code} przez ${s.name} (${s.playerId})`);
     s.peer.send({ t: "roomState", room: toRoomState(room) });
   }
@@ -278,13 +272,15 @@ export class RoomHost {
       this.error(s, `Nie ma pokoju o kodzie ${code.trim().toUpperCase()}.`);
       return;
     }
-    if (room.phase === "playing") {
-      const candidate = room.players.find((p) => !p.connected && p.name.toLowerCase() === s.name.toLowerCase());
-      if (!candidate) {
-        this.error(s, "Gra w tym pokoju już trwa.");
-        return;
-      }
+    const candidate = s.reconnectToken
+      ? room.players.find((p) => p.reconnectToken === s.reconnectToken)
+      : room.players.find((p) => !p.connected && !p.reconnectToken && p.name.toLowerCase() === s.name.toLowerCase());
+    if (candidate && (s.reconnectToken || !candidate.connected)) {
       this.reconnect(s, room, candidate);
+      return;
+    }
+    if (room.phase === "playing") {
+      this.error(s, "Gra w tym pokoju już trwa.");
       return;
     }
     if (room.players.length >= MAX_PLAYERS) {
@@ -298,12 +294,20 @@ export class RoomHost {
     }
     s.room = room;
     s.player = player;
+    player.reconnectToken = s.reconnectToken;
     this.log(`[pokój] ${s.name} dołączył do ${room.code}`);
     broadcastRoomState(room);
   }
 
   /** Powrót gracza do trwającej gry: przejmuje stare id i dostaje pełny stan. */
   private reconnect(s: HostSession, room: Room, player: RoomPlayer): void {
+    for (const previous of this.sessions.values()) {
+      if (previous.player === player && previous !== s) {
+        previous.room = null;
+        previous.player = null;
+        previous.reconnectToken = undefined;
+      }
+    }
     player.connected = true;
     player.disconnectedAt = null;
     player.peer = s.peer;
@@ -311,17 +315,17 @@ export class RoomHost {
     s.playerId = player.id;
     s.room = room;
     s.player = player;
-    this.log(`[pokój] ${s.name} wrócił do gry w ${room.code} (drużyna ${player.team})`);
+    this.log(`[pokój] ${s.name} wrócił do ${room.code} (drużyna ${player.team})`);
 
     s.peer.send({ t: "welcome", playerId: player.id });
-    s.peer.send({
-      t: "gameStart",
-      config: { ...room.config },
-      players: room.players.map(toPlayerInfo),
-      yourTeam: player.team,
-    });
     const loop = room.loop;
-    if (loop) {
+    if (room.phase === "playing" && loop) {
+      s.peer.send({
+        t: "gameStart",
+        config: { ...room.config },
+        players: room.players.map(toPlayerInfo),
+        yourTeam: player.team,
+      });
       try {
         s.peer.send({ t: "terrainSync", terrain: loop.terrainSync() });
         s.peer.send(loop.snapshotMessage());
@@ -352,7 +356,6 @@ export class RoomHost {
     s.peer.send({ t: "leftRoom" });
     if (!alive) return;
     broadcastRoomState(room);
-    this.checkAbandoned(room);
   }
 
   private onSetReady(s: HostSession, ready: unknown): void {
@@ -511,21 +514,6 @@ export class RoomHost {
     const alive = this.rooms.removePlayer(room, player.id);
     if (!alive) return;
     broadcastRoomState(room);
-    this.checkAbandoned(room);
-  }
-
-  /** Gdy w pokoju nie ma już nikogo połączonego – kasujemy pokój. */
-  private checkAbandoned(room: Room): boolean {
-    if (connectedPlayers(room).length > 0) return false;
-    this.log(`[pokój] ${room.code} opuszczony – zamykam`);
-    this.rooms.deleteRoom(room);
-    for (const s of this.sessions.values()) {
-      if (s.room === room) {
-        s.room = null;
-        s.player = null;
-      }
-    }
-    return true;
   }
 }
 

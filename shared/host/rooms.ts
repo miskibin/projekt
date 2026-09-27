@@ -21,11 +21,13 @@ export interface Peer {
 export interface RoomPlayer {
   id: string;
   name: string;
+  /** Prywatny identyfikator karty przeglądarki do powrotu po utracie WebSocket. */
+  reconnectToken?: string;
   team: number;
   ready: boolean;
   isHost: boolean;
   connected: boolean;
-  /** null gdy gracz rozłączony (czeka na reconnect w trakcie gry) */
+  /** null gdy gracz rozłączony i czeka na reconnect. */
   peer: Peer | null;
   /** nowMs rozłączenia – okno powrotu liczy `RoomHost.tick`, nie setTimeout */
   disconnectedAt: number | null;
