@@ -199,13 +199,17 @@ export class GameImpl implements Game, EngineCtx {
     let py = -1;
     // Mecz na telefonie zaczyna się w środkowym sektorze mapy: częściej widać
     // rywala bez ręcznego oddalania, a nadal jest miejsce na dalekie strzały.
-    const dists = [110, 90, 70, 50, 35, 0];
+    const dists = [110, 90, 70, 50, 35, 20];
+    const crowded = this.teams.length * this.config.wormsPerTeam > 8;
     for (const minDist of dists) {
       for (let attempt = 0; attempt < 300; attempt++) {
-        const x = this.rng.int(420, WORLD_WIDTH - 420);
+        const x = this.rng.int(crowded ? 60 : 420, WORLD_WIDTH - (crowded ? 60 : 420));
         const surf = this.terrain.surfaceY(x);
         if (surf >= WORLD_HEIGHT) continue;
         if (surf >= this.waterLevel - WORM_RADIUS - 6) continue; // ląd pod wodą
+        // A high floating island may be hundreds of pixels above solid land.
+        // Starting there forces a damaging fall before either player moves.
+        if (!this.terrain.isSolid(x, Math.min(WORLD_HEIGHT - 1, surf + 85))) continue;
         const y = surf - WORM_RADIUS - 1;
         if (y < 12) continue;
         if (circleHits(this.terrain, x, y, WORM_RADIUS)) continue;
