@@ -5,7 +5,7 @@ import {
   WORM_MAX_HP,
   WORM_RADIUS,
 } from "@shared/constants";
-import type { CrateSnapshot, MineSnapshot, ProjectileSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
+import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { Particles } from "./particles";
 import type { RenderState } from "./state";
@@ -139,6 +139,7 @@ export class Renderer {
 
     this.updateAnimator(inp, dt);
     this.drawGraves(ctx, inp);
+    this.drawBarrels(ctx, inp.state.barrels ?? []);
     this.drawMines(ctx, inp.state.mines, inp.time);
     this.drawCrates(ctx, inp.state.crates, inp.time);
     this.drawWorms(ctx, inp);
@@ -153,6 +154,31 @@ export class Renderer {
   }
 
   // ---------------- woda ----------------
+  private drawBarrels(ctx: CanvasRenderingContext2D, barrels: readonly BarrelSnapshot[]): void {
+    for (const barrel of barrels) {
+      const x = barrel.x;
+      const y = barrel.y;
+      ctx.fillStyle = "rgba(20, 10, 12, .28)";
+      ctx.beginPath();
+      ctx.ellipse(x, y + 11, 13, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#3b1118";
+      roundRect(ctx, x - 11, y - 12, 22, 23, 3);
+      ctx.fill();
+      ctx.fillStyle = "#db4934";
+      ctx.fillRect(x - 8, y - 10, 16, 19);
+      ctx.fillStyle = "#f87e47";
+      ctx.fillRect(x - 7, y - 9, 4, 17);
+      ctx.fillStyle = "#532022";
+      ctx.fillRect(x - 10, y - 7, 20, 3);
+      ctx.fillRect(x - 10, y + 6, 20, 3);
+      ctx.fillStyle = "#ffe3ac";
+      ctx.font = "bold 13px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("!", x, y + 5);
+    }
+  }
+
   private drawWater(ctx: CanvasRenderingContext2D, inp: RenderInput, pal: ThemePalette): void {
     const level = inp.waterLevel;
     if (level >= WORLD_HEIGHT + 40) return;

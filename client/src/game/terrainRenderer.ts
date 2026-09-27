@@ -48,6 +48,10 @@ export interface ThemePalette {
   mortar: RGB;
   /** rozmiar oczka siatki kamyków w pikselach */
   pebble: number;
+  /** mineralna żyła widoczna między warstwami ziemi */
+  mineral: RGB;
+  /** wysokość dużych warstw geologicznych */
+  stratum: number;
   /** gęstość kępek trawy sterczących ponad powierzchnię (0 = brak) */
   tufts: number;
 
@@ -92,6 +96,8 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneB: [100, 67, 40],
     mortar: [58, 37, 22],
     pebble: 24,
+    mineral: [219, 180, 111],
+    stratum: 42,
     tufts: 0.3,
     bgStyle: "mountains",
     bgFar: "#8fb0cd",
@@ -127,6 +133,8 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneB: [138, 102, 60],
     mortar: [104, 74, 44],
     pebble: 28,
+    mineral: [255, 226, 169],
+    stratum: 33,
     tufts: 0.06,
     bgStyle: "dunes",
     bgFar: "#d1a179",
@@ -162,6 +170,8 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneB: [86, 106, 134],
     mortar: [46, 60, 82],
     pebble: 26,
+    mineral: [177, 224, 244],
+    stratum: 48,
     tufts: 0.08,
     bgStyle: "peaks",
     bgFar: "#42597c",
@@ -197,6 +207,8 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     stoneB: [38, 28, 34],
     mortar: [16, 10, 14],
     pebble: 22,
+    mineral: [238, 100, 50],
+    stratum: 52,
     tufts: 0.22,
     bgStyle: "spires",
     bgFar: "#6d2619",
@@ -246,6 +258,8 @@ export class TerrainRenderer {
   private stone: Uint8Array;
   /** odcień pojedynczego kamyka (stały w obrębie komórki Worleya) */
   private tint: Uint8Array;
+  /** Powolne fale warstw skały, wspólne dla wszystkich motywów. */
+  private strataX: Float32Array;
   /** AIR / GRASS / SOIL, liczone w padded-rect przed malowaniem */
   private kind: Uint8Array;
   /** wektor do najbliższego powietrza (transformata odległości) */
@@ -276,6 +290,7 @@ export class TerrainRenderer {
     this.img = this.ctx.createImageData(terrain.width, terrain.height);
     const n = terrain.width * terrain.height;
     this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
+    this.strataX = makeStrataOffsets(terrain.width, this.seed);
     const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
     this.stone = st.stone;
     this.tint = st.tint;
@@ -313,6 +328,7 @@ export class TerrainRenderer {
       this.img = this.ctx.createImageData(terrain.width, terrain.height);
       const n = terrain.width * terrain.height;
       this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
+      this.strataX = makeStrataOffsets(terrain.width, this.seed);
       const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
       this.stone = st.stone;
       this.tint = st.tint;
@@ -347,7 +363,29 @@ export class TerrainRenderer {
       return;
     }
     if (this.dirty.length === 0) return;
-    for (const r of this.dirty) this.paintRect(r.x0, r.y0, r.x1, r.y1);
+    // Salwy, banany i wybuchy łańcuchowe potrafią zgłosić kilkanaście kraterów
+    // naraz. Ich pola pomocnicze są kosztowne; nakładające się dziury malujemy
+    // jednym przebiegiem, już po zastosowaniu wszystkich zmian bitmapy.
+    const merged: DirtyRect[] = [];
+    for (const rect of this.dirty) {
+      let next = rect;
+      for (let i = 0; i < merged.length;) {
+        const prev = merged[i];
+        if (next.x0 > prev.x1 + 1 || prev.x0 > next.x1 + 1 ||
+            next.y0 > prev.y1 + 1 || prev.y0 > next.y1 + 1) {
+          i++;
+          continue;
+        }
+        next = {
+          x0: Math.min(next.x0, prev.x0), y0: Math.min(next.y0, prev.y0),
+          x1: Math.max(next.x1, prev.x1), y1: Math.max(next.y1, prev.y1),
+        };
+        merged.splice(i, 1);
+        i = 0;
+      }
+      merged.push(next);
+    }
+    for (const r of merged) this.paintRect(r.x0, r.y0, r.x1, r.y1);
     this.dirty.length = 0;
   }
 
@@ -645,6 +683,7 @@ export class TerrainRenderer {
     const stone = this.stone;
     const tint = this.tint;
     const sm = this.smooth;
+    const strataX = this.strataX;
     const tuft = this.tuft;
     const cap = pal.topDepth;
 
@@ -794,6 +833,34 @@ export class TerrainRenderer {
           r *= mul;
           g *= mul;
           b *= mul;
+          // Szerokie, pofalowane warstwy łamią regularną siatkę kamyków. Są
+          // zakotwiczone w świecie, więc krater odsłania te same pokłady.
+          const layerY = y + strataX[x] + (sm[i] - 128) * 0.055;
+          const layer = Math.floor(layerY / pal.stratum);
+          const seam = layerY - layer * pal.stratum;
+          const layerHash = fine(layer * 11, 83);
+          const strataShade = (layerHash - 128) * 0.095 + (seam < 2 ? 14 : seam < 5 ? 5 : 0);
+          r += strataShade;
+          g += strataShade * 0.88;
+          b += strataShade * 0.75;
+          // Rzadkie skupiska minerałów: kwarc / sól / lód / rozgrzana ruda.
+          // Każde skupisko jest trwałe i ujawnia się także po wybuchu.
+          const cx = x >> 5;
+          const cy = y >> 5;
+          const cluster = fine(cx + (this.seed & 255), cy + ((this.seed >>> 8) & 255));
+          if (cluster > 244) {
+            const ox = (fine(cx, cy + 37) % 18) + 7;
+            const oy = (fine(cx + 19, cy) % 18) + 7;
+            const lx = x - (cx * 32 + ox);
+            const ly = y - (cy * 32 + oy);
+            const vein = Math.abs(lx + ly * 0.65);
+            if (Math.abs(ly) < 8 && vein < (ly < 0 ? 2 : 3)) {
+              const strength = ly < -5 ? 0.48 : 0.7;
+              r += (pal.mineral[0] - r) * strength;
+              g += (pal.mineral[1] - g) * strength;
+              b += (pal.mineral[2] - b) * strength;
+            }
+          }
           const gr = (fine(x, y) - 128) * 0.055;
           r += gr;
           g += gr;
@@ -851,6 +918,16 @@ function fine(x: number, y: number): number {
   let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return (n ^ (n >>> 16)) & 255;
+}
+
+/** Wolna fala pasm skały; jedna próbka na kolumnę, więc bez trygonometrii przy wybuchach. */
+function makeStrataOffsets(width: number, seed: number): Float32Array {
+  const result = new Float32Array(width);
+  const phase = (seed % 1024) * 0.013;
+  for (let x = 0; x < width; x++) {
+    result[x] = Math.sin(x * 0.009 + phase) * 14 + Math.sin(x * 0.027 - phase * 1.8) * 5;
+  }
+  return result;
 }
 
 /** Gładki szum (komórki ~18 px, interpolacja smoothstep). */

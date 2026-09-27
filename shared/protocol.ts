@@ -110,6 +110,8 @@ export interface ProjectileSnapshot {
   /** pozostały czas do wybuchu (s), jeśli dotyczy */
   fuse?: number;
   angle?: number;
+  /** Zaznaczony cel rakiety naprowadzanej; pozwala objąć trafienie kadrem. */
+  homingTarget?: { x: number; y: number };
 }
 
 export interface CrateSnapshot {
@@ -120,6 +122,8 @@ export interface CrateSnapshot {
   vy: number;
   landed: boolean;
 }
+
+export interface BarrelSnapshot { id: number; x: number; y: number }
 
 export interface MineSnapshot {
   id: number;
@@ -170,6 +174,8 @@ export interface GameSnapshot {
   worms: WormSnapshot[];
   projectiles: ProjectileSnapshot[];
   crates: CrateSnapshot[];
+  /** Niszczalne beczki z paliwem na powierzchni mapy. */
+  barrels?: BarrelSnapshot[];
   mines: MineSnapshot[];
   teams: TeamSnapshot[];
   turn: TurnInfo;
@@ -188,6 +194,7 @@ export type ExplosionStyle =
   | "dynamite"
   | "mine"
   | "airstrike"
+  | "barrel"
   | "shotgun"
   | "uzi";
 

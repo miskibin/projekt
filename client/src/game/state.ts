@@ -1,6 +1,7 @@
 import { SNAPSHOT_RATE } from "@shared/constants";
 import type {
   CrateSnapshot,
+  BarrelSnapshot,
   GameSnapshot,
   MineSnapshot,
   ProjectileSnapshot,
@@ -24,6 +25,7 @@ export interface RenderState {
   worms: WormSnapshot[];
   projectiles: ProjectileSnapshot[];
   crates: CrateSnapshot[];
+  barrels?: BarrelSnapshot[];
   mines: MineSnapshot[];
   teams: TeamSnapshot[];
   turn: TurnInfo;
@@ -200,6 +202,7 @@ function toRender(a: GameSnapshot, b: GameSnapshot, t: number): RenderState {
     worms,
     projectiles,
     crates,
+    barrels: b.barrels ?? [],
     mines,
     teams,
     turn,

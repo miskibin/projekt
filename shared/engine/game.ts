@@ -25,6 +25,7 @@ import {
 } from "../constants";
 import type {
   CrateSnapshot,
+  BarrelSnapshot,
   GameConfig,
   GameEvent,
   GameSnapshot,
@@ -99,6 +100,7 @@ export class GameImpl implements Game, EngineCtx {
   readonly projectiles: Projectile[] = [];
   readonly crates: Crate[] = [];
   readonly mines: Mine[] = [];
+  readonly barrels: BarrelSnapshot[] = [];
   readonly teams: TeamState[] = [];
 
   wind = 0;
@@ -179,7 +181,25 @@ export class GameImpl implements Game, EngineCtx {
     }
 
     spawnInitialMines(this);
+    this.spawnBarrels();
     this.beginNextTurn();
+  }
+
+  private spawnBarrels(): void {
+    for (let n = 0; n < 3; n++) {
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const x = this.rng.int(100, WORLD_WIDTH - 100);
+        const surface = this.terrain.surfaceY(x);
+        const y = surface - 11;
+        if (surface < WORLD_HEIGHT * 0.45 || surface >= this.waterLevel - 15) continue;
+        if (this.terrain.isSolid(x, y) || !this.terrain.isSolid(x, surface + 4)) continue;
+        if (this.worms.some((w) => Math.hypot(w.x - x, w.y - y) < 100)) continue;
+        if (this.mines.some((m) => Math.hypot(m.x - x, m.y - y) < 45)) continue;
+        if (this.barrels.some((b) => Math.abs(b.x - x) < 155)) continue;
+        this.barrels.push({ id: this.nextId(), x, y });
+        break;
+      }
+    }
   }
 
   // ---------------------------------------------------------------- EngineCtx
@@ -508,6 +528,15 @@ export class GameImpl implements Game, EngineCtx {
     this.terrain.carveCircle(xi, yi, ri);
     this.emit({ t: "explosion", x: xi, y: yi, r: ri, power: Math.round(power), style });
     this.emit({ t: "sound", name: style ? `explosion:${style}` : "explosion", x: xi, y: yi });
+
+    // Paliwowe beczki otwierają dodatkowy krater. Kolejka w explode() obsługuje
+    // reakcję łańcuchową bez rekurencji i wysyła identyczne zdarzenia wszystkim.
+    for (let i = this.barrels.length - 1; i >= 0; i--) {
+      const barrel = this.barrels[i];
+      if (Math.hypot(barrel.x - xi, barrel.y - yi) > ri + 12) continue;
+      this.barrels.splice(i, 1);
+      this.explode(barrel.x, barrel.y, 47, 42, 390, "barrel");
+    }
 
     const reach = ri * 1.5;
     for (const w of this.worms) {
@@ -1315,6 +1344,7 @@ export class GameImpl implements Game, EngineCtx {
         angle: r3(p.angle),
       };
       if (p.fuse !== undefined) s.fuse = r2(p.fuse);
+      if (p.homingTarget) s.homingTarget = { x: r2(p.homingTarget.x), y: r2(p.homingTarget.y) };
       projectiles[i] = s;
     }
 
@@ -1374,6 +1404,7 @@ export class GameImpl implements Game, EngineCtx {
       worms,
       projectiles,
       crates,
+      barrels: this.barrels.map((b) => ({ ...b })),
       mines,
       teams,
       turn,

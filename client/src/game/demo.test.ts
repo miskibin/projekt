@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { GameConfig } from "@shared/protocol";
-import { DemoDriver, chooseComputerShot } from "./demo";
+import { ComputerShotSearch, DemoDriver, chooseComputerShot } from "./demo";
 import { MAX_SHOT_POWER, WORM_RADIUS } from "@shared/constants";
 import { simulateTrajectory } from "./trajectory";
 
@@ -108,5 +108,29 @@ describe("single player against the computer", () => {
       closest = Math.min(closest, Math.hypot(path.points[i] - 780, path.points[i + 1] - 560));
     }
     expect(closest).toBeLessThan(70);
+  });
+
+  it("plans the same shot over short slices without blocking a render frame", () => {
+    const search = new ComputerShotSearch(200, 600, 780, 560, 1, 0, 2, 7);
+    let slices = 0;
+    while (!search.step(36)) slices++;
+    expect(slices).toBeGreaterThan(10);
+    expect(search.result()).toEqual(chooseComputerShot(200, 600, 780, 560, 1, 0, 2, 7));
+  });
+
+  it("hands control back after the computer's explosion settles", () => {
+    const game = new DemoDriver(config, "computer");
+    waitForTurn(game, 0);
+    game.applyAction({ kind: "skipTurn" });
+    waitForTurn(game, 1);
+    let returned = false;
+    for (let i = 0; i < 25 * 60; i++) {
+      game.update();
+      if (game.isOver || (game.snapshot.turn.activeTeam === 0 && game.snapshot.turn.phase === "active")) {
+        returned = true;
+        break;
+      }
+    }
+    expect(returned).toBe(true);
   });
 });

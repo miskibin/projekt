@@ -16,6 +16,7 @@ export class DemoDriver {
   private botTime = 0;
   private botShot = false;
   private botPlan: ShotPlan | null = null;
+  private botSearch: ComputerShotSearch | null = null;
 
   constructor(config: GameConfig, readonly mode: LocalMode = "twoPlayers") {
     this.game = createGame(config, [
@@ -56,6 +57,7 @@ export class DemoDriver {
       this.botTurn = "";
       this.botTime = 0;
       this.botPlan = null;
+      this.botSearch = null;
       return;
     }
     const worm = state.worms.find((item) => item.id === turn.activeWormId && item.alive);
@@ -67,6 +69,7 @@ export class DemoDriver {
       this.botTime = 0;
       this.botShot = false;
       this.botPlan = null;
+      this.botSearch = null;
     }
     this.botTime += dt;
     const target = enemies.reduce((best, item) =>
@@ -78,10 +81,15 @@ export class DemoDriver {
       return;
     }
     if (!this.botPlan) {
-      this.botPlan = chooseComputerShot(
+      this.botSearch ??= new ComputerShotSearch(
         worm.x, worm.y, target.x, target.y, faceRight ? 1 : -1, turn.wind, turn.round, worm.id,
         (px, py) => py >= 0 && this.terrain.isSolid(px, py),
       );
+      // Przeszukuj trajektorie po kawałku: pojedyncza długa kalkulacja na głównym
+      // wątku potrafiła zatrzymać animację na telefonie podczas tury komputera.
+      if (!this.botSearch.step(36)) return;
+      this.botPlan = this.botSearch.result();
+      this.botSearch = null;
     }
     this.game.applyInput(1, { left: false, right: false, aim: this.botPlan.aim, charge: false });
     if (this.botTime >= 1.15 && !this.botShot) {
@@ -107,12 +115,31 @@ export function chooseComputerShot(
   x: number, y: number, targetX: number, targetY: number, facing: 1 | -1,
   wind: number, round: number, wormId: number, isSolid?: (x: number, y: number) => boolean,
 ): ShotPlan {
-  let best: ShotPlan = { aim: -0.75, power: 0.65, missDistance: Number.POSITIVE_INFINITY };
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (let ai = 0; ai <= 36; ai++) {
-    const aim = -1.45 + ai * 0.05;
-    for (let pi = 0; pi <= 15; pi++) {
+  const search = new ComputerShotSearch(x, y, targetX, targetY, facing, wind, round, wormId, isSolid);
+  search.step(37 * 16);
+  return search.result();
+}
+
+/** Identyczne decyzje AI niezależnie od liczby klatek poświęconych na szukanie strzału. */
+export class ComputerShotSearch {
+  private index = 0;
+  private best: ShotPlan = { aim: -0.75, power: 0.65, missDistance: Number.POSITIVE_INFINITY };
+  private bestDistance = Number.POSITIVE_INFINITY;
+
+  constructor(
+    private x: number, private y: number, private targetX: number, private targetY: number,
+    private facing: 1 | -1, private wind: number, private round: number, private wormId: number,
+    private isSolid?: (x: number, y: number) => boolean,
+  ) {}
+
+  step(budget: number): boolean {
+    const end = Math.min(37 * 16, this.index + Math.max(1, budget));
+    for (; this.index < end; this.index++) {
+      const ai = Math.floor(this.index / 16);
+      const pi = this.index % 16;
+      const aim = -1.45 + ai * 0.05;
       const power = 0.25 + pi * 0.05;
+      const { x, y, targetX, targetY, facing, wind, isSolid } = this;
       const dirX = Math.cos(aim) * facing;
       const dirY = Math.sin(aim);
       const speed = power * MAX_SHOT_POWER;
@@ -122,19 +149,23 @@ export function chooseComputerShot(
       });
       for (let i = 6; i < trajectory.points.length; i += 2) {
         const distance = Math.hypot(trajectory.points[i] - targetX, trajectory.points[i + 1] - targetY);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          best = { aim, power, missDistance: distance };
+        if (distance < this.bestDistance) {
+          this.bestDistance = distance;
+          this.best = { aim, power, missDistance: distance };
         }
       }
     }
+    return this.index === 37 * 16;
   }
-  const noise = pseudoRandom(round * 97 + wormId * 17) - 0.5;
-  return {
-    aim: clamp(best.aim + noise * 0.09, -Math.PI / 2, Math.PI / 2),
-    power: clamp(best.power - noise * 0.08, 0.2, 1),
-    missDistance: best.missDistance,
-  };
+
+  result(): ShotPlan {
+    const noise = pseudoRandom(this.round * 97 + this.wormId * 17) - 0.5;
+    return {
+      aim: clamp(this.best.aim + noise * 0.09, -Math.PI / 2, Math.PI / 2),
+      power: clamp(this.best.power - noise * 0.08, 0.2, 1),
+      missDistance: this.best.missDistance,
+    };
+  }
 }
 
 function pseudoRandom(seed: number): number {

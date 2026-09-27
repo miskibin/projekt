@@ -782,3 +782,21 @@ describe("terrainSync", () => {
     expect(diff).toBe(0);
   });
 });
+
+describe("beczki na mapie", () => {
+  it("wybuch beczki drąży własny krater i może uruchomić następną", () => {
+    const game = new GameImpl(cfg({ seed: 919 }), setups(2));
+    expect(game.snapshot().barrels?.length).toBeGreaterThanOrEqual(2);
+    const initialCount = game.barrels.length;
+    game.drainEvents();
+    const first = game.barrels[0];
+    const second = game.barrels[1];
+    second.x = first.x + 42;
+    second.y = first.y;
+    game.explode(first.x - 20, first.y, 18, 0, 0, "bazooka");
+    const blasts = game.drainEvents().filter((e) => e.t === "explosion");
+    expect(blasts.filter((e) => e.style === "barrel")).toHaveLength(2);
+    expect(game.snapshot().barrels).toHaveLength(initialCount - 2);
+    expect(game.terrain.isSolid(first.x, first.y + 25)).toBe(false);
+  });
+});

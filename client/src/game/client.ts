@@ -71,6 +71,8 @@ export class GameClient {
   private graves: Grave[] = [];
   private lastPos = new Map<number, { x: number; y: number; team: number; name: string }>();
   private trackedWorm: { id: number; x: number; y: number } | null = null;
+  private homingImpact: { x: number; y: number } | null = null;
+  private homingImpactUntil = 0;
   private pending: { at: number; ev: GameEvent }[] = [];
   private raf = 0;
   private last = 0;
@@ -191,6 +193,8 @@ export class GameClient {
     this.graves = [];
     this.lastPos.clear();
     this.trackedWorm = null;
+    this.homingImpact = null;
+    this.homingImpactUntil = 0;
     this.pending = [];
     this.buffer.clear();
     this.prediction.reset();
@@ -392,9 +396,18 @@ export class GameClient {
       const moving = !!active && (!!previous && Math.hypot(active.x - previous.x, active.y - previous.y) > 0.04);
       const falling = !!active && (!active.onGround || Math.abs(active.vy) > 3 || Math.abs(observedVy) > 3);
       // kamera: prowadzenie pojedynczego pocisku / kadr salwy > aktywny robak > widok całej mapy
-      if (state.projectiles.length === 1) {
+      if (this.homingImpact && this.time < this.homingImpactUntil) {
+        const victim = state.worms.filter((w) => w.alive)
+          .sort((a, b) => Math.hypot(a.x - this.homingImpact!.x, a.y - this.homingImpact!.y) -
+            Math.hypot(b.x - this.homingImpact!.x, b.y - this.homingImpact!.y))[0];
+        this.camera.frame(victim ? [this.homingImpact, victim] : [this.homingImpact],
+          { maxZoom: this.camera.projectileZoom, margin: 110 });
+      } else if (state.projectiles.length === 1) {
         const p = state.projectiles[0];
-        this.camera.trackProjectile(p.x, p.y, p.vx, p.vy);
+        if (p.kind === "homing" && p.homingTarget) {
+          this.camera.frame(active ? [active, p, p.homingTarget] : [p, p.homingTarget],
+            { maxZoom: this.camera.projectileZoom, margin: 125 });
+        } else this.camera.trackProjectile(p.x, p.y, p.vx, p.vy);
       } else if (state.projectiles.length > 1) {
         const points = state.projectiles.map((p) => ({ x: p.x, y: p.y }));
         this.camera.frame(points, { maxZoom: this.camera.projectileZoom, margin: 100 });
@@ -510,7 +523,10 @@ export class GameClient {
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.renderer.onExplosion(ev.r, ev.power);
         this.camera.shake(Math.min(22, 2 + ev.r * 0.24 + ev.power * 0.006));
-        this.camera.glance(ev.x, ev.y, 0.25);
+        if (ev.style === "homing") {
+          this.homingImpact = { x: ev.x, y: ev.y };
+          this.homingImpactUntil = this.time + 1.1;
+        } else this.camera.glance(ev.x, ev.y, 0.25);
         break;
       }
       case "carveRect": {

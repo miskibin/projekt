@@ -137,6 +137,7 @@ const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
   dynamite: { ...DEFAULT_EXPLOSION, flash: "#ffd0bd", ring: "rgba(255,78,44,1)", embers: ["#fff2cf", "#ff704a", "#e42020"], smoke: ["rgba(112,76,70,1)", "rgba(54,43,43,1)"], fire: ["#fff5df", "#ffad58", "#ff3e24", "#8b0710"], fireballs: 2 },
   mine: { ...DEFAULT_EXPLOSION, flash: "#e6edf2", ring: "rgba(205,220,229,1)", embers: ["#ffffff", "#d5dde3", "#ff9138"], smoke: ["rgba(105,113,119,1)", "rgba(45,50,54,1)"], fire: ["#ffffff", "#dce4e8", "#ff9138", "#4c4643"] },
   airstrike: { ...DEFAULT_EXPLOSION, flash: "#ffe0cf", ring: "rgba(255,95,52,1)", embers: ["#fff2d5", "#ff883d", "#ff3428"], smoke: ["rgba(97,86,84,1)", "rgba(36,35,39,1)"], fire: ["#fff4d2", "#ff9a48", "#e62d22", "#68121b"], fireballs: 2, extraRings: 1 },
+  barrel: { ...DEFAULT_EXPLOSION, flash: "#fff2ba", ring: "rgba(255,125,52,1)", embers: ["#ffefae", "#ff843c", "#c32b28"], smoke: ["rgba(107,76,62,1)", "rgba(44,39,41,1)"], fire: ["#fff4c0", "#ffb44e", "#f24b20", "#7a1720"], fireballs: 2, extraRings: 1 },
   shotgun: { ...DEFAULT_EXPLOSION, flash: "#fff9dc", ring: "rgba(255,232,171,1)", embers: ["#ffffff", "#ffe1a1", "#d8c39b"], fire: ["#ffffff", "#ffe7ae", "#d29c62", "#75553c"], fireballs: 0, rays: 4 },
   uzi: { ...DEFAULT_EXPLOSION, flash: "#d9f5ff", ring: "rgba(137,217,255,1)", embers: ["#f5fdff", "#8fddff", "#9ea9b8"], fire: ["#f2fcff", "#9ee5ff", "#7798b8", "#3b4c62"], fireballs: 0, rays: 4 },
 };
