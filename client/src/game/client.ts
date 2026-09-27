@@ -393,7 +393,12 @@ export class GameClient {
         // Ruch pieszy zmienia bezpośrednio x, więc łączymy prędkość silnika z ruchem zaobserwowanym między klatkami.
         const vx = Math.abs(active.vx) > Math.abs(observedVx) ? active.vx : observedVx;
         const vy = Math.abs(active.vy) > Math.abs(observedVy) ? active.vy : observedVy;
-        const leadX = Math.max(-110, Math.min(110, vx * 0.2)) + active.facing * 26;
+        const closestRival = this.camera.viewW < 1000
+          ? state.worms.filter((other) => other.alive && other.team !== active.team)
+            .sort((a, b) => Math.abs(a.x - active.x) - Math.abs(b.x - active.x))[0]
+          : undefined;
+        const rivalLead = closestRival ? Math.max(-70, Math.min(70, (closestRival.x - active.x) * 0.12)) : 0;
+        const leadX = Math.max(-110, Math.min(110, vx * 0.2)) + active.facing * 26 + rivalLead;
         const leadY = Math.max(-55, Math.min(115, vy * 0.13));
         // Gdy robak faktycznie idzie lub spada, odzyskujemy auto-focus po wcześniejszym przesunięciu kamery.
         this.camera.focus(active.x + leadX, active.y + leadY - 16, undefined, false, moving || falling);
@@ -536,6 +541,12 @@ export class GameClient {
         this.camera.shake(fx.kick);
         const shooter = this.buffer.latest?.turn.activeWormId;
         if (shooter !== undefined) this.renderer.onShot(shooter);
+        break;
+      }
+      case "split": {
+        this.particles.split(ev.x, ev.y, ev.weapon);
+        this.camera.shake(ev.weapon === "banana" ? 5 : 3);
+        this.sound.play(ev.weapon === "banana" ? "bananaSplit" : "clusterSplit");
         break;
       }
       case "bulletTrace": {

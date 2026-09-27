@@ -128,6 +128,7 @@ const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
   homing: { ...DEFAULT_EXPLOSION, flash: "#c9f8ff", ring: "rgba(77,224,255,1)", embers: ["#edfdff", "#70eaff", "#ff557c"], fire: ["#effeff", "#82efff", "#2e9fff", "#7833b8"], extraRings: 1 },
   grenade: { ...DEFAULT_EXPLOSION, flash: "#efffc0", ring: "rgba(183,238,102,1)", embers: ["#f7ffc5", "#c7eb58", "#ffb137"], fire: ["#ffffdc", "#d9ed73", "#e68d26", "#75561a"] },
   cluster: { ...DEFAULT_EXPLOSION, flash: "#c9fff5", ring: "rgba(65,255,207,1)", embers: ["#effffb", "#63f4ce", "#4aa8ff"], fire: ["#edfffb", "#61f0ca", "#3397d8", "#135172"], extraRings: 2, rays: 14 },
+  clusterlet: { ...DEFAULT_EXPLOSION, flash: "#efffff", ring: "rgba(105,255,223,1)", embers: ["#ffffff", "#55ffcc", "#8fdfff"], smoke: ["rgba(44,104,112,1)", "rgba(25,56,75,1)"], fire: ["#ffffff", "#aefff1", "#39d9be", "#18778b"], fireballs: 0, rays: 5 },
   banana: { ...DEFAULT_EXPLOSION, flash: "#fff86a", ring: "rgba(255,226,45,1)", embers: ["#fffbd0", "#fff12f", "#ff9d1f"], smoke: ["rgba(170,147,55,1)", "rgba(93,76,32,1)"], fire: ["#ffffe0", "#fff22f", "#ffad18", "#c76b08"], fireballs: 2, extraRings: 1, rays: 16 },
   holy: { ...DEFAULT_EXPLOSION, flash: "#fffde8", ring: "rgba(255,245,158,1)", embers: ["#ffffff", "#fff8bb", "#ffd75a"], smoke: ["rgba(236,228,192,1)", "rgba(153,137,106,1)"], fire: ["#ffffff", "#fffbc2", "#ffd85d", "#b78622"], fireballs: 2, extraRings: 3, rays: 18 },
   dynamite: { ...DEFAULT_EXPLOSION, flash: "#ffd0bd", ring: "rgba(255,78,44,1)", embers: ["#fff2cf", "#ff704a", "#e42020"], smoke: ["rgba(112,76,70,1)", "rgba(54,43,43,1)"], fire: ["#fff5df", "#ffad58", "#ff3e24", "#8b0710"], fireballs: 2 },
@@ -174,6 +175,16 @@ export class Particles {
   }
 
   // ---------------- publiczne efekty ----------------
+
+  /** Rozpad widoczny jako pierścień i osobne smugi pocisków. */
+  split(x: number, y: number, weapon: "cluster" | "banana"): void {
+    const banana = weapon === "banana";
+    const color = banana ? "#ffe64c" : "#74ffe1";
+    this.flash(x, y, banana ? 35 : 26, color, 0.2);
+    this.pushRing({ x, y, r0: 7, r1: banana ? 66 : 56, life: 0,
+      max: 0.32, color, width: 3, flat: false, additive: true });
+    this.sparks(x, y, banana ? 28 : 22, color);
+  }
 
   /** Ślad śruciny albo pocisku UZI nie modyfikuje terenu. */
   bulletTrace(x0: number, y0: number, x: number, y: number, weapon: "shotgun" | "uzi", hit: boolean): void {

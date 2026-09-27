@@ -695,7 +695,16 @@ export class Renderer {
           ctx.arc(0, -0.5, 5.4, 0.58, Math.PI - 0.58);
           ctx.stroke();
         } else {
-          if (this.emitTrail(p.id, inp.time, 24)) inp.particles.sparks(p.x, p.y, 1, "#69ffe0");
+          ctx.rotate(ang);
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = "rgba(90,255,220,0.68)";
+          ctx.lineWidth = 4.4;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(-Math.min(29, 11 + Math.hypot(p.vx, p.vy) * 0.045), 0);
+          ctx.lineTo(-2, 0);
+          ctx.stroke();
+          ctx.globalCompositeOperation = "source-over";
           ctx.fillStyle = "#2bbd9d";
           ctx.beginPath();
           ctx.arc(0, 0, 4.1, 0, Math.PI * 2);

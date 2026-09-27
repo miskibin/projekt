@@ -49,7 +49,7 @@ const D = (
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
   bazooka: D("bazooka", -1, 28, 45, 300, { charge: true }),
   grenade: D("grenade", -1, 34, 55, 350, { charge: true }),
-  cluster: D("cluster", 2, 18, 20, 170, { charge: true }),
+  cluster: D("cluster", 2, 16, 15, 155, { charge: true }),
   banana: D("banana", 1, 22, 25, 200, { charge: true }),
   shotgun: D("shotgun", -1, 9, 22, 145, { shots: 2 }),
   uzi: D("uzi", 3, 5, 4, 70),
@@ -83,7 +83,7 @@ export const CRATE_WEAPONS: readonly WeaponId[] = [
 export const CRATE_UTILITIES: readonly WeaponId[] = ["teleport", "girder", "jetpack"];
 
 /** Parametry odłamków (cluster / banana). */
-export const CLUSTERLET = { radius: 14, damage: 17, power: 155 };
+export const CLUSTERLET = { radius: 17, damage: 19, power: 175 };
 export const BANANALET = { radius: 23, damage: 32, power: 255 };
 export const AIRSTRIKE_BOMB = { radius: 21, damage: 32, power: 250 };
 

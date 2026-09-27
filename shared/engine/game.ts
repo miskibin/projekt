@@ -510,7 +510,8 @@ export class GameImpl implements Game, EngineCtx {
       this.explode(m.x, m.y, WEAPONS.mine.radius, WEAPONS.mine.damage, WEAPONS.mine.power, "mine");
     }
 
-    for (const p of this.projectiles) {
+    // Rozpad granatu może dopisać nowe pociski; nie detonujemy ich tym samym wybuchem.
+    for (const p of [...this.projectiles]) {
       if (p.dead) continue;
       const d = Math.hypot(p.x - xi, p.y - yi);
       if (d > reach) continue;
@@ -935,7 +936,7 @@ export class GameImpl implements Game, EngineCtx {
           collidesWorms: false,
           bounces: true,
           restitution: id === "grenade" ? 0.32 : id === "cluster" ? 0.52 : 0.72,
-          shards: id === "cluster" ? 6 : id === "banana" ? 8 : 0,
+          shards: id === "cluster" ? 10 : id === "banana" ? 8 : 0,
           shardKind: id === "cluster" ? "clusterlet" : id === "banana" ? "bananalet" : undefined,
           ownerWorm: w.id,
           ownerTeam: w.team,
@@ -988,7 +989,9 @@ export class GameImpl implements Game, EngineCtx {
       }
       case "mine": {
         this.emitShot(id, w);
-        placeMine(this, w.x, w.y + WORM_RADIUS - MINE_RADIUS, ts.weaponTimer);
+        // Pułapka trafia przed robaka, poza swoim promieniem wykrywania.
+        placeMine(this, clamp(w.x + w.facing * 43, MINE_RADIUS, WORLD_WIDTH - MINE_RADIUS),
+          w.y + WORM_RADIUS - MINE_RADIUS, ts.weaponTimer);
         break;
       }
       case "shotgun": {
@@ -1025,7 +1028,7 @@ export class GameImpl implements Game, EngineCtx {
           makeProjectile(this, {
             kind: "airstrikeBomb",
             x: clamp(tx + off, 4, WORLD_WIDTH - 4),
-            y: -60 - i * 14,
+            y: -60 - i * 72,
             vx: 0,
             vy: 280,
             radius: def.radius,

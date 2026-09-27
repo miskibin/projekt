@@ -78,6 +78,9 @@ export class Sound {
         this.noise(t, 0.85, 850, 0.84, "lowpass", 95);
         this.tone(t, "sine", 115, 37, 0.65, 0.7);
         this.noise(t + 0.075, 0.4, 1300, 0.18, "bandpass", 300);
+      } else if (style === "clusterlet") {
+        this.noise(t, 0.18, 2100, 0.25, "bandpass", 600);
+        this.tone(t, "triangle", 350, 130, 0.16, 0.11);
       } else if (style === "cluster" || style === "banana" || style === "airstrike") {
         this.noise(t, 0.26, style === "banana" ? 1900 : 1350, 0.52, "bandpass", 250);
         this.tone(t, "triangle", style === "banana" ? 310 : 170, 60, 0.3, 0.32);
@@ -90,6 +93,14 @@ export class Sound {
       return;
     }
     switch (name) {
+      case "clusterSplit":
+        this.noise(t, 0.24, 3000, 0.3, "highpass");
+        this.tone(t, "sawtooth", 520, 960, 0.19, 0.17);
+        break;
+      case "bananaSplit":
+        this.tone(t, "sine", 230, 780, 0.3, 0.24);
+        this.tone(t + 0.08, "triangle", 660, 260, 0.2, 0.2);
+        break;
       case "explosion":
         this.noise(t, 0.75, 900, 0.9, "lowpass");
         this.tone(t, "sine", 120, 42, 0.55, 0.55);

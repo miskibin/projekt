@@ -51,26 +51,30 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
   p.dead = true;
   ctx.explode(p.x, p.y, p.radius, p.damage, p.power, projectileExplosionStyle(p.kind));
   if (p.shards > 0 && p.shardKind) {
+    ctx.emit({ t: "split", weapon: p.shardKind === "bananalet" ? "banana" : "cluster", x: p.x, y: p.y });
     const spec = p.shardKind === "bananalet" ? BANANALET : CLUSTERLET;
     for (let i = 0; i < p.shards; i++) {
       const banana = p.shardKind === "bananalet";
       const fan = (i + 0.5) / p.shards;
       const ang = banana
-        ? -Math.PI * 0.96 + fan * Math.PI * 0.92 + ctx.rng.range(-0.07, 0.07)
-        : ctx.rng.range(-Math.PI * 0.85, -Math.PI * 0.15);
-      const speed = banana ? ctx.rng.range(360, 570) : ctx.rng.range(125, 215);
+        ? -Math.PI + fan * Math.PI * 2 + ctx.rng.range(-0.04, 0.04)
+        : -Math.PI * 0.96 + fan * Math.PI * 0.92 + ctx.rng.range(-0.025, 0.025);
+      const speed = banana ? ctx.rng.range(360, 570) : ctx.rng.range(260, 350);
       makeProjectile(ctx, {
         kind: p.shardKind,
-        x: p.x + Math.cos(ang) * 4,
-        y: p.y + Math.sin(ang) * 4,
+        x: p.x + Math.cos(ang) * 7,
+        y: p.y + Math.sin(ang) * 7,
         vx: Math.cos(ang) * speed + p.vx * (banana ? 0.08 : 0.15),
         vy: Math.sin(ang) * speed,
-        ...(banana ? { fuse: ctx.rng.range(0.9, 1.45) } : {}),
+        fuse: banana ? ctx.rng.range(1.1, 1.7) : ctx.rng.range(1.2, 1.55),
         radius: spec.radius,
         damage: spec.damage,
         power: spec.power,
-        explodeOnContact: true,
-        bounces: false,
+        gravityScale: banana ? 1 : 0.8,
+        explodeOnContact: !banana,
+        collidesWorms: !banana,
+        bounces: banana,
+        restitution: banana ? 0.74 : 0.45,
         ownerWorm: p.ownerWorm,
         ownerTeam: p.ownerTeam,
       });
@@ -79,7 +83,7 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
 }
 
 function projectileExplosionStyle(kind: ProjectileKind): ExplosionStyle | undefined {
-  if (kind === "clusterlet") return "cluster";
+  if (kind === "clusterlet") return "clusterlet";
   if (kind === "bananalet") return "banana";
   if (kind === "airstrikeBomb") return "airstrike";
   if (

@@ -5,6 +5,7 @@ import { createGame, type Game, type TeamSetup } from "./index";
 import { GameImpl } from "./game";
 import { circleHits } from "./physics";
 import { placeMine } from "./crates";
+import { detonateProjectile } from "./projectiles";
 import { Terrain } from "./terrain";
 
 function cfg(over: Partial<GameConfig> = {}): GameConfig {
@@ -251,6 +252,45 @@ describe("bronie", () => {
     expect(Math.min(...children.map((p) => p.vx))).toBeLessThan(-250);
     expect(Math.max(...children.map((p) => p.vx))).toBeGreaterThan(250);
     expect(children.every((p) => p.fuse !== undefined && p.fuse > 0)).toBe(true);
+    expect(children.every((p) => p.bounces && !p.explodeOnContact)).toBe(true);
+    expect(children.some((p) => p.vy > 150)).toBe(true);
+    expect(children.some((p) => p.vy < -150)).toBe(true);
+  });
+
+  it("odłamkowy tworzy rozrzucone, osobno wybuchające pociski, a banan odbija mini bananki", () => {
+    for (const weapon of ["cluster", "banana"] as const) {
+      const g = createGame(cfg({ seed: 2026 }), setups(2));
+      const gi = g as GameImpl;
+      toActive(g);
+      clearMines(g);
+      const team = g.snapshot().turn.activeTeam;
+      g.applyAction(team, { kind: "selectWeapon", weapon });
+      g.applyAction(team, { kind: "fire", power: 0.5 });
+      const parent = gi.projectiles.find((p) => p.kind === weapon)!;
+      // Miejsce detonacji ustawiamy nad ziemią, żeby sprawdzić rozpad bez zależności od trajektorii rzutu.
+      const x = 960;
+      let ground = 480;
+      while (ground < 950 && !gi.terrain.isSolid(x, ground)) ground++;
+      parent.x = x; parent.y = ground - 55; parent.vx = 0; parent.vy = 0;
+      g.drainEvents();
+      detonateProjectile(gi, parent);
+      const split = g.drainEvents();
+      expect(split.some((e) => e.t === "split" && e.weapon === weapon)).toBe(true);
+      const kind = weapon === "cluster" ? "clusterlet" : "bananalet";
+      const children = gi.projectiles.filter((p) => p.kind === kind);
+      expect(children).toHaveLength(weapon === "cluster" ? 10 : 8);
+      expect(Math.min(...children.map((p) => p.vx))).toBeLessThan(-200);
+      expect(Math.max(...children.map((p) => p.vx))).toBeGreaterThan(200);
+      expect(children.every((p) => p.fuse !== undefined && p.fuse > 0)).toBe(true);
+      expect(children.every((p) => p.bounces === (weapon === "banana"))).toBe(true);
+      const events: GameEvent[] = [];
+      stepN(g, 125, events);
+      const style = weapon === "cluster" ? "clusterlet" : "banana";
+      const blasts = events.filter((e): e is Extract<GameEvent, { t: "explosion" }> => e.t === "explosion" && e.style === style);
+      expect(blasts.length).toBeGreaterThanOrEqual(4);
+      const xs = blasts.map((e) => e.x);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(110);
+    }
   });
 
   it("shotgun pozwala na dwa strzały, dopiero drugi kończy turę", () => {
@@ -325,7 +365,10 @@ describe("bronie", () => {
       g.applyAction(team, { kind: "selectWeapon", weapon });
       g.applyAction(team, { kind: "setTimer", seconds: 4 });
       g.applyAction(team, { kind: "fire", power: 0.5 });
-      if (weapon === "mine") expect(gi.mines[0].triggerFuse).toBe(4);
+      if (weapon === "mine") {
+        expect(gi.mines[0].triggerFuse).toBe(4);
+        expect(Math.abs(gi.mines[0].x - activeWorm(g).x)).toBeGreaterThan(30);
+      }
       else expect(gi.projectiles.find((p) => p.kind === weapon)?.fuse).toBe(4);
     }
   });
