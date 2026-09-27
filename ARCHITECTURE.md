@@ -55,3 +55,11 @@ Zamiast tego:
 - To nadal zależy od karty hosta i publicznego brokera; zmiana samego transportu na Supabase
   nie daje niezależnego serwera. Docelowa architektura dla płynnego i trwałego multiplayera
   wymaga procesu symulacji na dedykowanym serwerze WebSocket (`server/index.ts` już obsługuje WS).
+
+## Stały proces gry
+
+`render.yaml` buduje klienta z `VITE_TRANSPORT=ws` i uruchamia `server/index.ts`.
+Obie przeglądarki łączą się z `/ws` pod tym samym adresem; serwer przejmuje
+`RoomHost`, zegar 60 Hz i rozsyłanie migawek 20 Hz. Jedna instancja trzyma pokoje
+w pamięci; restart serwera kończy niezapisane mecze. Dla przejmowania pokoju po
+restarcie trzeba dodać trwały zapis stanu silnika i sesji.

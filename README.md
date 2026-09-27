@@ -50,7 +50,24 @@ więc może chybić.
 Celownik pokazuje kierunek oraz przybliżoną siłę strzału, ale nie rysuje pełnej trajektorii ani
 punktu uderzenia. Wpływ wiatru, grawitacji i terenu trzeba ocenić samodzielnie.
 
-## Własny serwer (opcjonalnie)
+## Stały serwer dla gry na dwóch telefonach
+
+Wersja na Vercel używa telefonu tworzącego pokój jako hosta symulacji. Hotspot
+nie usuwa tej zależności: pakiety nadal przechodzą przez publiczny broker.
+`render.yaml` uruchamia istniejący serwer Node w regionie Frankfurt na jednej
+stale działającej instancji. Grę otwiera się z adresu utworzonej usługi Render:
+serwer udostępnia stronę i `/ws` z tej samej domeny. Nie trzeba podawać osobnego
+adresu API ani udostępniać telefonu jako hosta gry.
+
+[Utwórz serwer na Render](https://render.com/deploy?repo=https://github.com/miskibin/projekt)
+— przed zatwierdzeniem sprawdź plan `0.5c-512mb` (płatny, około 7 USD/mies.);
+po wdrożeniu otwórz adres `https://<nazwa-usługi>.onrender.com/` na obu telefonach.
+Blueprint nie wdraża kolejnych commitów automatycznie, żeby aktualizacja kodu
+nie przerywała trwającej gry. Nowe wersje trzeba uruchamiać ręcznie w panelu.
+Pokój jest trzymany w pamięci jednej instancji, więc restart samej usługi
+przerywa trwającą rundę; krótkie zerwanie połączenia telefonu można wznowić.
+
+### Własny serwer w sieci lokalnej
 
 ```bash
 npm install
@@ -58,9 +75,9 @@ VITE_TRANSPORT=ws npm run build   # klient łączy się WebSocketem z serwerem N
 npm start                          # http://localhost:3000 (PORT=xxxx żeby zmienić)
 ```
 
-Serwer po starcie wypisze adresy w sieci lokalnej, np. `http://192.168.1.10:3000` – koledzy w tej samej
-sieci wchodzą na ten adres. Przez internet: przekieruj port, użyj tunelu (`ngrok http 3000`,
-`cloudflared tunnel --url http://localhost:3000`) albo wrzuć na Render/Fly/Railway (jest `Dockerfile`).
+Serwer po starcie wypisze adresy w sieci lokalnej, np. `http://192.168.1.10:3000`.
+Telefon i komputer uruchamiający serwer muszą być w tej samej sieci. Sam hotspot
+między telefonami bez komputera z procesem Node nie tworzy serwera gry.
 
 ## Rozwój
 

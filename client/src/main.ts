@@ -1,7 +1,6 @@
 import "./styles.css";
 import type { ClientMessage, GameConfig, ServerMessage } from "@shared/protocol";
 import { NetClient, WebSocketTransport, wsUrl, type ConnStatus, type Transport } from "./net";
-import { TrysteroTransport } from "./net/trysteroTransport";
 import { GameClient } from "./game/client";
 import { demoRoom } from "./game/demo";
 import { Sound } from "./game/sound";
@@ -14,14 +13,17 @@ import { Lobby } from "./lobby";
  */
 class LazyTransport implements Transport {
   private inner: Transport | null = null;
+  private closed = false;
   private msgCbs: ((m: ServerMessage) => void)[] = [];
   private statusCbs: ((s: ConnStatus) => void)[] = [];
 
   constructor(private readonly load: () => Promise<Transport>) {}
 
   async connect(): Promise<void> {
+    this.closed = false;
     if (!this.inner) {
       const t = await this.load();
+      if (this.closed) return;
       this.inner = t;
       for (const cb of this.msgCbs) t.onMessage(cb);
       for (const cb of this.statusCbs) t.onStatus(cb);
@@ -44,6 +46,7 @@ class LazyTransport implements Transport {
   }
 
   close(): void {
+    this.closed = true;
     this.inner?.close();
   }
 }
@@ -55,7 +58,9 @@ class LazyTransport implements Transport {
  */
 export function createTransport(): Transport {
   const env = import.meta.env as unknown as Record<string, string | undefined>;
-  return env.VITE_TRANSPORT === "ws" ? new WebSocketTransport(wsUrl()) : new TrysteroTransport();
+  return env.VITE_TRANSPORT === "ws"
+    ? new WebSocketTransport(wsUrl())
+    : new LazyTransport(async () => new (await import("./net/trysteroTransport")).TrysteroTransport());
 }
 
 type Screen = "menu" | "lobby" | "game";

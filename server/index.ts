@@ -26,10 +26,14 @@ const clientDist = path.join(projectRoot, "dist", "client");
 /** Adresy IPv4 wszystkich zewnętrznych interfejsów – żeby podać koledze link. */
 export function lanAddresses(): string[] {
   const out: string[] = [];
-  for (const iface of Object.values(networkInterfaces())) {
-    for (const addr of iface ?? []) {
-      if (addr.family === "IPv4" && !addr.internal) out.push(addr.address);
+  try {
+    for (const iface of Object.values(networkInterfaces())) {
+      for (const addr of iface ?? []) {
+        if (addr.family === "IPv4" && !addr.internal) out.push(addr.address);
+      }
     }
+  } catch {
+    // Niektóre kontenery nie udostępniają listy interfejsów; nie blokuje to serwera.
   }
   return out;
 }
@@ -148,8 +152,8 @@ export function startServer(port = PORT) {
     console.log(`\n  Worms Online – serwer wystartował (${IS_PROD ? "produkcja" : "dev"})`);
     console.log(`  Lokalnie:      http://localhost:${port}`);
     if (!IS_PROD) console.log(`  Klient (Vite): http://localhost:5173`);
-    for (const ip of lanAddresses()) {
-      console.log(`  Graj z kolegami: http://${ip}:${IS_PROD ? port : 5173}`);
+    if (!IS_PROD) for (const ip of lanAddresses()) {
+      console.log(`  Graj z kolegami: http://${ip}:5173`);
     }
     console.log(`  WebSocket:     ws://localhost:${port}/ws\n`);
   });
