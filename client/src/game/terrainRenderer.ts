@@ -839,10 +839,21 @@ export class TerrainRenderer {
           const layer = Math.floor(layerY / pal.stratum);
           const seam = layerY - layer * pal.stratum;
           const layerHash = fine(layer * 11, 83);
-          const strataShade = (layerHash - 128) * 0.095 + (seam < 2 ? 14 : seam < 5 ? 5 : 0);
+          const strataShade = (layerHash - 128) * 0.15 + (seam < 2 ? 19 : seam < 5 ? 7 : 0);
           r += strataShade;
           g += strataShade * 0.88;
           b += strataShade * 0.75;
+          if (layerHash < 88) {
+            const earth = (88 - layerHash) / 190;
+            r += (pal.soil[0] - r) * earth;
+            g += (pal.soil[1] - g) * earth;
+            b += (pal.soil[2] - b) * earth;
+          } else if (layerHash > 184) {
+            const bedrock = (layerHash - 184) / 170;
+            r += (pal.soilDark[0] - r) * bedrock;
+            g += (pal.soilDark[1] - g) * bedrock;
+            b += (pal.soilDark[2] - b) * bedrock;
+          }
           // Rzadkie skupiska minerałów: kwarc / sól / lód / rozgrzana ruda.
           // Każde skupisko jest trwałe i ujawnia się także po wybuchu.
           const cx = x >> 5;

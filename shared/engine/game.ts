@@ -53,6 +53,7 @@ import type { Crate, DeathReason, EngineCtx, Mine, Projectile, TeamState, Worm }
 
 const STARTING_TIME = 0.75;
 const SETTLE_TIMEOUT = 7;
+const STRANDED_WORM_TIMEOUT = 3;
 const WATER_RISE_TIME = 1.2;
 
 const WORM_RESTITUTION = 0.3;
@@ -758,7 +759,13 @@ export class GameImpl implements Game, EngineCtx {
         if (!this.isCalm()) {
           this.settleGuard += dt;
           this.phaseTimer = ROUND_END_DELAY;
-          if (this.settleGuard > SETTLE_TIMEOUT) this.phaseTimer = 0;
+          // Po ostatnim wybuchu pojedynczy robak może wisieć na nierównej
+          // krawędzi. Długi limit jest potrzebny tylko żywym pociskom i salwom.
+          const activeHazard = this.projectiles.length > 0 || !!this.burst ||
+            this.mines.some((mine) => mine.fuse !== undefined && !mine.dead);
+          if (this.settleGuard > (activeHazard ? SETTLE_TIMEOUT : STRANDED_WORM_TIMEOUT)) {
+            this.phaseTimer = 0;
+          }
         } else {
           this.phaseTimer -= dt;
         }
