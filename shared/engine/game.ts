@@ -58,6 +58,8 @@ const WORM_RESTITUTION = 0.3;
 const WORM_BOUNCE_FRICTION = 0.55;
 const WORM_REST_SPEED = 55;
 const WORM_STEP_DOWN = 8;
+const JUMP_GRACE_TIME = 0.12;
+const WORM_AIR_CONTROL = 240;
 
 const JET_FUEL = 8;
 const JET_UP = 1600;
@@ -103,6 +105,8 @@ export class GameImpl implements Game, EngineCtx {
   waterLevel = WATER_LEVEL_START;
 
   private events: GameEvent[] = [];
+  private readonly lastGroundedAt = new Map<number, number>();
+  private bufferedJump: { wormId: number; back: boolean; until: number } | null = null;
   private idCounter = 1;
   private tick = 0;
   private time = 0;
@@ -293,9 +297,9 @@ export class GameImpl implements Game, EngineCtx {
     if (inp.left && !inp.right) w.facing = -1;
     else if (inp.right && !inp.left) w.facing = 1;
 
-    if (!w.jetpackActive && (inp.left || inp.right) && w.onGround) {
-      const dir = inp.left && !inp.right ? -1 : inp.right ? 1 : 0;
-      if (dir !== 0) {
+    const dir = inp.left && !inp.right ? -1 : inp.right && !inp.left ? 1 : 0;
+    if (!w.jetpackActive && dir !== 0) {
+      if (w.onGround) {
         const res = walkStep(
           this.terrain,
           w,
@@ -305,6 +309,9 @@ export class GameImpl implements Game, EngineCtx {
           WORM_STEP_DOWN,
         );
         if (res === "fell") w.onGround = false;
+      } else {
+        // Gentle air steering helps clear crater lips and narrow terrain gaps.
+        w.vx = clamp(w.vx + dir * WORM_AIR_CONTROL * dt, -120, 120);
       }
     }
 
@@ -319,6 +326,18 @@ export class GameImpl implements Game, EngineCtx {
 
   private updateWorm(w: Worm, dt: number): void {
     if (!w.alive) return;
+
+    // Destruction or a placed girder can change the terrain under a resting
+    // worm. Recover once when embedded instead of bouncing in place forever.
+    if (circleHits(this.terrain, w.x, w.y, WORM_RADIUS)) {
+      const pos = { x: w.x, y: w.y };
+      if (pushOut(this.terrain, pos, WORM_RADIUS, 28)) {
+        w.x = pos.x;
+        w.y = pos.y;
+        w.onGround = w.vy >= 0 && groundBelow(this.terrain, w.x, w.y, WORM_RADIUS, 3);
+        if (w.onGround) { w.vx = 0; w.vy = 0; }
+      }
+    }
 
     if (w.animTimer > 0) {
       w.animTimer -= dt;
@@ -356,12 +375,19 @@ export class GameImpl implements Game, EngineCtx {
       if (!groundBelow(this.terrain, w.x, w.y, WORM_RADIUS, 2)) {
         w.onGround = false;
       } else {
+        this.lastGroundedAt.set(w.id, this.time);
         w.vx = 0;
         w.vy = 0;
       }
     }
 
     if (!w.onGround) this.ballistic(w, dt);
+
+    if (w.onGround && this.bufferedJump?.wormId === w.id && this.bufferedJump.until >= this.time) {
+      this.jump(w, this.bufferedJump.back);
+    } else if (this.bufferedJump && this.bufferedJump.until < this.time) {
+      this.bufferedJump = null;
+    }
 
     if (w.y > this.waterLevel) {
       this.killWorm(w, "drown");
@@ -398,10 +424,13 @@ export class GameImpl implements Game, EngineCtx {
           this.damageWorm(w, dmg, "fall");
           if (!w.alive) return;
         }
-        if (Math.hypot(w.vx, w.vy) < WORM_REST_SPEED) {
+        if (n.y < -0.35 && groundBelow(this.terrain, w.x, w.y, WORM_RADIUS, 3) &&
+            !circleHits(this.terrain, w.x, w.y, WORM_RADIUS) &&
+            Math.hypot(w.vx, w.vy) < WORM_REST_SPEED) {
           w.vx = 0;
           w.vy = 0;
           w.onGround = true;
+          this.lastGroundedAt.set(w.id, this.time);
         }
         return;
       }
@@ -825,7 +854,12 @@ export class GameImpl implements Game, EngineCtx {
       w.jetThrust = 0.2;
       return;
     }
-    if (!w.onGround) return;
+    if (!w.onGround && (this.time - (this.lastGroundedAt.get(w.id) ?? -Infinity) > JUMP_GRACE_TIME || w.vy > 150)) {
+      this.bufferedJump = { wormId: w.id, back, until: this.time + JUMP_GRACE_TIME };
+      return;
+    }
+    this.bufferedJump = null;
+    this.lastGroundedAt.delete(w.id);
     w.onGround = false;
     if (back) {
       w.vx = -w.facing * WORM_JUMP_VX * 0.55;

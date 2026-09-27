@@ -51,6 +51,7 @@ interface Fireball {
   r: number;
   life: number;
   max: number;
+  rotation: number;
   colors: FireColors;
 }
 
@@ -91,13 +92,15 @@ interface Tracer {
   color: string;
 }
 
-const MAX_PARTICLES = 1400;
+// Limits update and draw cost on phones during volleys.
+const MAX_PARTICLES = 900;
 const MAX_TEXTS = 40;
 const MAX_FLASHES = 24;
 const MAX_FIREBALLS = 16;
 const MAX_RINGS = 24;
 const MAX_BURSTS = 24;
 const MAX_TRACERS = 48;
+const BURST_PATHS = new Map<number, Path2D>();
 
 type FireColors = readonly [string, string, string, string];
 
@@ -236,6 +239,7 @@ export class Particles {
         r: r * (i === 0 ? 1.5 : 1.05),
         life: 0,
         max: 0.3 + k * 0.16 + i * 0.04,
+        rotation: Math.random() * Math.PI * 2,
         colors: visual.fire,
       });
     }
@@ -677,7 +681,13 @@ export class Particles {
       const t = f.life / f.max;
       const r = f.r * (0.42 + t * 0.85);
       ctx.globalAlpha = Math.min(1, (1 - t) * 1.35);
-      if (fire) ctx.drawImage(fire, f.x - r, f.y - r, r * 2, r * 2);
+      if (fire) {
+        ctx.save();
+        ctx.translate(f.x, f.y);
+        ctx.rotate(f.rotation + t * 0.18);
+        ctx.drawImage(fire, -r, -r, r * 2, r * 2);
+        ctx.restore();
+      }
       else {
         ctx.fillStyle = "rgba(255,150,40,0.8)";
         ctx.beginPath();
@@ -698,17 +708,25 @@ export class Particles {
       ctx.globalAlpha = Math.max(0, (1 - progress) ** 2 * 0.72);
       ctx.fillStyle = burst.color;
       const outer = burst.radius * expansion;
-      const inner = burst.radius * (0.38 + progress * 0.6);
-      for (let i = 0; i < burst.rays; i++) {
-        const angle = i * Math.PI * 2 / burst.rays;
-        const length = outer * (i % 3 === 0 ? 1.35 : i % 2 === 0 ? 0.8 : 1);
-        const spread = Math.PI / burst.rays * 0.18;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(angle - spread) * inner, Math.sin(angle - spread) * inner);
-        ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
-        ctx.lineTo(Math.cos(angle + spread) * inner, Math.sin(angle + spread) * inner);
-        ctx.closePath();
-        ctx.fill();
+      const path = getBurstPath(burst.rays);
+      if (path) {
+        // One cached vector shape per ray count replaces dozens of path builds
+        // and trigonometric calls on every animation frame.
+        ctx.scale(outer, outer);
+        ctx.fill(path);
+      } else {
+        const inner = burst.radius * (0.38 + progress * 0.6);
+        for (let i = 0; i < burst.rays; i++) {
+          const angle = i * Math.PI * 2 / burst.rays;
+          const length = outer * (i % 3 === 0 ? 1.35 : i % 2 === 0 ? 0.8 : 1);
+          const spread = Math.PI / burst.rays * 0.18;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle - spread) * inner, Math.sin(angle - spread) * inner);
+          ctx.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+          ctx.lineTo(Math.cos(angle + spread) * inner, Math.sin(angle + spread) * inner);
+          ctx.closePath();
+          ctx.fill();
+        }
       }
       ctx.restore();
     }
@@ -851,6 +869,20 @@ export class Particles {
       cv.height = 128;
       const c = cv.getContext("2d");
       if (c) {
+        // A slightly uneven silhouette gives the pre-rendered flame a less
+        // synthetic edge without adding any work to the per-frame draw loop.
+        c.save();
+        c.beginPath();
+        for (let i = 0; i < 48; i++) {
+          const angle = (i / 48) * Math.PI * 2;
+          const wave = 0.94 + 0.045 * Math.sin(angle * 5 + 0.4) + 0.025 * Math.sin(angle * 9 + 1.7);
+          const x = 64 + Math.cos(angle) * 62 * wave;
+          const y = 64 + Math.sin(angle) * 62 * wave;
+          if (i === 0) c.moveTo(x, y);
+          else c.lineTo(x, y);
+        }
+        c.closePath();
+        c.clip();
         const g = c.createRadialGradient(64, 64, 0, 64, 64, 64);
         g.addColorStop(0, withAlpha(colors[0], 1));
         g.addColorStop(0.22, withAlpha(colors[1], 0.98));
@@ -859,6 +891,7 @@ export class Particles {
         g.addColorStop(1, withAlpha(colors[3], 0));
         c.fillStyle = g;
         c.fillRect(0, 0, 128, 128);
+        c.restore();
       } else cv = null;
     }
     this.fireSprites.set(key, cv);
@@ -868,6 +901,25 @@ export class Particles {
 
 function easeOut(t: number): number {
   return 1 - (1 - t) * (1 - t);
+}
+
+function getBurstPath(rays: number): Path2D | null {
+  if (typeof Path2D === "undefined") return null;
+  const cached = BURST_PATHS.get(rays);
+  if (cached) return cached;
+  const path = new Path2D();
+  const inner = 0.5;
+  for (let i = 0; i < rays; i++) {
+    const angle = i * Math.PI * 2 / rays;
+    const length = i % 3 === 0 ? 1.35 : i % 2 === 0 ? 0.8 : 1;
+    const spread = Math.PI / rays * 0.18;
+    path.moveTo(Math.cos(angle - spread) * inner, Math.sin(angle - spread) * inner);
+    path.lineTo(Math.cos(angle) * length, Math.sin(angle) * length);
+    path.lineTo(Math.cos(angle + spread) * inner, Math.sin(angle + spread) * inner);
+    path.closePath();
+  }
+  BURST_PATHS.set(rays, path);
+  return path;
 }
 
 /** Lekkie "przestrzelenie" skali przy pojawieniu się napisu. */

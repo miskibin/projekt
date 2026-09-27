@@ -21,8 +21,11 @@ export function viewportZoom(width: number, height: number): number {
   return Math.max(w / WORLD_WIDTH, (h / WORLD_HEIGHT) * PORTRAIT_FILL);
 }
 
-export function canvasResolution(width: number, height: number, deviceRatio: number) {
-  // Native phone/Retina resolution, with a bounded allocation on large 4K displays.
-  const ratio = Math.min(Math.max(1, deviceRatio), Math.sqrt(8_388_608 / Math.max(1, width * height)));
+export function canvasResolution(width: number, height: number, deviceRatio: number, touch = false) {
+  // Repainting a 3x full-screen canvas 60 times/s heats up phones quickly.
+  // Keep CSS/world coordinates unchanged while capping only the backing store.
+  const pixels = touch ? 2_500_000 : 8_388_608;
+  const ratio = Math.min(Math.max(1, deviceRatio), touch ? 1.75 : 3,
+    Math.sqrt(pixels / Math.max(1, width * height)));
   return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
 }

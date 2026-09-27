@@ -19,6 +19,13 @@ export interface CoverPlacement {
   height: number;
 }
 
+export const LANDSCAPE_ASSETS: Record<BgStyle, string> = {
+  mountains: "/assets/meadow-v2.webp",
+  dunes: "/assets/desert-v2.webp",
+  peaks: "/assets/winter-v2.webp",
+  spires: "/assets/volcano-v2.webp",
+};
+
 /**
  * Skaluje obraz jak CSS `cover`, zostawiając bezpieczny zapas na parallax.
  * panX / panY są znormalizowane do zakresu -1..1 i nigdy nie odsłaniają krawędzi obrazu.
@@ -171,14 +178,10 @@ export class Background {
   private layers: Layer[] = [];
   private builtFor: ThemePalette | null = null;
   private glow: { key: string; grad: CanvasGradient } | null = null;
-  private landscape: HTMLImageElement | null = null;
-  private foreground: HTMLImageElement | null = null;
-  private landscapeReady = false;
-  private foregroundReady = false;
+  private landscapes = new Map<BgStyle, { image: HTMLImageElement; ready: boolean }>();
 
   constructor(seed = 1) {
     this.regen(seed);
-    this.loadLandscape();
   }
 
   regen(seed: number): void {
@@ -364,30 +367,29 @@ export class Background {
     if (pal.embers) this.drawEmbers(ctx, inp, camX, W, H);
   }
 
-  private loadLandscape(): void {
+  private loadLandscape(style: BgStyle): void {
     if (typeof Image === "undefined") return;
-
-    const landscape = new Image();
-    landscape.decoding = "async";
-    landscape.onload = () => { this.landscapeReady = true; };
-    landscape.src = "/assets/alpine-valley.webp";
-    this.landscape = landscape;
-
-    const foreground = new Image();
-    foreground.decoding = "async";
-    foreground.onload = () => { this.foregroundReady = true; };
-    foreground.src = "/assets/alpine-valley-foreground.webp";
-    this.foreground = foreground;
+    if (this.landscapes.has(style)) return;
+    const image = new Image();
+    const asset = { image, ready: false };
+    this.landscapes.set(style, asset);
+    image.decoding = "async";
+    image.onload = () => { asset.ready = true; };
+    // Keep the failed entry; the procedural fallback remains available without
+    // retrying an image request on every animation frame.
+    image.src = LANDSCAPE_ASSETS[style];
   }
 
   /**
-   * Fotograficzna baza porusza się wolno, a wycięty pierwszy plan lasu szybciej.
-   * Obie warstwy mają zapas kadru, więc również przy skrajnej pozycji kamery
-   * nigdy nie pojawiają się puste pasy.
+   * One compressed plate per theme, fetched only when selected. The subtle pan
+   * is bounded by coverPlacement and costs one drawImage per frame.
    */
   private drawLandscape(ctx: CanvasRenderingContext2D, inp: BackgroundInput): boolean {
-    const image = this.landscape;
-    if (!this.landscapeReady || !image?.naturalWidth || !image.naturalHeight) return false;
+    const style = inp.palette.bgStyle;
+    this.loadLandscape(style);
+    const asset = this.landscapes.get(style);
+    const image = asset?.image;
+    if (!asset?.ready || !image?.naturalWidth || !image.naturalHeight) return false;
 
     const { width: W, height: H, camera, palette: pal } = inp;
     const view = camera.viewRect();
@@ -399,23 +401,10 @@ export class Background {
     const back = coverPlacement(image.naturalWidth, image.naturalHeight, W, H, nx * 0.28, ny * 0.18);
     ctx.save();
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(image, back.x, back.y, back.width, back.height);
 
-    const front = this.foreground;
-    if (this.foregroundReady && front?.naturalWidth && front.naturalHeight) {
-      const near = coverPlacement(front.naturalWidth, front.naturalHeight, W, H, nx * 0.72, ny * 0.42);
-      ctx.drawImage(front, near.x, near.y, near.width, near.height);
-    }
-
-    // Motywy nadal różnią się temperaturą i nastrojem, ale zachowują dostarczony pejzaż.
-    const tint = landscapeTint(pal.bgStyle);
-    if (tint) {
-      ctx.fillStyle = tint;
-      ctx.fillRect(0, 0, W, H);
-    }
-
-    // Przyciemnia dół obrazu, aby teren, woda i robaki nie ginęły w szczegółach lasu.
+    // Terrain and worms need legibility against the detailed lower half.
     const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
     depth.addColorStop(0, "rgba(4,12,24,0)");
     depth.addColorStop(0.72, "rgba(4,12,24,0.08)");
@@ -515,15 +504,6 @@ export class Background {
       return { canvas, spec, ground: color };
     });
     this.builtFor = pal;
-  }
-}
-
-function landscapeTint(style: BgStyle): string | null {
-  switch (style) {
-    case "peaks": return "rgba(30,58,92,0.12)";
-    case "dunes": return "rgba(126,69,18,0.16)";
-    case "spires": return "rgba(58,4,12,0.38)";
-    default: return null;
   }
 }
 

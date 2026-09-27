@@ -196,10 +196,10 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 #screen-game {
   touch-action: none; user-select: none; -webkit-user-select: none; background: #05070c;
   /* Wspólny język HUD-u: ciemne, półprzezroczyste granatowe kafle z jasną obwódką. */
-  --hud-bg: rgba(20,35,55,.72);
-  --hud-bg-hi: rgba(46,78,116,.85);
-  --hud-line: rgba(190,215,255,.16);
-  --hud-line-hi: rgba(214,234,255,.34);
+  --hud-bg: rgba(13,25,41,.9);
+  --hud-bg-hi: rgba(46,78,116,.94);
+  --hud-line: rgba(205,226,255,.24);
+  --hud-line-hi: rgba(224,240,255,.56);
   --hud-r: 12px;
 }
 #game-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; background: #05070c; outline: none; touch-action: none; }
@@ -220,8 +220,9 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
   height: 48px; min-width: 48px; padding: 0 10px;
   border: 1px solid var(--hud-line); border-radius: var(--hud-r);
-  background: var(--hud-bg); color: #fff;
+  background: linear-gradient(160deg, rgba(39,58,81,.94), var(--hud-bg)); color: #fff;
   font-size: 20px; line-height: 1; cursor: pointer; touch-action: manipulation;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 3px 10px rgba(0,0,0,.24);
 }
 .game-tools .game-tool { width: 48px; padding: 0; }
 .game-tool:hover, .game-tool[aria-pressed=true] { background: var(--hud-bg-hi); border-color: var(--hud-line-hi); }
@@ -258,32 +259,33 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .touch-actions { display: flex; align-items: flex-end; gap: 12px; pointer-events: none; }
 .touch-aim-key {
   width: 58px; height: 58px; border-radius: 18px; flex-direction: column; gap: 1px;
-  border: 2px solid rgba(113,190,255,.72); background: rgba(23,52,80,.82); color: #d9f1ff; font-size: 19px;
+  border: 2px solid rgba(126,190,244,.76); background: linear-gradient(155deg, rgba(35,76,111,.94), rgba(16,39,62,.96)); color: #e2f3ff; font-size: 19px;
 }
 .touch-aim-key[data-pressed=true] { background: rgba(61,143,209,.55); border-color: rgba(190,229,255,.95); transform: scale(.96); }
 .touch-move-key {
   width: 76px; height: 76px; border-radius: 22px; flex-direction: column; gap: 3px;
-  border: 2px solid rgba(160,205,255,.72); background: rgba(20,43,70,.82); color: #e4f3ff;
+  border: 2px solid rgba(173,210,250,.76); background: linear-gradient(155deg, rgba(38,65,93,.95), rgba(17,34,55,.96)); color: #eff7ff;
 }
 .touch-move-key[data-pressed=true] { background: rgba(69,137,202,.58); border-color: rgba(210,238,255,.98); transform: scale(.96); }
 .touch-key {
   pointer-events: auto; width: 64px; height: 64px; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid var(--hud-line); border-radius: 14px;
-  background: var(--hud-bg); color: #fff;
+  background: linear-gradient(155deg, rgba(40,59,83,.95), var(--hud-bg)); color: #fff;
   font: 700 26px var(--font); line-height: 1;
   touch-action: none; -webkit-touch-callout: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 4px 12px rgba(0,0,0,.28);
 }
-.touch-key small { display: block; font: 800 9px var(--font); letter-spacing: .7px; opacity: .78; pointer-events: none; }
+.touch-key small { display: block; font: 800 9px var(--font); letter-spacing: .7px; opacity: .9; pointer-events: none; }
 .touch-key svg { width: 26px; height: 26px; display: block; pointer-events: none; }
 .touch-key[data-pressed=true] { background: var(--hud-bg-hi); border-color: var(--hud-line-hi); }
 .touch-fire {
   width: 110px; height: 110px; border-radius: 50%; font-size: 42px; flex-direction: column; gap: 1px;
-  border: 3px solid rgba(240,190,110,.8);
+  border: 3px solid rgba(255,205,125,.9); background: linear-gradient(145deg, rgba(91,63,30,.96), rgba(49,35,22,.96)); color: #fff2cf;
 }
 .touch-jump {
   width: 76px; height: 76px; border-radius: 50%; flex-direction: column; gap: 2px;
-  border: 2px solid rgba(126,211,151,.8); background: rgba(25,64,53,.78); color: #d8ffe3;
+  border: 2px solid rgba(141,225,165,.88); background: linear-gradient(145deg, rgba(35,91,65,.96), rgba(18,48,40,.96)); color: #e1ffe9;
 }
 .touch-jump[data-pressed=true] { background: rgba(66,170,99,.52); border-color: rgba(177,255,199,.95); transform: scale(.96); }
 .touch-fire[data-pressed=true] { background: rgba(255,198,92,.3); border-color: rgba(255,214,140,.95); }
@@ -305,6 +307,17 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .touch-aim-key { width: 48px; height: 48px; border-radius: 15px; font-size: 16px; }
   .touch-jump { width: 62px; height: 62px; font-size: 24px; }
   .touch-fire { width: 88px; height: 88px; font-size: 34px; }
+}
+@media (max-height: 390px) and (max-width: 600px) {
+  .touch-move { left: max(7px, env(safe-area-inset-left)); bottom: max(7px, env(safe-area-inset-bottom)); gap: 5px; }
+  .touch-move-key { width: 52px; height: 52px; border-radius: 16px; font-size: 20px; }
+  .touch-right { right: max(7px, env(safe-area-inset-right)); bottom: max(7px, env(safe-area-inset-bottom)); gap: 5px; }
+  .touch-actions { gap: 5px; }
+  .touch-aim { gap: 4px; }
+  .touch-aim-key { width: 44px; height: 44px; border-radius: 13px; font-size: 15px; }
+  .touch-jump { width: 54px; height: 54px; font-size: 22px; }
+  .touch-fire { width: 74px; height: 74px; font-size: 30px; }
+  .touch-key small { font-size: 8px; }
 }
 
 .overlay {

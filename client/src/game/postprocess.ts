@@ -16,34 +16,38 @@ export class PostProcess {
     if (width <= 0 || height <= 0) return;
     this.impact *= Math.exp(-dt * 5.2);
 
-    const scale = Math.min(0.5, 560 / Math.max(width, height));
-    const bw = Math.max(1, Math.round(width * scale));
-    const bh = Math.max(1, Math.round(height * scale));
-    if (!this.buffer) this.buffer = document.createElement("canvas");
-    if (this.buffer.width !== bw || this.buffer.height !== bh) {
-      this.buffer.width = bw;
-      this.buffer.height = bh;
-    }
-    const glow = this.buffer.getContext("2d");
-    if (glow) {
-      glow.clearRect(0, 0, bw, bh);
-      glow.drawImage(ctx.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height, 0, 0, bw, bh);
-
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
-      ctx.globalAlpha = 0.1 + this.impact * 0.1;
-      ctx.filter = `blur(${8 + this.impact * 7}px) saturate(${1.18 + this.impact * 0.45})`;
-      ctx.drawImage(this.buffer, 0, 0, bw, bh, 0, 0, width, height);
-
-      if (this.impact > 0.025) {
-        const shift = 1.5 + this.impact * 5;
-        ctx.globalAlpha = this.impact * 0.065;
-        ctx.filter = "hue-rotate(150deg) saturate(2.8)";
-        ctx.drawImage(this.buffer, 0, 0, bw, bh, -shift, 0, width, height);
-        ctx.filter = "hue-rotate(-75deg) saturate(2.8)";
-        ctx.drawImage(this.buffer, 0, 0, bw, bh, shift, 0, width, height);
+    // Copy/blur the full frame only during a fresh impact. The smaller buffer
+    // keeps the short bloom pulse affordable on mobile GPUs.
+    if (this.impact > 0.035) {
+      const scale = Math.min(0.42, 360 / Math.max(width, height));
+      const bw = Math.max(1, Math.round(width * scale));
+      const bh = Math.max(1, Math.round(height * scale));
+      if (!this.buffer) this.buffer = document.createElement("canvas");
+      if (this.buffer.width !== bw || this.buffer.height !== bh) {
+        this.buffer.width = bw;
+        this.buffer.height = bh;
       }
-      ctx.restore();
+      const glow = this.buffer.getContext("2d");
+      if (glow) {
+        glow.clearRect(0, 0, bw, bh);
+        glow.drawImage(ctx.canvas, 0, 0, ctx.canvas.width, ctx.canvas.height, 0, 0, bw, bh);
+
+        ctx.save();
+        ctx.globalCompositeOperation = "screen";
+        ctx.globalAlpha = 0.12 + this.impact * 0.16;
+        ctx.filter = `blur(${7 + this.impact * 6}px) saturate(${1.25 + this.impact * 0.65})`;
+        ctx.drawImage(this.buffer, 0, 0, bw, bh, 0, 0, width, height);
+
+        if (this.impact > 0.24) {
+          const shift = 1 + this.impact * 4;
+          ctx.globalAlpha = this.impact * 0.065;
+          ctx.filter = "hue-rotate(150deg) saturate(2.8)";
+          ctx.drawImage(this.buffer, 0, 0, bw, bh, -shift, 0, width, height);
+          ctx.filter = "hue-rotate(-75deg) saturate(2.8)";
+          ctx.drawImage(this.buffer, 0, 0, bw, bh, shift, 0, width, height);
+        }
+        ctx.restore();
+      }
     }
 
     // Stały, delikatny grading spaja niebo, teren i efekty.

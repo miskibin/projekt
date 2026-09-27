@@ -60,6 +60,8 @@ export function terrainNormal(t: Terrain, x: number, y: number, r: number): { x:
 
 /** Wypycha punkt z terenu wzdłuż normalnej. Zwraca true jeśli udało się wyjść. */
 export function pushOut(t: Terrain, pos: { x: number; y: number }, r: number, maxSteps = 24): boolean {
+  const originX = pos.x;
+  const originY = pos.y;
   for (let i = 0; i < maxSteps; i++) {
     if (!circleHits(t, pos.x, pos.y, r)) return true;
     const n = terrainNormal(t, pos.x, pos.y, r);
@@ -67,12 +69,36 @@ export function pushOut(t: Terrain, pos: { x: number; y: number }, r: number, ma
     pos.y += n.y;
     if (pos.y < -2000) return false;
   }
-  return !circleHits(t, pos.x, pos.y, r);
+  if (!circleHits(t, pos.x, pos.y, r)) return true;
+  // In a crater or narrow notch the sampled normal can point into another wall.
+  // Search only after the cheap normal-based solution fails; favour a free spot
+  // above the old position so a worm is not pushed beneath the ground.
+  for (let d = 1; d <= maxSteps; d++) {
+    const offsets = [[0, -d], [-d, -d], [d, -d], [-d, 0], [d, 0], [0, d]];
+    for (const [ox, oy] of offsets) {
+      const x = clamp(originX + ox, r, t.width - 1 - r);
+      const y = originY + oy;
+      if (!circleHits(t, x, y, r)) {
+        pos.x = x;
+        pos.y = y;
+        return true;
+      }
+    }
+  }
+  pos.x = originX;
+  pos.y = originY;
+  return false;
 }
 
 /** Czy pod okręgiem (w odległości do `depth` px) jest ziemia? */
 export function groundBelow(t: Terrain, x: number, y: number, r: number, depth = 2): boolean {
-  for (let d = 1; d <= depth; d++) if (circleHits(t, x, y + d, r)) return true;
+  // A wall beside the worm touches its collision circle too, but it is not
+  // ground. Sample the feet, including two points for the edge of a slope.
+  for (let d = 1; d <= depth; d++) {
+    const footY = y + r + d;
+    if (t.isSolid(x, footY) || t.isSolid(x - r * 0.5, footY - 1) ||
+        t.isSolid(x + r * 0.5, footY - 1)) return true;
+  }
   return false;
 }
 

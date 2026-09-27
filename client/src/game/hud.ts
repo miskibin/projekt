@@ -61,31 +61,35 @@ export class Hud {
     ctx.textBaseline = "middle";
     const clockBottom = this.drawClock(ctx, inp, W, narrow);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
-    if (inp.stale) this.drawBanner(ctx, "Słaby sygnał · czekam na synchronizację", W, clockBottom + 28, narrow);
+    const feedBottom = this.feed.length
+      ? (narrow ? clockBottom + 12 : 74) + (this.feed.length - 1) * (narrow ? 25 : 27) + 22
+      : clockBottom;
+    const bannerY = Math.max(clockBottom + (narrow ? 28 : 32), feedBottom + (narrow ? 10 : 12));
+    if (inp.stale) this.drawBanner(ctx, "Słaby sygnał · czekam na synchronizację", W, bannerY, narrow);
 
     // Krótkie komunikaty zamiast stałych podpisów i dużych kart na środku ekranu.
     if (this.notice) {
       ctx.globalAlpha = Math.min(1, this.notice.life * 6, (this.notice.max - this.notice.life) * 3);
-      this.drawBanner(ctx, this.notice.text, W, clockBottom + (narrow ? 26 : 32), narrow);
+      this.drawBanner(ctx, this.notice.text, W, bannerY + (inp.stale ? (narrow ? 34 : 40) : 0), narrow);
       ctx.globalAlpha = 1;
     }
 
     // Kill feed – pod przyciskami w prawym górnym rogu, z kropką w kolorze drużyny.
-    ctx.font = "600 " + (narrow ? 11 : 12) + "px " + FONT;
+    ctx.font = "650 " + (narrow ? 11 : 12) + "px " + FONT;
     ctx.textAlign = "right";
     const feedTop = narrow ? clockBottom + 12 : 74;
-    const maxWidth = Math.min(W * 0.34, 230);
+    const rowWidth = Math.min(Math.max(132, W * 0.38), 242);
+    const textWidth = rowWidth - 40;
     this.feed.forEach((item, index) => {
-      const y = feedTop + index * (narrow ? 16 : 18);
+      const rowHeight = narrow ? 22 : 24;
+      const y = feedTop + index * (rowHeight + 3);
       ctx.globalAlpha = Math.min(1, 4 - item.life);
+      panel(ctx, W - rowWidth - 10, y - rowHeight / 2, rowWidth, rowHeight, rowHeight / 2);
       ctx.fillStyle = TEXT;
-      ctx.shadowColor = "rgba(0,0,0,.65)";
-      ctx.shadowBlur = 4;
-      ctx.fillText(item.text, W - 24, y, maxWidth);
-      ctx.shadowBlur = 0;
+      ctx.fillText(fitText(ctx, item.text, textWidth), W - 36, y);
       ctx.fillStyle = item.color;
       ctx.beginPath();
-      ctx.arc(W - 14, y, 3.5, 0, Math.PI * 2);
+      ctx.arc(W - 22, y, 3.5, 0, Math.PI * 2);
       ctx.fill();
     });
     ctx.globalAlpha = 1;
@@ -105,32 +109,58 @@ export class Hud {
     const seconds = Math.max(0, Math.ceil(turn.timeLeft));
     const hot = seconds <= 10 && turn.phase === "active";
 
-    ctx.textAlign = "left";
-    ctx.font = "700 " + (narrow ? 10 : 12) + "px " + FONT;
+    // Three clear zones keep round, timer, and wind readable at phone scale.
+    const leftEdge = px + (narrow ? 49 : 62);
+    const rightEdge = px + (narrow ? 113 : 136);
+    ctx.strokeStyle = "rgba(190,215,255,.13)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(leftEdge, py + 8);
+    ctx.lineTo(leftEdge, py + ph - 8);
+    ctx.moveTo(rightEdge, py + 8);
+    ctx.lineTo(rightEdge, py + ph - 8);
+    ctx.stroke();
+
+    const roundW = narrow ? 36 : 44;
+    const roundH = narrow ? 24 : 28;
+    const roundX = px + (narrow ? 7 : 9);
+    roundRect(ctx, roundX, cy - roundH / 2, roundW, roundH, roundH / 2);
+    ctx.fillStyle = "rgba(255,255,255,.07)";
+    ctx.fill();
+    ctx.fillStyle = teamColor(turn.activeTeam);
+    ctx.beginPath();
+    ctx.arc(roundX + (narrow ? 7 : 8), cy, narrow ? 2.5 : 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.font = "750 " + (narrow ? 9 : 10) + "px " + FONT;
     ctx.fillStyle = turn.suddenDeath ? ALERT : MUTED;
-    ctx.fillText("R" + turn.round, px + (narrow ? 12 : 16), cy);
+    ctx.fillText("R " + turn.round, roundX + roundW / 2 + (narrow ? 2 : 3), cy);
 
     ctx.textAlign = "center";
     ctx.font = "800 " + (narrow ? 22 : 27) + "px " + FONT;
     ctx.fillStyle = hot ? ALERT : TEXT;
-    ctx.fillText(String(seconds).padStart(2, "0"), px + pw * 0.43, cy + 1);
+    ctx.fillText(String(seconds).padStart(2, "0"), px + (narrow ? 81 : 99), cy + 1);
 
-    const cx = px + pw * 0.77;
-    const half = narrow ? 32 : 42;
+    const cx = px + (narrow ? 162 : 204);
+    const half = narrow ? 23 : 30;
+    ctx.font = "750 " + (narrow ? 7 : 8) + "px " + FONT;
+    ctx.fillStyle = MUTED;
+    ctx.textAlign = "center";
+    ctx.fillText("WIATR", cx, cy - (narrow ? 12 : 14));
     ctx.fillStyle = "rgba(255,255,255,.16)";
-    roundRect(ctx, cx - half, cy - 2, half * 2, 4, 2);
+    roundRect(ctx, cx - half, cy + 4, half * 2, 4, 2);
     ctx.fill();
     const wind = Math.max(-1, Math.min(1, turn.wind / MAX_WIND));
     const len = Math.abs(wind) * half;
     if (len > 1) {
       ctx.fillStyle = WIND;
-      roundRect(ctx, wind < 0 ? cx - len : cx, cy - 2, len, 4, 2);
+      roundRect(ctx, wind < 0 ? cx - len : cx, cy + 4, len, 4, 2);
       ctx.fill();
     }
     ctx.fillStyle = "rgba(255,255,255,.45)";
-    ctx.fillRect(cx - 0.5, cy - 5, 1, 10);
-    arrow(ctx, cx - half - 7, cy, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
-    arrow(ctx, cx + half + 7, cy, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
+    ctx.fillRect(cx - 0.5, cy + 1, 1, 10);
+    arrow(ctx, cx - half - 5, cy + 6, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
+    arrow(ctx, cx + half + 5, cy + 6, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
     return py + ph;
   }
 
@@ -197,6 +227,15 @@ function arrow(ctx: CanvasRenderingContext2D, cx: number, cy: number, dir: numbe
   ctx.lineTo(cx - dir * 3, cy + 4.5);
   ctx.closePath();
   ctx.fill();
+}
+
+/** Keep kill-feed text at its intended font size instead of squeezing long names. */
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  const ellipsis = "…";
+  let end = text.length;
+  while (end > 0 && ctx.measureText(text.slice(0, end) + ellipsis).width > maxWidth) end--;
+  return end > 0 ? text.slice(0, end) + ellipsis : ellipsis;
 }
 
 export { TEAM_COLORS };

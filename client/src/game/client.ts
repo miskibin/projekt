@@ -337,6 +337,9 @@ export class GameClient {
   private frame = (now: number): void => {
     if (!this.running) return;
     this.raf = requestAnimationFrame(this.frame);
+    // Turn-based controls remain responsive at ~30 fps on 60 Hz phones; half
+    // as many full canvas repaints saves GPU bandwidth and battery.
+    if (this.touchEnabled && now - this.last < 28) return;
     const dt = Math.min(0.05, Math.max(0, (now - this.last) / 1000));
     this.last = now;
     this.time += dt;
@@ -840,7 +843,7 @@ export class GameClient {
     this.pixelRatio = window.devicePixelRatio || 1;
     const w = this.els.canvas.clientWidth || window.innerWidth;
     const h = this.els.canvas.clientHeight || window.innerHeight;
-    const resolution = canvasResolution(w, h, this.pixelRatio);
+    const resolution = canvasResolution(w, h, this.pixelRatio, this.touchEnabled);
     if (this.els.canvas.width !== resolution.width) this.els.canvas.width = resolution.width;
     if (this.els.canvas.height !== resolution.height) this.els.canvas.height = resolution.height;
     this.ctx.setTransform(resolution.width / w, 0, 0, resolution.height / h, 0, 0);

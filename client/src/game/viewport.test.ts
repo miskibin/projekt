@@ -4,8 +4,11 @@ import { Camera } from "./camera";
 import { canvasResolution, viewportZoom } from "./viewport";
 
 describe("responsive game canvas", () => {
-  it("uses phone DPR 3 for a crisp canvas without enlarging the interface", () => {
+  it("caps mobile backing resolution while preserving CSS dimensions", () => {
     expect(canvasResolution(830, 360, 3)).toEqual({ width: 2490, height: 1080 });
+    expect(canvasResolution(830, 360, 3, true)).toEqual({ width: 1453, height: 630 });
+    const portrait = canvasResolution(390, 844, 3, true);
+    expect(portrait.width * portrait.height).toBeLessThan(2_500_000);
     expect(canvasResolution(1280, 720, 1)).toEqual({ width: 1280, height: 720 });
     const large = canvasResolution(3840, 2160, 3);
     expect(large.width * large.height).toBeLessThan(8_400_000);

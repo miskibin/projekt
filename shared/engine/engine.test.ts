@@ -3,7 +3,7 @@ import { FIXED_DT, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH, WORM_RADIUS } f
 import type { GameConfig, GameEvent, InputState, WeaponId } from "../protocol";
 import { createGame, type Game, type TeamSetup } from "./index";
 import { GameImpl } from "./game";
-import { circleHits } from "./physics";
+import { circleHits, groundBelow } from "./physics";
 import { placeMine } from "./crates";
 import { detonateProjectile } from "./projectiles";
 import { Terrain } from "./terrain";
@@ -25,6 +25,50 @@ function setups(n = 2): TeamSetup[] {
 }
 
 const NEUTRAL: InputState = { left: false, right: false, aim: 0, charge: false };
+
+describe("skok i kolizje", () => {
+  it("boczna ściana nie udaje podłoża", () => {
+    const t = new Terrain(100, 100);
+    for (let y = 20; y < 75; y++) for (let x = 52; x < 75; x++) t.set(x, y, 1);
+    expect(circleHits(t, 45, 45, 8)).toBe(true);
+    expect(groundBelow(t, 45, 45, 8, 3)).toBe(false);
+  });
+
+  it("skok naciśnięty tuż przed lądowaniem wykonuje się po kontakcie z podłożem", () => {
+    const g = createGame(cfg(), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const w = gi.worms.find((worm) => worm.id === g.snapshot().turn.activeWormId)!;
+    w.x = 500; w.y = 438; w.vx = 0; w.vy = 100; w.onGround = false;
+    g.applyAction(w.team, { kind: "jump" });
+    let jumped = false;
+    for (let i = 0; i < 8; i++) {
+      g.step(FIXED_DT);
+      if (w.vy < -150) jumped = true;
+    }
+    expect(jumped).toBe(true);
+  });
+
+  it("robak osadzony w zmienionym terenie wraca do wolnego miejsca", () => {
+    const g = createGame(cfg(), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const w = gi.worms.find((worm) => worm.id === g.snapshot().turn.activeWormId)!;
+    w.x = 500; w.y = 447; w.vx = 0; w.vy = 0; w.onGround = true;
+    expect(circleHits(gi.terrain, w.x, w.y, WORM_RADIUS)).toBe(true);
+    g.step(FIXED_DT);
+    expect(circleHits(gi.terrain, w.x, w.y, WORM_RADIUS)).toBe(false);
+    expect(w.y).toBeLessThan(447);
+  });
+});
 
 function stepN(g: Game, n: number, sink?: GameEvent[]): void {
   for (let i = 0; i < n; i++) {

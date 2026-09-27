@@ -15,7 +15,8 @@ describe("efekty wybuchów", () => {
   it("salwa wielu wybuchów ma ograniczoną liczbę obiektów", () => {
     const particles = new Particles();
     for (let i = 0; i < 60; i++) particles.explosion(400 + i, 500, 24, "#806040", "airstrike");
-    expect(particles.count).toBeLessThanOrEqual(1400 + 24 + 16 + 24 + 24);
+    // Salwa zostaje efektowna, ale nie może zwiększać kosztu ponad budżet mobilny.
+    expect(particles.count).toBeLessThanOrEqual(900 + 24 + 16 + 24 + 24);
     particles.clear();
     expect(particles.count).toBe(0);
   });
