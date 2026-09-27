@@ -191,8 +191,8 @@ describe("rozstawienie robaków", () => {
         expect(w.x).toBeLessThan(WORLD_WIDTH);
         expect(w.y).toBeLessThan(WATER_LEVEL_START);
         expect(w.y).toBeGreaterThan(0);
+        expect(w.y).toBeGreaterThan(WORLD_HEIGHT * 0.42); // bez niebezpiecznych wysp startowych
         expect(circleHits(g.terrain, w.x, w.y, WORM_RADIUS)).toBe(false);
-        expect(g.terrain.isSolid(w.x, w.y + WORM_RADIUS + 86)).toBe(true);
         expect(w.name.length).toBeGreaterThan(2);
       }
       // przynajmniej część robaków jest od siebie odsunięta

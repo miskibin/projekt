@@ -207,9 +207,14 @@ export class GameImpl implements Game, EngineCtx {
         const surf = this.terrain.surfaceY(x);
         if (surf >= WORLD_HEIGHT) continue;
         if (surf >= this.waterLevel - WORM_RADIUS - 6) continue; // ląd pod wodą
+        if (surf < WORLD_HEIGHT * 0.43) continue; // wysokie wyspy są do zdobycia, nie na start
         // A high floating island may be hundreds of pixels above solid land.
         // Starting there forces a damaging fall before either player moves.
-        if (!this.terrain.isSolid(x, Math.min(WORLD_HEIGHT - 1, surf + 85))) continue;
+        let support = 0;
+        for (const depth of [90, 150, 210]) {
+          if (this.terrain.isSolid(x, Math.min(WORLD_HEIGHT - 50, surf + depth))) support++;
+        }
+        if (support < 2) continue;
         const y = surf - WORM_RADIUS - 1;
         if (y < 12) continue;
         if (circleHits(this.terrain, x, y, WORM_RADIUS)) continue;
