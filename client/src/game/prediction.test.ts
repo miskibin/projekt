@@ -26,6 +26,7 @@ describe("lokalna predykcja", () => {
   it("pozwala od razu chodzić i celować, bez ruszania rywala lub wyniku", () => {
     const { terrain, snapshot, state } = setup();
     const predictor = new LocalPrediction();
+    predictor.onInputSent(1, input, 1000);
     predictor.onSnapshot(snapshot, 1000);
     let predicted = state;
     for (let i = 1; i <= 12; i++) predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1000 + i * 16);
@@ -41,13 +42,15 @@ describe("lokalna predykcja", () => {
   it("zatrzymuje przewidywanie po zaniku danych i gładko uzgadnia nowy snapshot", () => {
     const { terrain, snapshot, state } = setup();
     const predictor = new LocalPrediction();
+    predictor.onInputSent(1, input, 1000);
     predictor.onSnapshot(snapshot, 1000);
     let predicted = state;
     for (let i = 1; i <= 42; i++) predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1000 + i * 16);
     const x = predicted.worms[0].x;
+    expect(x).toBeLessThan(90); // bez potwierdzenia nie idzie setki pikseli do przodu
     predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1900);
     expect(predicted.worms[0].x).toBeCloseTo(x, 3);
-    predictor.onSnapshot({ ...snapshot, tick: 2, worms: [{ ...snapshot.worms[0], x: 82 }, snapshot.worms[1]] }, 1900);
+    predictor.onSnapshot({ ...snapshot, tick: 2, inputAcks: { 0: 1 }, worms: [{ ...snapshot.worms[0], x: 82 }, snapshot.worms[1]] }, 1900);
     predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1916);
     expect(predicted.worms[0].x).toBeLessThan(x + 2);
     expect(predicted.worms[0].x).toBeGreaterThan(82);
@@ -57,9 +60,34 @@ describe("lokalna predykcja", () => {
     const { terrain, snapshot, state } = setup();
     for (let y = 65; y < 100; y++) terrain.set(115, y, 1);
     const predictor = new LocalPrediction();
+    predictor.onInputSent(1, input, 1000);
     predictor.onSnapshot(snapshot, 1000);
     let predicted = state;
     for (let i = 1; i <= 40; i++) predicted = predictor.apply(state, terrain, input, 0, 1 / 60, 1000 + i * 16);
     expect(predicted.worms[0].x).toBeLessThan(110);
+  });
+
+  it("opóźniony snapshot nie powoduje cofnięcia podczas marszu, a STOP nie cofa do starej pozycji", () => {
+    const { terrain, snapshot, state } = setup();
+    const predictor = new LocalPrediction();
+    predictor.onInputSent(1, input, 1000);
+    predictor.onSnapshot({ ...snapshot, inputAcks: { 0: 1 } }, 1000);
+    let previous = 80;
+    for (let i = 1; i <= 15; i++) {
+      const now = 1000 + i * 16;
+      if (i === 4 || i === 8 || i === 12) {
+        const x = 80 + i / 3;
+        predictor.onSnapshot({ ...snapshot, tick: i, inputAcks: { 0: 1 },
+          worms: [{ ...snapshot.worms[0], x }, snapshot.worms[1]] }, now);
+      }
+      const current = predictor.apply(state, terrain, input, 0, 1 / 60, now, 80).worms[0].x;
+      expect(current).toBeGreaterThanOrEqual(previous - 0.001);
+      previous = current;
+    }
+    const stopped = { ...input, right: false };
+    predictor.onInputSent(2, stopped, 1240);
+    predictor.onSnapshot({ ...snapshot, tick: 20, inputAcks: { 0: 1 },
+      worms: [{ ...snapshot.worms[0], x: previous - 5 }, snapshot.worms[1]] }, 1240);
+    expect(predictor.apply(state, terrain, stopped, 0, 1 / 60, 1256).worms[0].x).toBeCloseTo(previous, 3);
   });
 });

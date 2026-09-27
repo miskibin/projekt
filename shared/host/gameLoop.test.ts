@@ -270,6 +270,33 @@ describe("GameLoop – koniec gry", () => {
 });
 
 describe("GameLoop – wejście gracza", () => {
+  it("potwierdza wejścia w snapshocie, pomija duplikaty i spóźnione STOP", () => {
+    const h = setup();
+    const moving = { left: false, right: true, aim: 0, charge: false };
+    const stopped = { ...moving, right: false };
+    const turn = { round: 2, wormId: 0 };
+    expect(h.loop.applyInput(0, moving, 11, turn)).toBe(true);
+    expect(h.loop.applyInput(0, stopped, 10, turn)).toBe(true);
+    expect(h.game.inputs).toEqual([[0, moving]]);
+    expect(h.loop.snapshotMessage()).toMatchObject({ t: "snapshot", snapshot: { inputAcks: { 0: 11 } } });
+    expect(h.loop.applyInput(0, stopped, 12, { round: 1, wormId: 0 })).toBe(true);
+    expect(h.game.inputs).toHaveLength(1);
+    expect(h.loop.applyInput(0, stopped, 12, turn)).toBe(true);
+    expect(h.game.inputs).toHaveLength(2);
+    expect(h.loop.snapshotMessage()).toMatchObject({ t: "snapshot", snapshot: { inputAcks: { 0: 12 } } });
+  });
+
+  it("strzał z opóźnionego pakietu wykonuje najwyżej raz i nigdy w następnej turze", () => {
+    const h = setup();
+    const fire = { kind: "fire" as const, power: 0.5 };
+    expect(h.loop.applyAction(0, fire, 1, { round: 2, wormId: 0 })).toBe(true);
+    expect(h.loop.applyAction(0, fire, 1, { round: 2, wormId: 0 })).toBe(true);
+    expect(h.loop.applyAction(0, fire, 2, { round: 1, wormId: 0 })).toBe(true);
+    expect(h.game.actions).toHaveLength(1);
+    expect(h.loop.applyAction(0, fire, 3, { round: 2, wormId: 0 })).toBe(true);
+    expect(h.game.actions).toHaveLength(2);
+  });
+
   it("przekazuje poprawny input i akcję do silnika", () => {
     const h = setup();
     expect(h.loop.applyInput(0, { left: true, right: false, aim: -0.5, charge: false })).toBe(true);

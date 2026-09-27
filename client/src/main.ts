@@ -242,6 +242,8 @@ function handle(msg: ServerMessage): void {
       break;
 
     case "gameStart": {
+      // Powtórzony handshake ma uzupełnić zgubiony stan, a nie resetować trwającą grę.
+      if (inGame && !gameOverOpen) break;
       inGame = true;
       gameOverOpen = false;
       showScreen("game");

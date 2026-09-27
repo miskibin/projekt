@@ -207,9 +207,9 @@ export class RoomHost {
       case "startGame":
         return this.onStartGame(s);
       case "input":
-        return this.onInput(s, msg.state);
+        return this.onInput(s, msg.state, msg.seq, msg.turn);
       case "action":
-        return this.onAction(s, msg.action);
+        return this.onAction(s, msg.action, msg.seq, msg.turn);
       case "ping":
         s.peer.send({ t: "pong", ts: typeof msg.ts === "number" && Number.isFinite(msg.ts) ? msg.ts : this.nowMs });
         return;
@@ -259,6 +259,17 @@ export class RoomHost {
   private onJoinRoom(s: HostSession, code: unknown): void {
     if (typeof code !== "string") {
       this.error(s, "Podaj kod pokoju.");
+      return;
+    }
+    // Ponowiona paczka JOIN nie może wyrzucić gracza z jego własnego pokoju.
+    if (s.room?.code === code.trim().toUpperCase() && s.player) {
+      s.peer.send({ t: "roomState", room: toRoomState(s.room) });
+      if (s.room.phase === "playing" && s.room.loop) {
+        s.peer.send({ t: "gameStart", config: { ...s.room.config },
+          players: s.room.players.map(toPlayerInfo), yourTeam: s.player.team });
+        s.peer.send({ t: "terrainSync", terrain: s.room.loop.terrainSync() });
+        s.peer.send(s.room.loop.snapshotMessage());
+      }
       return;
     }
     if (s.room) this.onLeaveRoom(s);
@@ -457,16 +468,17 @@ export class RoomHost {
 
   // ---------- gra ----------
 
-  private onInput(s: HostSession, state: unknown): void {
+  private onInput(s: HostSession, state: unknown, seq?: number, turn?: { round: number; wormId: number }): void {
     const { room, player } = s;
     if (!room || !player || !room.loop || room.phase !== "playing") return;
-    if (!room.loop.applyInput(player.team, state)) this.error(s, "Nieprawidłowy input.");
+    if (!room.loop.applyInput(player.team, state, seq, turn)) this.error(s, "Nieprawidłowy input.");
   }
 
-  private onAction(s: HostSession, action: unknown): void {
+  private onAction(s: HostSession, action: unknown, seq?: number, turn?: { round: number; wormId: number }): void {
     const { room, player } = s;
     if (!room || !player || !room.loop || room.phase !== "playing") return;
-    if (!room.loop.applyAction(player.team, action)) this.error(s, "Nieprawidłowa akcja.");
+    if (!room.loop.applyAction(player.team, action, seq, turn)) this.error(s, "Nieprawidłowa akcja.");
+    else if (seq !== undefined) s.peer.send({ t: "actionAck", seq });
   }
 
   private onRequestTerrainSync(s: HostSession): void {

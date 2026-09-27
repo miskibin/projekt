@@ -26,8 +26,9 @@ export interface InputContext {
 
 /** Maks. częstotliwość wysyłania ciągłego `input` (celowanie itp.) – 20 Hz. */
 const SEND_INTERVAL = 1 / 20;
-/** Podtrzymanie stanu, gdy nic się nie zmienia (na wypadek zgubionego pakietu). */
-const RESEND_INTERVAL = 0.5;
+/** Częsty heartbeat ruchu łata przerwy w subskrypcji brokera; w bezruchu oszczędzamy pasmo. */
+const ACTIVE_RESEND_INTERVAL = 0.18;
+const IDLE_RESEND_INTERVAL = 0.6;
 
 /**
  * Klawiatura, mysz i dotyk. Kąt wejścia jest nachyleniem względem kierunku robaka;
@@ -403,7 +404,9 @@ export class InputController {
     if (this.acc >= SEND_INTERVAL) {
       this.acc = 0;
       const aimChanged = !this.lastSent || Math.abs(this.lastSent.aim - this.state.aim) > 0.01;
-      if (aimChanged || this.sinceSend >= RESEND_INTERVAL) this.flushInput();
+      const heartbeat = this.state.left || this.state.right || this.state.charge
+        ? ACTIVE_RESEND_INTERVAL : IDLE_RESEND_INTERVAL;
+      if (aimChanged || this.sinceSend >= heartbeat) this.flushInput();
     }
   }
 

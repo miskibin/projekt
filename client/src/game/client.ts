@@ -58,6 +58,7 @@ export class GameClient {
   private camera = new Camera();
   private particles = new Particles();
   private prediction = new LocalPrediction();
+  private inputSeq = 0;
   private hud = new Hud();
   private renderer = new Renderer();
   private buffer = new SnapshotBuffer();
@@ -126,7 +127,12 @@ export class GameClient {
     this.input = new InputController(this.els.canvas, this.camera, {
       sendInput: (state) => {
         if (this.demo) this.demo.applyInput(state);
-        else this.cb.send({ t: "input", state });
+        else if (this.cb.connected()) {
+          const turn = this.buffer.latest?.turn;
+          const seq = ++this.inputSeq;
+          this.prediction.onInputSent(seq, state);
+          this.cb.send({ t: "input", seq, state, turn: turn ? { round: turn.round, wormId: turn.activeWormId } : undefined });
+        }
       },
       sendAction: (action) => {
         if (action.kind === "selectWeapon") this.selectedWeapon = action.weapon;
@@ -188,6 +194,7 @@ export class GameClient {
     this.pending = [];
     this.buffer.clear();
     this.prediction.reset();
+    this.inputSeq = 0;
     this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
     this.particles.clear();
     this.hud.clear();
@@ -367,7 +374,8 @@ export class GameClient {
     }
     this.input.update(dt);
     if (state && !this.demo) {
-      state = this.prediction.apply(state, this.terrain, this.input.currentState, this.myTeam, dt, now);
+      if (!this.demo) state = this.prediction.apply(state, this.terrain, this.input.currentState,
+        this.myTeam, dt, now, this.cb.rtt());
     }
     this.particles.update(dt);
     this.hud.update(dt);
@@ -475,7 +483,10 @@ export class GameClient {
       return;
     }
     if (this.demo) this.demo.applyAction(action);
-    else this.cb.send({ t: "action", action });
+    else {
+      const turn = this.buffer.latest?.turn;
+      this.cb.send({ t: "action", action, turn: turn ? { round: turn.round, wormId: turn.activeWormId } : undefined });
+    }
   }
 
   // ---------------- zdarzenia ----------------

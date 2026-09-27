@@ -300,6 +300,35 @@ describe("start gry", () => {
     expect(b.last("snapshot")).toBeDefined();
   });
 
+  it("gość dostaje potwierdzenie akcji i numer wejścia w autorytatywnym snapshocie", () => {
+    const { a, b } = lobbyOfTwo();
+    b.send({ t: "setReady", ready: true });
+    a.send({ t: "startGame" });
+    a.send({ t: "input", seq: 7, state: { left: false, right: true, aim: 0, charge: false } });
+    b.send({ t: "action", seq: 3, action: { kind: "selectWeapon", weapon: "banana" } });
+    b.send({ t: "action", seq: 3, action: { kind: "selectWeapon", weapon: "banana" } });
+    expect(b.received.filter((m) => m.t === "actionAck" && m.seq === 3)).toHaveLength(2);
+    host.tick(0);
+    host.tick(60);
+    expect(b.last("snapshot")?.snapshot.inputAcks?.[0]).toBe(7);
+  });
+
+  it("ponowiony JOIN nie wyrzuca gościa ani nie restartuje trwającej gry", () => {
+    const { a, b } = lobbyOfTwo();
+    const code = a.last("roomState")!.room.code;
+    b.send({ t: "joinRoom", code });
+    expect(b.last("roomState")!.room.players).toHaveLength(2);
+    expect(b.types()).not.toContain("leftRoom");
+    b.send({ t: "setReady", ready: true });
+    a.send({ t: "startGame" });
+    const loop = roomOf(code)!.loop;
+    b.send({ t: "joinRoom", code });
+    expect(roomOf(code)!.loop).toBe(loop);
+    expect(b.last("gameStart")?.yourTeam).toBe(1);
+    expect(b.last("terrainSync")).toBeDefined();
+    expect(b.last("snapshot")).toBeDefined();
+  });
+
   it("requestTerrainSync odpowiada terenem tylko w grze", () => {
     const { a, b } = lobbyOfTwo();
     a.send({ t: "requestTerrainSync" });

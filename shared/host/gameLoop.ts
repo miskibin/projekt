@@ -4,7 +4,7 @@
 import { FIXED_DT, SNAPSHOT_RATE, TICK_RATE } from "../constants";
 import { createGame } from "../engine";
 import type { Game, TeamSetup } from "../engine";
-import type { GameConfig, InputAction, InputState, ServerMessage, TerrainSync, WeaponId } from "../protocol";
+import type { GameConfig, InputAction, InputState, ServerMessage, TerrainSync, TurnKey, WeaponId } from "../protocol";
 
 export const TICK_MS = 1000 / TICK_RATE;
 export const SNAPSHOT_MS = 1000 / SNAPSHOT_RATE;
@@ -97,6 +97,8 @@ export class GameLoop {
   private startedAt = 0;
   private ticks = 0;
   private now = 0;
+  private readonly inputSeq = new Map<number, number>();
+  private readonly actionSeq = new Map<number, number>();
 
   constructor(
     config: GameConfig,
@@ -166,19 +168,39 @@ export class GameLoop {
   }
 
   sendSnapshot(): void {
-    this.deps.broadcast({ t: "snapshot", snapshot: this.game.snapshot() });
+    this.deps.broadcast(this.snapshotMessage());
   }
 
-  applyInput(team: number, raw: unknown): boolean {
+  private sameTurn(team: number, turn?: TurnKey): boolean {
+    if (!turn) return true;
+    const active = this.game.snapshot().turn;
+    return active.activeTeam === team && active.round === turn.round && active.activeWormId === turn.wormId;
+  }
+
+  applyInput(team: number, raw: unknown, seq?: number, turn?: TurnKey): boolean {
     const state = validateInputState(raw);
     if (!state) return false;
+    const active = this.game.snapshot().turn;
+    if (active.activeTeam !== team || (active.phase !== "active" && active.phase !== "retreat")) return true;
+    if (turn && !this.sameTurn(team, turn)) return true;
+    if (seq !== undefined) {
+      if (!Number.isSafeInteger(seq) || seq < 0) return false;
+      if (seq <= (this.inputSeq.get(team) ?? -1)) return true;
+      this.inputSeq.set(team, seq);
+    }
     this.game.applyInput(team, state);
     return true;
   }
 
-  applyAction(team: number, raw: unknown): boolean {
+  applyAction(team: number, raw: unknown, seq?: number, turn?: TurnKey): boolean {
     const action = validateAction(raw);
     if (!action) return false;
+    if (seq !== undefined) {
+      if (!Number.isSafeInteger(seq) || seq < 0) return false;
+      if (seq <= (this.actionSeq.get(team) ?? -1)) return true;
+      this.actionSeq.set(team, seq);
+    }
+    if (!this.sameTurn(team, turn)) return true;
     this.game.applyAction(team, action);
     return true;
   }
@@ -193,7 +215,7 @@ export class GameLoop {
   }
 
   snapshotMessage(): ServerMessage {
-    return { t: "snapshot", snapshot: this.game.snapshot() };
+    return { t: "snapshot", snapshot: { ...this.game.snapshot(), inputAcks: Object.fromEntries(this.inputSeq) } };
   }
 
   /** Kończy grę: ostatni snapshot + `gameOver`, zatrzymuje pętlę. */
@@ -204,7 +226,7 @@ export class GameLoop {
     try {
       const snap = this.game.snapshot();
       round = snap.turn?.round ?? 0;
-      this.deps.broadcast({ t: "snapshot", snapshot: snap });
+      this.deps.broadcast({ t: "snapshot", snapshot: { ...snap, inputAcks: Object.fromEntries(this.inputSeq) } });
     } catch {
       /* silnik może już nie dać snapshotu – trudno */
     }

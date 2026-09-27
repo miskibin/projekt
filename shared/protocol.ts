@@ -55,6 +55,9 @@ export interface InputState {
   charge: boolean;
 }
 
+/** Chroni przed odtworzeniem spóźnionego strzału lub ruchu w następnej turze. */
+export interface TurnKey { round: number; wormId: number }
+
 export type InputAction =
   | { kind: "jump" }
   | { kind: "backflip" }
@@ -74,8 +77,8 @@ export type ClientMessage =
   | { t: "setReady"; ready: boolean }
   | { t: "setConfig"; config: Partial<GameConfig> } // tylko host
   | { t: "startGame" } // tylko host
-  | { t: "input"; state: InputState }
-  | { t: "action"; action: InputAction }
+  | { t: "input"; state: InputState; seq?: number; turn?: TurnKey }
+  | { t: "action"; action: InputAction; seq?: number; turn?: TurnKey }
   | { t: "ping"; ts: number }
   | { t: "requestTerrainSync" };
 
@@ -170,6 +173,8 @@ export interface GameSnapshot {
   mines: MineSnapshot[];
   teams: TeamSnapshot[];
   turn: TurnInfo;
+  /** Ostatnie wejście faktycznie przyjęte przez hosta dla każdej drużyny. */
+  inputAcks?: Record<number, number>;
 }
 
 export type ExplosionStyle =
@@ -218,6 +223,7 @@ export type ServerMessage =
   | { t: "pong"; ts: number }
   | { t: "gameStart"; config: GameConfig; players: PlayerInfo[]; yourTeam: number }
   | { t: "snapshot"; snapshot: GameSnapshot }
+  | { t: "actionAck"; seq: number }
   | { t: "events"; events: GameEvent[] }
   | { t: "terrainSync"; terrain: TerrainSync }
   | { t: "gameOver"; winnerTeam: number | null; winnerName: string | null; stats: Record<string, unknown> };

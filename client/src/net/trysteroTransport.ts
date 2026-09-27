@@ -4,7 +4,7 @@ import { createRoomHost, type Peer, type RoomHost } from "@shared/host";
 import type { ConnStatus, Transport } from "../net";
 
 type WireC2S = { msgs: ClientMessage[] };
-type WireS2C = { msgs: ServerMessage[] };
+type WireS2C = { id?: number; msgs: ServerMessage[] };
 type HostPresence = { peerId: string; at: number };
 
 const BROKER_URL = "wss://broker.emqx.io:8084/mqtt";
@@ -28,6 +28,8 @@ export class TrysteroTransport implements Transport {
   private hostPeerId: string | null = null;
   private hostPeers = new Map<string, Peer>();
   private hostOut = new Map<string, ServerMessage[]>();
+  private hostBatchId = 0;
+  private readonly seenBatches = new Set<number>();
   private lastHello: ClientMessage | null = null;
   private roomCode: string | null = null;
   private role: "host" | "guest" | null = null;
@@ -35,6 +37,8 @@ export class TrysteroTransport implements Transport {
   private hostTimer: number | null = null;
   private hostWorker: Worker | null = null;
   private joinTimer: number | null = null;
+  private joinRetryTimer: number | null = null;
+  private joined = false;
   private heartbeatTimer: number | null = null;
   private lastHostHeartbeat = 0;
   private hostRecoveryPending = false;
@@ -124,8 +128,7 @@ export class TrysteroTransport implements Transport {
       return this.teardownRoom();
     }
     this.roomCode = code;
-    this.client?.subscribe(`${this.baseTopic()}/c2s/+`);
-    this.publishHostPresence();
+    this.client?.subscribe(`${this.baseTopic()}/c2s/+`, { qos: 1 }, () => this.publishHostPresence());
     this.heartbeatTimer = window.setInterval(() => this.publishHostPresence(), HOST_HEARTBEAT_MS);
     this.startHostClock(() => host.tick(performance.now()));
   }
@@ -139,10 +142,10 @@ export class TrysteroTransport implements Transport {
     this.roomCode = code;
     this.role = "guest";
     const base = this.baseTopic();
-    this.client?.subscribe([`${base}/host`, `${base}/s2c/${this.peerId}`]);
+    this.client?.subscribe([`${base}/host`, `${base}/s2c/${this.peerId}`], { qos: 1 });
     this.joinTimer = window.setTimeout(() => {
       this.joinTimer = null;
-      if (this.hostPeerId) return;
+      if (this.joined) return;
       this.msgCb({ t: "error", message: `Pokój ${code} nie istnieje albo host jest offline` });
       this.teardownRoom();
     }, HOST_WAIT_MS);
@@ -182,7 +185,7 @@ export class TrysteroTransport implements Transport {
           this.hostRecoveryPending = false;
           this.publish(`${base}/c2s/${this.peerId}`, {
             msgs: [{ t: "requestTerrainSync" }],
-          } satisfies WireC2S);
+          } satisfies WireC2S, false, 1);
         }
       } catch { /* ignore malformed public-broker traffic */ }
       return;
@@ -190,8 +193,22 @@ export class TrysteroTransport implements Transport {
 
     if (this.role === "guest" && topic === `${base}/s2c/${this.peerId}`) {
       try {
-        const { msgs } = JSON.parse(payload) as WireS2C;
-        for (const msg of msgs) this.msgCb(msg);
+        const { msgs, id } = JSON.parse(payload) as WireS2C;
+        if (id !== undefined) {
+          if (this.seenBatches.has(id)) return;
+          this.seenBatches.add(id);
+          if (this.seenBatches.size > 128) this.seenBatches.delete(this.seenBatches.values().next().value!);
+        }
+        for (const msg of msgs) {
+          if (msg.t === "roomState" || msg.t === "gameStart") {
+            this.joined = true;
+            if (this.joinTimer !== null) window.clearTimeout(this.joinTimer);
+            if (this.joinRetryTimer !== null) window.clearInterval(this.joinRetryTimer);
+            this.joinTimer = null;
+            this.joinRetryTimer = null;
+          }
+          this.msgCb(msg);
+        }
       } catch { /* ignore malformed public-broker traffic */ }
       return;
     }
@@ -210,18 +227,22 @@ export class TrysteroTransport implements Transport {
 
   private connectToHost(peerId: string): void {
     this.hostPeerId = peerId;
-    if (this.joinTimer !== null) window.clearTimeout(this.joinTimer);
-    this.joinTimer = null;
+    this.sendJoinRequest();
+    if (this.joinRetryTimer === null) this.joinRetryTimer = window.setInterval(() => this.sendJoinRequest(), 1000);
+  }
+
+  private sendJoinRequest(): void {
+    if (!this.roomCode || !this.hostPeerId || this.joined) return;
     const msgs: ClientMessage[] = [];
     if (this.lastHello) msgs.push(this.lastHello);
     msgs.push({ t: "joinRoom", code: this.roomCode! });
-    this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs } satisfies WireC2S);
+    this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs } satisfies WireC2S, false, 1);
   }
 
   private deliverToHost(msg: ClientMessage): void {
     if (this.host) this.host.handleMessage(this.localPeer(), msg);
     else if (this.hostPeerId && this.roomCode) {
-      this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs: [msg] } satisfies WireC2S);
+      this.publish(`${this.baseTopic()}/c2s/${this.peerId}`, { msgs: [msg] } satisfies WireC2S, false, 1);
     } else if (msg.t !== "hello" && msg.t !== "ping") {
       this.msgCb({ t: "error", message: "Nie jesteś w pokoju" });
     }
@@ -250,7 +271,9 @@ export class TrysteroTransport implements Transport {
     this.hostOut.clear();
     if (!this.roomCode) return;
     for (const [peerId, msgs] of entries) {
-      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { msgs } satisfies WireS2C);
+      // Snapshoty są zastępowalne; akcje i zmiany terenu muszą dotrzeć.
+      const critical = msgs.some((msg) => msg.t !== "snapshot" && msg.t !== "pong");
+      this.publish(`${this.baseTopic()}/s2c/${peerId}`, { id: ++this.hostBatchId, msgs } satisfies WireS2C, false, critical ? 1 : 0);
     }
   }
 
@@ -263,15 +286,18 @@ export class TrysteroTransport implements Transport {
     if (!this.client || !this.roomCode || !this.role) return;
     const base = this.baseTopic();
     if (this.role === "host") {
-      this.client.subscribe(`${base}/c2s/+`);
-      this.publishHostPresence();
+      this.client.subscribe(`${base}/c2s/+`, { qos: 1 }, () => this.publishHostPresence());
       return;
     }
-    this.client.subscribe([`${base}/host`, `${base}/s2c/${this.peerId}`]);
+    this.client.subscribe([`${base}/host`, `${base}/s2c/${this.peerId}`], { qos: 1 }, () => {
+      if (this.role === "guest" && this.hostPeerId && this.joined) this.publish(`${base}/c2s/${this.peerId}`,
+        { msgs: [{ t: "requestTerrainSync" }] } satisfies WireC2S, false, 1);
+    });
   }
 
-  private publish(topic: string, payload: object, retain = false): void {
-    this.client?.publish(topic, JSON.stringify(payload), { qos: 0, retain });
+  private publish(topic: string, payload: object, retain = false, qos: 0 | 1 = 0): void {
+    if (!this.client?.connected) return;
+    this.client.publish(topic, JSON.stringify(payload), { qos, retain });
   }
 
   private baseTopic(): string { return `${TOPIC_ROOT}/${this.roomCode}`; }
@@ -295,6 +321,7 @@ export class TrysteroTransport implements Transport {
     if (this.role === "host" && base) this.client?.publish(`${base}/host`, "", { retain: true });
     if (base) this.client?.unsubscribe([`${base}/host`, `${base}/c2s/+`, `${base}/s2c/${this.peerId}`]);
     if (this.joinTimer !== null) window.clearTimeout(this.joinTimer);
+    if (this.joinRetryTimer !== null) window.clearInterval(this.joinRetryTimer);
     if (this.hostFlushTimer !== null) window.clearTimeout(this.hostFlushTimer);
     if (this.hostTimer !== null) window.clearInterval(this.hostTimer);
     if (this.heartbeatTimer !== null) window.clearInterval(this.heartbeatTimer);
@@ -307,12 +334,15 @@ export class TrysteroTransport implements Transport {
     this.roomCode = null;
     this.role = null;
     this.joinTimer = null;
+    this.joinRetryTimer = null;
+    this.joined = false;
     this.hostFlushTimer = null;
     this.hostTimer = null;
     this.heartbeatTimer = null;
     this.hostWorker = null;
     this.lastHostHeartbeat = 0;
     this.hostRecoveryPending = false;
+    this.seenBatches.clear();
   }
 
   private msgCb(msg: ServerMessage): void { for (const cb of this.msgCbs) cb(msg); }

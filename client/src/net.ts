@@ -138,6 +138,10 @@ export class WebSocketTransport implements Transport {
  */
 export class NetClient {
   private queue: ClientMessage[] = [];
+  private actionQueue: Array<Extract<ClientMessage, { t: "action" }>> = [];
+  private nextActionSeq = 0;
+  private actionRetries = 0;
+  private actionTimer: number | null = null;
   private handlers: ((m: ServerMessage) => void)[] = [];
   private statusHandlers: ((s: ConnStatus) => void)[] = [];
   private pingTimer: number | null = null;
@@ -154,6 +158,15 @@ export class NetClient {
         this.rtt = Math.max(0, Math.round(performance.now() - msg.ts));
         return;
       }
+      if (msg?.t === "actionAck") {
+        if (this.actionQueue[0]?.seq === msg.seq) {
+          this.actionQueue.shift();
+          this.actionRetries = 0;
+          if (this.actionQueue.length) this.sendHeadAction();
+          else this.stopActionRetry();
+        }
+        return;
+      }
       for (const h of this.handlers) h(msg);
     });
     transport.onStatus((s) => {
@@ -168,6 +181,8 @@ export class NetClient {
         this.startPing();
       } else {
         this.stopPing();
+        this.stopActionRetry();
+        this.actionQueue = [];
       }
       for (const h of this.statusHandlers) h(s);
     });
@@ -179,12 +194,38 @@ export class NetClient {
 
   send(msg: ClientMessage): void {
     if (this.status === "open") {
-      this.transport.send(msg);
+      if (msg.t === "action") {
+        if (this.actionQueue.length >= 16) return;
+        this.actionQueue.push({ ...msg, seq: ++this.nextActionSeq });
+        if (this.actionQueue.length === 1) this.sendHeadAction();
+      } else this.transport.send(msg);
     } else if (msg.t !== "ping" && msg.t !== "input" && msg.t !== "action") {
       // Strzał, skok lub wybór celu po powrocie sieci mógłby wykonać się
       // w cudzej turze. Zostawiamy tylko kontrolne wiadomości pokoju.
       if (this.queue.length < 64) this.queue.push(msg);
     }
+  }
+
+  private sendHeadAction(): void {
+    const head = this.actionQueue[0];
+    if (!head || this.status !== "open") return;
+    this.transport.send(head);
+    if (this.actionTimer !== null) return;
+    this.actionTimer = window.setInterval(() => {
+      if (++this.actionRetries > 12) {
+        this.stopActionRetry();
+        this.actionQueue = [];
+        for (const h of this.handlers) h({ t: "error", message: "Nie potwierdzono akcji. Sprawdź połączenie." });
+        return;
+      }
+      const pending = this.actionQueue[0];
+      if (pending && this.status === "open") this.transport.send(pending);
+    }, 250);
+  }
+
+  private stopActionRetry(): void {
+    if (this.actionTimer !== null) clearInterval(this.actionTimer);
+    this.actionTimer = null;
   }
 
   on(h: (m: ServerMessage) => void): void {
@@ -212,6 +253,8 @@ export class NetClient {
 
   close(): void {
     this.stopPing();
+    this.stopActionRetry();
+    this.actionQueue = [];
     this.transport.close();
   }
 }

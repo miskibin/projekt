@@ -4,13 +4,27 @@ import type { Terrain } from "@shared/engine/terrain";
 import type { GameSnapshot, InputState } from "@shared/protocol";
 import type { RenderState } from "./state";
 
-/** Tylko pozycja własnej postaci. Obrażenia, pociski i tury zawsze pochodzą od hosta. */
+const MAX_CONFIRMED_LEAD = 0.14;
+const MAX_UNCONFIRMED_LEAD = 0.08;
+const STALE_MS = 300;
+
+/** Pozycja własnego robaka oparta o snapshot hosta i potwierdzone wejścia. */
 export class LocalPrediction {
   private latest: GameSnapshot | null = null;
   private receivedAt = 0;
   private id = -1;
   private x = 0;
   private y = 0;
+  private sentSeq = 0;
+  private sentDirection = 0;
+  private directionChangedAt = 0;
+
+  onInputSent(seq: number, input: InputState, now = performance.now()): void {
+    const direction = Number(input.right) - Number(input.left);
+    if (direction !== this.sentDirection) this.directionChangedAt = now;
+    this.sentDirection = direction;
+    this.sentSeq = seq;
+  }
 
   onSnapshot(snapshot: GameSnapshot, now = performance.now()): void {
     if (this.latest && snapshot.tick <= this.latest.tick) return;
@@ -22,6 +36,9 @@ export class LocalPrediction {
     this.latest = null;
     this.receivedAt = 0;
     this.id = -1;
+    this.sentSeq = 0;
+    this.sentDirection = 0;
+    this.directionChangedAt = 0;
   }
 
   get ageMs(): number {
@@ -29,7 +46,7 @@ export class LocalPrediction {
   }
 
   apply(state: RenderState, terrain: Terrain, input: InputState, team: number,
-    dt: number, now = performance.now()): RenderState {
+    dt: number, now = performance.now(), rttMs = 0): RenderState {
     if (state.turn.activeTeam !== team || (state.turn.phase !== "active" && state.turn.phase !== "retreat")) {
       this.id = -1;
       return state;
@@ -43,28 +60,48 @@ export class LocalPrediction {
       this.y = authoritative.y;
     }
 
-    const age = Math.max(0, (now - this.receivedAt) / 1000);
+    const ageMs = Math.max(0, now - this.receivedAt);
     const direction = Number(input.right) - Number(input.left);
-    // Najwyżej 700 ms predykcji: dalszy ruch bez serwera wyglądałby jak prawdziwa gra.
-    if (direction && age < 0.7 && authoritative.onGround && authoritative.anim !== "jetpack") {
-      const pos = { x: this.x, y: this.y };
-      walkStep(terrain, pos, WORM_RADIUS, direction * WORM_WALK_SPEED * Math.min(dt, 0.05), WORM_MAX_STEP_UP, 8);
-      this.x = pos.x;
-      this.y = pos.y;
-    }
-
-    if (age < 0.35) {
-      // Host koryguje model; uwzględniamy krótki czas transportu bieżącego wejścia.
-      const expectedX = authoritative.x + (authoritative.onGround ? direction * WORM_WALK_SPEED * Math.min(age + 0.07, 0.2) : 0);
-      const dx = expectedX - this.x;
-      const dy = authoritative.y - this.y;
-      if (Math.abs(dx) > 96 || Math.abs(dy) > 40) {
-        this.x = authoritative.x;
-        this.y = authoritative.y;
+    // Po zaniku snapshotów zamrażamy pozycję. Nie pokazujemy ruchu, którego host nie widział.
+    if (ageMs < STALE_MS) {
+      const ack = this.latest?.inputAcks?.[team] ?? -1;
+      const confirmed = this.sentSeq > 0 && direction === this.sentDirection && ack >= this.sentSeq;
+      const lead = confirmed
+        ? Math.min(MAX_CONFIRMED_LEAD, ageMs / 1000 + Math.min(0.08, Math.max(0.025, rttMs / 2000)))
+        : direction === this.sentDirection && this.sentSeq > 0
+          ? Math.min(MAX_UNCONFIRMED_LEAD, Math.max(0, (now - this.directionChangedAt) / 1000))
+          : 0;
+      const target = { x: authoritative.x, y: authoritative.y };
+      if (direction && authoritative.onGround && authoritative.anim !== "jetpack") {
+        // Ta sama fizyka kroku co u hosta, na bazie najnowszego stanu autorytatywnego.
+        const steps = Math.ceil(lead * 60);
+        for (let i = 0; i < steps; i++) {
+          const span = Math.min(1 / 60, lead - i / 60);
+          if (walkStep(terrain, target, WORM_RADIUS, direction * WORM_WALK_SPEED * span,
+            WORM_MAX_STEP_UP, 8) !== "moved") break;
+        }
+      } else if (!confirmed && !direction && this.sentSeq > 0 && now - this.directionChangedAt < 250) {
+        // Puściła ruch; nie cofamy jej do spóźnionego snapshotu przed potwierdzeniem STOP.
+        target.x = this.x;
+        target.y = this.y;
+      }
+      // Wahania czasu dostarczenia snapshotów nie mogą szarpać idącej postaci wstecz.
+      // Dużą rozbieżność nadal korygujemy: wtedy host naprawdę ma inny stan.
+      if (direction && confirmed && (target.x - this.x) * direction < 0 &&
+        Math.abs(target.x - this.x) < 16) {
+        target.x = this.x;
+        target.y = this.y;
+      }
+      const dx = target.x - this.x;
+      const dy = target.y - this.y;
+      if (Math.abs(dx) > 56 || Math.abs(dy) > 42) {
+        // Teleport, odrzut lub zmiana podłoża wymagają faktycznej korekty.
+        this.x = target.x;
+        this.y = target.y;
       } else {
-        const blend = 1 - Math.exp(-Math.min(dt, 0.05) * (direction ? 5 : 12));
-        this.x += dx * blend;
-        this.y += dy * blend;
+        const maxStep = 140 * Math.min(dt, 0.05);
+        this.x += Math.max(-maxStep, Math.min(maxStep, dx));
+        this.y += Math.max(-maxStep, Math.min(maxStep, dy));
       }
     }
     const facing = direction ? (direction as 1 | -1) : authoritative.facing;
