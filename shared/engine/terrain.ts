@@ -109,20 +109,31 @@ export function generateTerrain(seed: number, width: number, height: number, den
   const t = new Terrain(width, height);
 
   // 1) profil powierzchni: suma sinusów o losowych fazach
-  const waves = Array.from({ length: 6 }, (_, i) => ({
-    amp: rng.range(27, 96) / (i + 1) ** 0.5,
-    freq: rng.range(0.002, 0.012) * (i + 1),
+  const waves = Array.from({ length: 5 }, (_, i) => ({
+    amp: rng.range(20, 52) / (i + 1) ** 0.65,
+    freq: rng.range(0.0017, 0.004) * (i + 1),
     phase: rng.range(0, Math.PI * 2),
   }));
   // Niższa linia lądu zostawia więcej czystego kadru nad robakami i ogranicza ściany zajmujące cały ekran.
   const base = height * (0.76 - 0.16 * density);
-  const surface = new Int32Array(width);
+  const rawSurface = new Float32Array(width);
   for (let x = 0; x < width; x++) {
     let y = base;
     for (const w of waves) y += Math.sin(x * w.freq + w.phase) * w.amp;
-    surface[x] = Math.max(height * 0.16, Math.min(height - 60, y)) | 0;
+    rawSurface[x] = y;
   }
-  for (let x = 0; x < width; x++) t.data.fill(1, surface[x] * width + x, surface[x] * width + x + 1);
+  const surface = new Int32Array(width);
+  // A short low-pass removes needle peaks and deep narrow traps. Wider hills
+  // keep variety while the walking step and jump can negotiate the slopes.
+  for (let x = 0; x < width; x++) {
+    let sum = 0;
+    let count = 0;
+    for (let dx = -12; dx <= 12; dx += 3) {
+      sum += rawSurface[Math.max(0, Math.min(width - 1, x + dx))];
+      count++;
+    }
+    surface[x] = Math.max(height * 0.2, Math.min(height - 90, Math.round(sum / count)));
+  }
   for (let y = 0; y < height; y++)
     for (let x = 0; x < width; x++) if (y >= surface[x]) t.data[y * width + x] = 1;
 

@@ -68,6 +68,21 @@ describe("skok i kolizje", () => {
     expect(circleHits(gi.terrain, w.x, w.y, WORM_RADIUS)).toBe(false);
     expect(w.y).toBeLessThan(447);
   });
+
+  it("zwykły skok pozwala pokonać typowy stopień terenu", () => {
+    const g = createGame(cfg(), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const w = gi.worms.find((worm) => worm.id === g.snapshot().turn.activeWormId)!;
+    w.x = 500; w.y = 441; w.vx = 0; w.vy = 0; w.onGround = true;
+    g.applyAction(w.team, { kind: "jump" });
+    stepN(g, 15);
+    expect(w.y).toBeLessThan(391);
+  });
 });
 
 function stepN(g: Game, n: number, sink?: GameEvent[]): void {
