@@ -28,6 +28,22 @@ function connected(role: "guest" | "host") {
 }
 
 describe("MQTT: dostarczanie gry", () => {
+  it("po odświeżeniu tej samej karty zachowuje identyfikator gościa", () => {
+    const entries = new Map<string, string>();
+    vi.stubGlobal("sessionStorage", {
+      getItem: (key: string) => entries.get(key) ?? null,
+      setItem: (key: string, value: string) => { entries.set(key, value); },
+    });
+    try {
+      const first = new TrysteroTransport() as unknown as TestTransport;
+      const afterReload = new TrysteroTransport() as unknown as TestTransport;
+      expect(afterReload.peerId).toBe(first.peerId);
+      expect(first.peerId).toMatch(/^[a-f0-9]{32}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("ruch gościa wysyła z QoS 1 i subskrybuje wiadomości z QoS 1", () => {
     const { transport, publish, subscribe } = connected("guest");
     transport.hostPeerId = "host";

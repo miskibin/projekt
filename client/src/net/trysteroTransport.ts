@@ -19,9 +19,24 @@ function randomId(): string {
   return crypto.randomUUID().replaceAll("-", "");
 }
 
+function sessionPeerId(): string {
+  const key = "worms.peerId";
+  try {
+    const saved = sessionStorage.getItem(key);
+    if (saved && /^[a-f0-9]{32}$/.test(saved)) return saved;
+    const id = randomId();
+    sessionStorage.setItem(key, id);
+    return id;
+  } catch {
+    // Storage may be disabled (including private browsing); an in-memory identity
+    // still works for transient MQTT reconnects in the current page.
+    return randomId();
+  }
+}
+
 /** Browser-hosted game with a public TLS MQTT broker used only as its relay. */
 export class TrysteroTransport implements Transport {
-  private readonly peerId = randomId();
+  private readonly peerId = sessionPeerId();
   private readonly selfPeer: Peer = { id: this.peerId, send: (msg) => this.msgCb(msg) };
   private client: MqttClient | null = null;
   private host: RoomHost | null = null;
