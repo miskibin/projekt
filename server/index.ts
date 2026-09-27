@@ -61,10 +61,15 @@ export function createApp(host: RoomHost): express.Express {
   });
 
   if (IS_PROD) {
-    app.use(express.static(clientDist, { index: "index.html", maxAge: "1h" }));
+    const indexHtml = path.join(clientDist, "index.html");
+    // Po wdrożeniu strona musi wskazać nowy plik JS. Cache'ujemy tylko assety z hashem.
+    app.get("/", (_req, res) => {
+      res.set("Cache-Control", "no-store").sendFile(indexHtml);
+    });
+    app.use(express.static(clientDist, { index: false, maxAge: "1h" }));
     // SPA fallback – wszystko poza /ws i /health leci na index.html
     app.get(/^\/(?!ws$|health$).*/, (_req, res) => {
-      res.sendFile(path.join(clientDist, "index.html"), (err) => {
+      res.set("Cache-Control", "no-store").sendFile(indexHtml, (err) => {
         if (err) res.status(404).send("Brak zbudowanego klienta – uruchom `npm run build`.");
       });
     });
