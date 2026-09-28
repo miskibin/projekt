@@ -3,7 +3,7 @@
 // Node uruchamia go dla wielu pokoi; przeglądarka (gracz-host) dla jednego.
 import { MAX_PLAYERS } from "../constants";
 import type { TeamSetup } from "../engine";
-import type { ClientMessage, GameConfig, ServerMessage } from "../protocol";
+import { REACTION_COOLDOWN_MS, type ClientMessage, type GameConfig, type ServerMessage, type SpectatorReaction } from "../protocol";
 import { GameLoop, TICK_MS } from "./gameLoop";
 import {
   RoomManager,
@@ -79,6 +79,7 @@ export class RoomHost {
   private readonly log: (...args: unknown[]) => void;
   private readonly graceMs: number;
   private readonly maxRooms: number;
+  private readonly reactionAt = new WeakMap<Room, Map<string, number>>();
   private nowMs = 0;
   private destroyed = false;
 
@@ -200,6 +201,8 @@ export class RoomHost {
         return this.onInput(s, msg.state, msg.seq, msg.turn);
       case "action":
         return this.onAction(s, msg.action, msg.seq, msg.turn);
+      case "reaction":
+        return this.onReaction(s, msg.kind);
       case "ping":
         s.peer.send({ t: "pong", ts: typeof msg.ts === "number" && Number.isFinite(msg.ts) ? msg.ts : this.nowMs });
         return;
@@ -482,6 +485,25 @@ export class RoomHost {
     if (!room || !player || !room.loop || room.phase !== "playing") return;
     if (!room.loop.applyAction(player.team, action, seq, turn)) this.error(s, "Nieprawidłowa akcja.");
     else if (seq !== undefined) s.peer.send({ t: "actionAck", seq });
+  }
+
+  private onReaction(s: HostSession, kind: unknown): void {
+    const { room, player } = s;
+    if (!room || !player || !player.connected || room.phase !== "playing" || !room.loop) return;
+    if (kind !== "cheer" && kind !== "laugh" && kind !== "gasp") return;
+    const snapshot = room.loop.game.snapshot();
+    const turn = snapshot.turn;
+    if (turn.phase === "gameOver" || turn.activeTeam < 0 || turn.activeTeam === player.team) return;
+    const active = snapshot.worms.find((w) => w.id === turn.activeWormId);
+    const worm = snapshot.worms.filter((w) => w.alive && w.team === player.team)
+      .sort((a, b) => Math.abs(a.x - (active?.x ?? a.x)) - Math.abs(b.x - (active?.x ?? b.x)))[0];
+    if (!worm) return;
+    const lastByPlayer = this.reactionAt.get(room) ?? new Map<string, number>();
+    const last = lastByPlayer.get(player.id) ?? Number.NEGATIVE_INFINITY;
+    if (this.nowMs - last < REACTION_COOLDOWN_MS) return;
+    lastByPlayer.set(player.id, this.nowMs);
+    this.reactionAt.set(room, lastByPlayer);
+    broadcast(room, { t: "reaction", team: player.team, wormId: worm.id, kind: kind as SpectatorReaction });
   }
 
   private onRequestTerrainSync(s: HostSession): void {

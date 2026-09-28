@@ -72,6 +72,11 @@ export type InputAction =
   | { kind: "skipTurn" }
   | { kind: "surrender" };
 
+/** Wyłącznie ozdobna reakcja w cudzej turze; nie trafia do silnika fizyki. */
+export type SpectatorReaction = "cheer" | "laugh" | "gasp";
+/** Jedna reakcja co 3 s na gracza; chroni animację przed spamem i sieć MQTT przed lawiną paczek. */
+export const REACTION_COOLDOWN_MS = 3_000;
+
 export type ClientMessage =
   | { t: "hello"; name: string; reconnectToken?: string }
   | { t: "createRoom"; config?: Partial<GameConfig> }
@@ -82,6 +87,7 @@ export type ClientMessage =
   | { t: "startGame" } // tylko host
   | { t: "input"; state: InputState; seq?: number; turn?: TurnKey }
   | { t: "action"; action: InputAction; seq?: number; turn?: TurnKey }
+  | { t: "reaction"; kind: SpectatorReaction }
   | { t: "ping"; ts: number }
   | { t: "requestTerrainSync" };
 
@@ -240,6 +246,7 @@ export type ServerMessage =
   | { t: "gameStart"; config: GameConfig; players: PlayerInfo[]; yourTeam: number }
   | { t: "snapshot"; snapshot: GameSnapshot }
   | { t: "actionAck"; seq: number }
+  | { t: "reaction"; team: number; wormId: number; kind: SpectatorReaction }
   | { t: "events"; events: GameEvent[]; seq?: number }
   | { t: "terrainSync"; terrain: TerrainSync }
   | { t: "gameOver"; winnerTeam: number | null; winnerName: string | null; stats: Record<string, unknown> };

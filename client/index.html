@@ -123,6 +123,15 @@
       <nav class="game-tools" aria-label="Opcje gry">
         <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
       </nav>
+      <div id="spectator-tools" class="spectator-tools" aria-label="Podczas tury drugiego gracza" hidden>
+        <span>Gdy czekasz: reaguj lub obejrzyj mapę</span>
+        <div class="spectator-actions">
+          <button type="button" data-reaction="cheer" aria-label="Pokaż oklaski" title="Brawo!">👏</button>
+          <button type="button" data-reaction="laugh" aria-label="Pokaż śmiech" title="Ale numer!">😂</button>
+          <button type="button" data-reaction="gasp" aria-label="Pokaż zdziwienie" title="O nie!">😱</button>
+          <button type="button" id="spectator-map" aria-label="Pokaż lub ukryj mapę" aria-pressed="false" title="Mapa">▧</button>
+        </div>
+      </div>
       <div id="touch-controls" class="touch-controls" aria-label="Sterowanie dotykowe">
         <div class="touch-move" aria-label="Chodzenie">
           <button class="touch-key touch-move-key" data-control="left" aria-label="Idź w lewo">◀</button>

@@ -5,7 +5,7 @@ import {
   WORM_MAX_HP,
   WORM_RADIUS,
 } from "@shared/constants";
-import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
+import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, SpectatorReaction, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { Particles } from "./particles";
 import type { RenderState } from "./state";
@@ -50,11 +50,13 @@ export interface RenderInput {
   localCharge: number;
   mouseWorld: { x: number; y: number } | null;
   waterLevel: number;
+  reactions: readonly { wormId: number; kind: SpectatorReaction; age: number }[];
 }
 
 const teamColor = (t: number): string => TEAM_COLORS[((t % TEAM_COLORS.length) + TEAM_COLORS.length) % TEAM_COLORS.length];
 
 const DEFAULT_PREVIEW_POWER = 0.6;
+const REACTION_ICONS: Record<SpectatorReaction, string> = { cheer: "👏", laugh: "😂", gasp: "😱" };
 
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
 export class Renderer {
@@ -156,10 +158,35 @@ export class Renderer {
     inp.particles.draw(ctx, camera.zoom);
     this.drawAim(ctx, inp);
     this.drawWater(ctx, inp, pal);
+    this.drawReactions(ctx, inp);
 
     ctx.restore();
     this.postProcess.draw(ctx, W, H, dt, this.lowPower);
     ctx.restore();
+  }
+
+  private drawReactions(ctx: CanvasRenderingContext2D, inp: RenderInput): void {
+    if (inp.reactions.length === 0) return;
+    const s = 1 / inp.camera.zoom;
+    for (const reaction of inp.reactions) {
+      const w = inp.state.worms.find((worm) => worm.id === reaction.wormId && worm.alive);
+      if (!w || reaction.age < 0 || reaction.age > 2.7) continue;
+      ctx.save();
+      ctx.translate(w.x + s * 22, w.y - WORM_RY - s * (43 + Math.sin(reaction.age * 4) * 3));
+      ctx.scale(s, s);
+      ctx.globalAlpha = Math.min(1, reaction.age * 7, (2.7 - reaction.age) * 2);
+      ctx.fillStyle = "rgba(13,31,42,.93)";
+      ctx.strokeStyle = teamColor(w.team);
+      ctx.lineWidth = 2;
+      roundRect(ctx, -20, -21, 40, 37, 11);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#fff";
+      ctx.font = "24px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(REACTION_ICONS[reaction.kind], 0, 0);
+      ctx.restore();
+    }
   }
 
   // ---------------- woda ----------------

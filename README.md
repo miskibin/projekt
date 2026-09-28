@@ -44,6 +44,12 @@ zwiększać moc, i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, 
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
 
+Gdy gra druga osoba, u góry pojawia się mały panel: **👏 / 😂 / 😱** wysyła
+krótką reakcję widoczną nad własnym robakiem obu graczom, a **▧** pozwala zajrzeć
+na mapę. Reakcje są tylko wizualne i mają 3-sekundową przerwę, więc nie wpływają
+na turę ani nie zalewają łącza. Mapa otwarta z tego panelu zamyka się, gdy
+zaczyna się Twoja tura.
+
 ## Gra z komputerem
 
 W menu wybierz **„Graj z komputerem”** albo otwórz stronę z `?computer=1`. Grasz Czerwonymi,

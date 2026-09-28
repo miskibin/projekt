@@ -238,6 +238,28 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .game-tool:active { background: var(--hud-bg-hi); }
 .game-tool:focus-visible, .touch-key:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Czysto towarzyskie reakcje i mapa dostępne tylko podczas cudzej tury. */
+.spectator-tools {
+  position: absolute; z-index: 12;
+  top: calc(max(10px, env(safe-area-inset-top)) + 56px);
+  right: max(12px, env(safe-area-inset-right));
+  display: grid; gap: 5px; padding: 8px;
+  background: rgba(12,32,40,.86); border: 1px solid var(--hud-line);
+  border-radius: var(--hud-r); backdrop-filter: blur(5px);
+  color: #cae5df; font: 600 10px var(--font);
+}
+.spectator-tools[hidden] { display: none; }
+.spectator-actions { display: flex; gap: 5px; justify-content: flex-end; }
+.spectator-actions button {
+  width: 42px; height: 42px; padding: 0;
+  border: 1px solid var(--hud-line); border-radius: 10px;
+  background: rgba(45,82,87,.82); color: #f1f8ff;
+  font-size: 22px; line-height: 1; cursor: pointer; touch-action: manipulation;
+}
+.spectator-actions button:hover, .spectator-actions button[aria-pressed=true] { background: var(--hud-bg-hi); }
+.spectator-actions button:disabled { opacity: .46; cursor: default; }
+.spectator-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* --- pigułka aktualnej broni w lewym górnym rogu --- */
 .weapon-tool {
   position: absolute; z-index: 12;
@@ -306,6 +328,8 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
   .weapon-tool { height: 40px; padding: 0 9px 0 5px; gap: 5px; font-size: 12.5px; max-width: min(196px, calc(100vw - 66px)); }
   .weapon-badge { width: 30px; height: 30px; }
+  .spectator-tools { top: calc(max(8px, env(safe-area-inset-top)) + 46px); font-size: 9px; }
+  .spectator-actions button { width: 38px; height: 38px; font-size: 21px; }
 }
 @media (max-height: 460px), (max-width: 430px) {
   .touch-move { left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }

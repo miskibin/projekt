@@ -1,4 +1,5 @@
 import { FIXED_DT, TEAM_NAMES, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
+import { REACTION_COOLDOWN_MS } from "@shared/protocol";
 import { generateTerrain, Terrain } from "@shared/engine/terrain";
 import type {
   ClientMessage,
@@ -7,6 +8,7 @@ import type {
   GameSnapshot,
   InputAction,
   PlayerInfo,
+  SpectatorReaction,
   TerrainSync,
   WeaponId,
 } from "@shared/protocol";
@@ -49,6 +51,8 @@ interface Els {
   fire: HTMLButtonElement;
   currentWeapon: HTMLElement;
   currentAmmo: HTMLElement;
+  spectatorTools: HTMLElement;
+  spectatorMap: HTMLButtonElement;
 }
 
 /** Spina render, wejście, dźwięk i sieć w jedną pętlę gry. */
@@ -94,6 +98,10 @@ export class GameClient {
   private autoFullscreenAttempted = false;
   private pixelRatio = 1;
   private shownCharge = -1;
+  private lastSpectatorReaction = Number.NEGATIVE_INFINITY;
+  private spectatorMapOpen = false;
+  private reactions: { team: number; wormId: number; kind: SpectatorReaction; at: number }[] = [];
+  private readonly reactionButtons: HTMLButtonElement[];
   private touchEnabled = matchMedia("(any-pointer: coarse)").matches;
   private touchResetters: Array<() => void> = [];
   private readonly resizeObserver = new ResizeObserver(() => this.resize());
@@ -121,7 +129,10 @@ export class GameClient {
       fire: byId<HTMLButtonElement>("touch-fire"),
       currentWeapon: byId("current-weapon"),
       currentAmmo: byId("current-ammo"),
+      spectatorTools: byId("spectator-tools"),
+      spectatorMap: byId<HTMLButtonElement>("spectator-map"),
     };
+    this.reactionButtons = Array.from(this.els.spectatorTools.querySelectorAll<HTMLButtonElement>("[data-reaction]"));
     const ctx = this.els.canvas.getContext("2d");
     if (!ctx) throw new Error("Brak kontekstu 2D");
     this.ctx = ctx;
@@ -209,6 +220,10 @@ export class GameClient {
     this.buffer.clear();
     this.prediction.reset();
     this.inputSeq = 0;
+    this.lastSpectatorReaction = Number.NEGATIVE_INFINITY;
+    this.reactions = [];
+    this.spectatorMapOpen = false;
+    this.els.spectatorTools.hidden = true;
     this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
     this.particles.clear();
     this.hud.clear();
@@ -216,6 +231,7 @@ export class GameClient {
     this.waterShown = WATER_LEVEL_START;
     this.showMap = false;
     byId("btn-map").setAttribute("aria-pressed", "false");
+    this.els.spectatorMap.setAttribute("aria-pressed", "false");
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.terrainTex = new TerrainRenderer(this.terrain, config.theme, config.seed);
     this.renderer.regen(config.seed);
@@ -257,6 +273,8 @@ export class GameClient {
     window.visualViewport?.removeEventListener("resize", this.onResize);
     this.resizeObserver.disconnect();
     this.demo = null;
+    this.reactions = [];
+    this.els.spectatorTools.hidden = true;
     this.prediction.reset();
     this.els.demoControls.hidden = true;
     this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
@@ -310,6 +328,13 @@ export class GameClient {
     for (const ev of events) this.pending.push({ at, ev, seq: seq ?? 0 });
   }
 
+  onReaction(team: number, wormId: number, kind: SpectatorReaction): void {
+    if (!this.running || this.demo || team < 0 || !Number.isInteger(wormId)) return;
+    if (kind !== "cheer" && kind !== "laugh" && kind !== "gasp") return;
+    this.reactions.push({ team, wormId, kind, at: this.time });
+    if (this.reactions.length > 4) this.reactions.shift();
+  }
+
   onTerrainSync(sync: TerrainSync): void {
     if (sync.eventSeq !== undefined && sync.eventSeq < this.appliedTerrainSeq) {
       this.requestTerrainRepair();
@@ -334,6 +359,7 @@ export class GameClient {
 
   onGameOver(winnerTeam: number | null, winnerName: string | null, stats: Record<string, unknown>): void {
     this.overOpen = true;
+    this.els.spectatorTools.hidden = true;
     this.syncControls();
     const title = this.els.goTitle;
     if (winnerTeam === null) {
@@ -420,11 +446,13 @@ export class GameClient {
       });
     }
     this.input.update(dt);
+    this.updateSpectatorTools(state);
     if (state && !this.demo) {
       if (!this.demo) state = this.prediction.apply(state, this.terrain, this.input.currentState,
         this.myTeam, dt, now, this.cb.rtt());
     }
     this.particles.update(dt);
+    if (this.reactions.length) this.reactions = this.reactions.filter((r) => this.time - r.at < 2.7);
     this.hud.update(dt);
 
     if (state) {
@@ -497,6 +525,7 @@ export class GameClient {
         camera: this.camera,
         particles: this.particles,
         time: this.time,
+        reactions: this.reactions.map((r) => ({ wormId: r.wormId, kind: r.kind, age: this.time - r.at })),
         myTeam: this.myTeam,
         myTurn,
         graves: this.graves,
@@ -814,6 +843,15 @@ export class GameClient {
     byId("btn-weapons").addEventListener("click", () => this.toggleWeapons());
     byId("btn-close-weapons").addEventListener("click", () => this.setWeapons(false));
     byId("btn-map").addEventListener("click", () => this.toggleMap());
+    this.els.spectatorMap.addEventListener("click", () => this.toggleMap(true));
+    for (const button of this.reactionButtons) button.addEventListener("click", () => {
+      if (this.els.spectatorTools.hidden || button.disabled || !this.cb.connected()) return;
+      const kind = button.dataset.reaction as SpectatorReaction;
+      if (kind !== "cheer" && kind !== "laugh" && kind !== "gasp") return;
+      this.lastSpectatorReaction = performance.now();
+      this.cb.send({ t: "reaction", kind });
+      this.updateSpectatorTools(this.buffer.latest);
+    });
     this.els.demoSkip.addEventListener("click", () => {
       this.demo?.applyAction({ kind: "skipTurn" });
       this.setEsc(false);
@@ -855,15 +893,35 @@ export class GameClient {
     if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
   }
 
-  private toggleMap(): void {
+  private toggleMap(fromSpectator = false): void {
     this.showMap = !this.showMap;
+    this.spectatorMapOpen = fromSpectator && this.showMap;
     byId("btn-map").setAttribute("aria-pressed", String(this.showMap));
+    this.els.spectatorMap.setAttribute("aria-pressed", String(this.showMap));
     if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
+  }
+
+  private updateSpectatorTools(state: GameSnapshot | null): void {
+    const turn = this.buffer.latest?.turn ?? state?.turn;
+    const waiting = !!turn && !this.demo && !this.overOpen && !this.escOpen && !this.panelOpen &&
+      turn.phase !== "gameOver" && turn.activeTeam >= 0 && turn.activeTeam !== this.myTeam;
+    this.els.spectatorTools.hidden = !waiting;
+    if (!waiting && this.spectatorMapOpen) {
+      this.showMap = false;
+      this.spectatorMapOpen = false;
+      byId("btn-map").setAttribute("aria-pressed", "false");
+      this.els.spectatorMap.setAttribute("aria-pressed", "false");
+    }
+    if (waiting) {
+      const disabled = !this.cb.connected() || performance.now() - this.lastSpectatorReaction < REACTION_COOLDOWN_MS;
+      for (const button of this.reactionButtons) button.disabled = disabled;
+    }
   }
 
   private syncControls(): void {
     const blocked = this.panelOpen || this.escOpen || this.overOpen;
     byId("touch-controls").hidden = !this.touchEnabled || blocked;
+    if (blocked) this.els.spectatorTools.hidden = true;
     if (!this.touchEnabled || blocked) {
       for (const reset of this.touchResetters) reset();
       this.input.cancelControls();
