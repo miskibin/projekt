@@ -4,6 +4,8 @@ import type {
   BarrelSnapshot,
   GameSnapshot,
   MineSnapshot,
+  TreeSnapshot,
+  SpringSnapshot,
   ProjectileSnapshot,
   TeamSnapshot,
   TurnInfo,
@@ -26,6 +28,8 @@ export interface RenderState {
   projectiles: ProjectileSnapshot[];
   crates: CrateSnapshot[];
   barrels?: BarrelSnapshot[];
+  trees?: TreeSnapshot[];
+  springs?: SpringSnapshot[];
   mines: MineSnapshot[];
   teams: TeamSnapshot[];
   turn: TurnInfo;
@@ -149,6 +153,7 @@ function toRender(a: GameSnapshot, b: GameSnapshot, t: number): RenderState {
   const ap = indexById(a.projectiles);
   const ac = indexById(a.crates);
   const am = indexById(a.mines);
+  const at = indexById(a.trees ?? []);
 
   const worms: WormSnapshot[] = b.worms.map((w) => {
     const o = aw.get(w.id);
@@ -203,6 +208,11 @@ function toRender(a: GameSnapshot, b: GameSnapshot, t: number): RenderState {
     projectiles,
     crates,
     barrels: b.barrels ?? [],
+    trees: (b.trees ?? []).map((tree) => {
+      const old = at.get(tree.id);
+      return old ? { ...tree, angle: lerp(old.angle, tree.angle, t), opacity: lerp(old.opacity, tree.opacity, t) } : tree;
+    }),
+    springs: b.springs ?? [],
     mines,
     teams,
     turn,

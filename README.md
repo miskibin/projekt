@@ -75,6 +75,13 @@ robią krok w wybraną stronę, a skok wykonuje odskok. Możesz wcześniej wskaz
 własnego robaka w panelu. Działa to także przez internet; okno reakcji pojawia się
 po strzale przeciwnika. W panelu pozostaje przycisk mapy **▧**.
 
+Na mapie pojawia się kilka drzew. **Siekierą** można uderzyć stojącego blisko
+robaka albo ściąć drzewo: pień przewróci się w stronę ciosu, może przygnieść
+każdego robaka na drodze i po chwili zniknie. Wybór **Katapulta** pozwala
+postawić jedną ukrytą pułapkę na drużynę w meczu. Przeciwnik nie otrzyma jej
+pozycji w pakietach sieciowych przed uruchomieniem; gdy na nią wejdzie,
+zostanie wyrzucony w górę i na bok. Sama pułapka nie odbiera HP.
+
 ## Gra z komputerem
 
 W menu wybierz **„Graj z komputerem”** albo otwórz stronę z `?computer=1`. Grasz Czerwonymi,

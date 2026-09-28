@@ -33,7 +33,8 @@ export function chooseComputerWeapon(stage: number, round: number, distance: num
   ammo: Partial<Record<WeaponId, number>>, enemyCluster = 0, allyClose = false): WeaponId {
   const role = (Math.max(1, stage) - 1) % SOLO_OPPONENTS.length;
   const available = (id: WeaponId) => ammo[id] !== undefined && ammo[id] !== 0;
-  if (role === 0) return distance < 130 && available("shotgun") ? "shotgun" : "bazooka";
+  if (role === 0) return distance < 62 && available("axe") ? "axe" :
+    distance < 130 && available("shotgun") ? "shotgun" : "bazooka";
   if (role === 1) {
     if (distance > 110 && distance < 350 && available("banana") && round % 3 === 0) return "banana";
     return "grenade";
@@ -43,6 +44,7 @@ export function chooseComputerWeapon(stage: number, round: number, distance: num
     return distance < 170 && available("shotgun") ? "shotgun" : "bazooka";
   }
   if (role === 3) {
+    if (distance > 90 && distance < 160 && round < 3 && available("spring")) return "spring";
     if (distance < 90 && !allyClose && available("mine")) return "mine";
     if (enemyCluster && available("cluster") && distance > 100) return "cluster";
     return "grenade";

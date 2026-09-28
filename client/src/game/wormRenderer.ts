@@ -1433,6 +1433,25 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
       ctx.fill();
       break;
     }
+    case "spring": {
+      ctx.fillStyle = "#e1ac4e";
+      roundRect(ctx, 0, -2, 9, 3, 1);
+      ctx.fill();
+      ctx.strokeStyle = "#d9f2ff";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(1, 1); ctx.lineTo(3, 3); ctx.lineTo(5, 1); ctx.lineTo(7, 3);
+      ctx.stroke();
+      break;
+    }
+    case "axe": {
+      ctx.strokeStyle = "#804d2e";
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(1, 4); ctx.lineTo(10, -7); ctx.stroke();
+      ctx.fillStyle = "#bbdbe5";
+      ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(15, -9); ctx.lineTo(14, -3); ctx.lineTo(10, -5); ctx.closePath(); ctx.fill();
+      break;
+    }
     case "airstrike": {
       ctx.fillStyle = "#2f3742";
       roundRect(ctx, 1, -3.5, 6, 7, 1.4);

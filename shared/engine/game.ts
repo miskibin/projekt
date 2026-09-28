@@ -27,6 +27,8 @@ import {
 import type {
   CrateSnapshot,
   BarrelSnapshot,
+  TreeSnapshot,
+  SpringSnapshot,
   GameConfig,
   GameEvent,
   GameSnapshot,
@@ -50,7 +52,7 @@ import { WEAPONS, matchArsenal, startingAmmo, type WeaponDef } from "./weapons";
 import { makeProjectile, detonateProjectile, stepProjectiles } from "./projectiles";
 import { placeMine, spawnCrate, spawnInitialMines, stepCrates, stepMines, MINE_RADIUS } from "./crates";
 import { WORM_NAMES } from "./names";
-import type { Crate, DeathReason, EngineCtx, Mine, Projectile, TeamState, Worm } from "./types";
+import type { Crate, DeathReason, EngineCtx, FallingTree, Mine, Projectile, SpringTrap, TeamState, Worm } from "./types";
 
 const STARTING_TIME = 0.75;
 const SETTLE_TIMEOUT = 7;
@@ -109,6 +111,8 @@ export class GameImpl implements Game, EngineCtx {
   readonly crates: Crate[] = [];
   readonly mines: Mine[] = [];
   readonly barrels: BarrelSnapshot[] = [];
+  readonly trees: FallingTree[] = [];
+  readonly springs: SpringTrap[] = [];
   readonly teams: TeamState[] = [];
   private readonly spawnSites: Array<{ x: number; y: number }>;
   private readonly matchFeature: MatchFeature;
@@ -197,6 +201,7 @@ export class GameImpl implements Game, EngineCtx {
 
     spawnInitialMines(this);
     this.spawnBarrels(this.matchFeature === "barrels" ? 5 : 3);
+    this.spawnTrees(this.config.theme === "desert" ? 3 : 4);
     if (draft) {
       spawnCrate(this, "weapon", true);
       spawnCrate(this, "utility", true);
@@ -224,6 +229,83 @@ export class GameImpl implements Game, EngineCtx {
         this.barrels.push({ id: this.nextId(), x, y });
         break;
       }
+    }
+  }
+
+  private spawnTrees(count: number): void {
+    for (let n = 0; n < count; n++) {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const x = this.rng.int(95, WORLD_WIDTH - 95);
+        const y = this.terrain.surfaceY(x);
+        const height = this.rng.int(65, 92);
+        if (y < height + 55 || y > this.waterLevel - 35 ||
+          !this.terrain.isSolid(x, y + 5) || this.terrain.isSolid(x, y - height)) continue;
+        if (this.worms.some((w) => Math.abs(w.x - x) < 63 && Math.abs(w.y - y) < 82) ||
+          this.barrels.some((b) => Math.abs(b.x - x) < 42) ||
+          this.trees.some((tree) => Math.abs(tree.x - x) < 195)) continue;
+        this.trees.push({ id: this.nextId(), x, y, height, angle: 0, direction: 1,
+          falling: false, fade: 1, hitWorms: new Set() });
+        break;
+      }
+    }
+  }
+
+  private fellTree(tree: FallingTree, direction: -1 | 1): void {
+    if (tree.falling) return;
+    tree.falling = true;
+    tree.direction = direction;
+    this.emit({ t: "treeFall", x: tree.x, y: tree.y, direction });
+    this.emit({ t: "sound", name: "wood", x: tree.x, y: tree.y });
+  }
+
+  private stepTreesAndSprings(dt: number): void {
+    for (let i = this.trees.length - 1; i >= 0; i--) {
+      const tree = this.trees[i];
+      if (!tree.falling) continue;
+      const prev = tree.angle;
+      tree.angle = Math.min(Math.PI / 2, tree.angle + dt * 2.7);
+      const x0 = tree.x;
+      const y0 = tree.y;
+      const x1 = x0 + tree.direction * Math.sin(tree.angle) * tree.height;
+      const y1 = y0 - Math.cos(tree.angle) * tree.height;
+      for (const worm of this.worms) {
+        if (!worm.alive || tree.hitWorms.has(worm.id)) continue;
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+        const along = clamp(((worm.x - x0) * dx + (worm.y - y0) * dy) / (tree.height * tree.height), 0, 1);
+        const dist = Math.hypot(worm.x - (x0 + along * dx), worm.y - (y0 + along * dy));
+        // Górna korona ma szerszy obszar uderzenia niż pień.
+        if (dist > WORM_RADIUS + (along > 0.72 ? 21 : 8) || tree.angle <= 0.12) continue;
+        tree.hitWorms.add(worm.id);
+        worm.vx = tree.direction * 175;
+        worm.vy = -230;
+        worm.onGround = false;
+        this.damageWorm(worm, 34, "explosion");
+      }
+      if (tree.angle === Math.PI / 2) {
+        if (prev < Math.PI / 2) this.emit({ t: "sound", name: "wood", x: x1, y: y1 });
+        tree.fade -= dt * 0.7;
+        if (tree.fade <= 0) this.trees.splice(i, 1);
+      }
+    }
+    for (let i = this.springs.length - 1; i >= 0; i--) {
+      const spring = this.springs[i];
+      if (spring.revealed) {
+        spring.life -= dt;
+        if (spring.life <= 0) this.springs.splice(i, 1);
+        continue;
+      }
+      const victim = this.worms.find((w) => w.alive && w.team !== spring.ownerTeam &&
+        Math.abs(w.x - spring.x) < 23 && Math.abs(w.y - (spring.y - WORM_RADIUS)) < 18);
+      if (!victim) continue;
+      spring.revealed = true;
+      spring.life = 0.7;
+      victim.vx = victim.x < spring.x ? -345 : 345;
+      victim.vy = -570;
+      victim.onGround = false;
+      this.lastGroundedAt.delete(victim.id);
+      this.emit({ t: "springTriggered", x: spring.x, y: spring.y, wormId: victim.id });
+      this.emit({ t: "sound", name: "spring", x: spring.x, y: spring.y });
     }
   }
 
@@ -336,6 +418,7 @@ export class GameImpl implements Game, EngineCtx {
     this.updateBurst(dt);
     for (const w of this.worms) this.updateWorm(w, dt);
     stepProjectiles(this, dt);
+    this.stepTreesAndSprings(dt);
     stepMines(this, dt);
     stepCrates(this, dt);
     this.updateTurnPhase(dt);
@@ -601,6 +684,15 @@ export class GameImpl implements Game, EngineCtx {
       this.explode(barrel.x, barrel.y, 47, 42, 390, "barrel");
     }
 
+    for (const tree of this.trees) {
+      if (tree.falling) continue;
+      const trunkX = tree.x;
+      const trunkY = tree.y - tree.height * 0.45;
+      if (Math.hypot(trunkX - xi, trunkY - yi) < ri + tree.height * 0.4) {
+        this.fellTree(tree, xi < tree.x ? 1 : -1);
+      }
+    }
+
     const reach = ri * 1.5;
     for (const w of this.worms) {
       if (!w.alive) continue;
@@ -778,6 +870,7 @@ export class GameImpl implements Game, EngineCtx {
 
   private isCalm(): boolean {
     if (this.projectiles.length > 0) return false;
+    if (this.trees.some((tree) => tree.falling && tree.angle < Math.PI / 2)) return false;
     if (this.burst) return false;
     if (this.explosionQueue.length > 0) return false;
     for (const m of this.mines) if (!m.onGround || m.fuse !== undefined) return false;
@@ -1184,6 +1277,18 @@ export class GameImpl implements Game, EngineCtx {
           w.y + WORM_RADIUS - MINE_RADIUS, ts.weaponTimer);
         break;
       }
+      case "spring": {
+        const tx = Math.round(clamp(w.x + w.facing * 50, 30, WORLD_WIDTH - 30));
+        const ty = this.terrain.surfaceY(tx);
+        if (ty > this.waterLevel - 12 || Math.abs(ty - w.y) > 44 ||
+            this.springs.some((trap) => Math.abs(trap.x - tx) < 48 && Math.abs(trap.y - ty) < 28)) {
+          this.emit({ t: "message", text: "Tu nie da się postawić katapulty." });
+          return;
+        }
+        this.emitShot(id, w);
+        this.springs.push({ id: this.nextId(), x: tx, y: ty, ownerTeam: w.team, revealed: false, life: 0 });
+        break;
+      }
       case "shotgun": {
         this.emitShot(id, w);
         const hits = new Map<Worm, number>();
@@ -1208,6 +1313,27 @@ export class GameImpl implements Game, EngineCtx {
       }
       case "bat": {
         this.swingBat(w, dirX, dirY);
+        break;
+      }
+      case "axe": {
+        this.emitShot(id, w);
+        const tree = this.trees.filter((t) => !t.falling && (t.x - w.x) * w.facing > 0 &&
+          Math.abs(t.x - w.x) < 68 && Math.abs(t.y - w.y) < 58)
+          .sort((a, b) => Math.abs(a.x - w.x) - Math.abs(b.x - w.x))[0];
+        if (tree) this.fellTree(tree, w.facing);
+        else {
+          const victim = this.worms.filter((other) => other.alive && other.id !== w.id &&
+            (other.x - w.x) * w.facing > 0 && Math.hypot(other.x - w.x, other.y - w.y) < 64)
+            .sort((a, b) => Math.hypot(a.x - w.x, a.y - w.y) - Math.hypot(b.x - w.x, b.y - w.y))[0];
+          if (victim) {
+            victim.vx = w.facing * 310;
+            victim.vy = -200;
+            victim.onGround = false;
+            this.damageWorm(victim, def.damage, "explosion");
+          }
+        }
+        w.anim = "bat";
+        w.animTimer = 0.35;
         break;
       }
       case "airstrike": {
@@ -1289,7 +1415,8 @@ export class GameImpl implements Game, EngineCtx {
       id === "bazooka" || id === "homing" ? "rocket" :
       id === "grenade" || id === "cluster" || id === "banana" ? "throw" :
       id === "drill" ? "drill" : id === "airstrike" ? "airstrike" :
-      id === "dynamite" || id === "mine" ? "place" : "shot";
+      id === "dynamite" || id === "mine" || id === "spring" ? "place" :
+      id === "axe" ? "axe" : "shot";
     this.emit({ t: "sound", name, x: w.x, y: w.y });
   }
 
@@ -1533,6 +1660,10 @@ export class GameImpl implements Game, EngineCtx {
       projectiles,
       crates,
       barrels: this.barrels.map((b) => ({ ...b })),
+      trees: this.trees.map((tree): TreeSnapshot => ({ id: tree.id, x: r2(tree.x), y: r2(tree.y),
+        height: tree.height, angle: r3(tree.angle * tree.direction), opacity: r2(Math.max(0, tree.fade)) })),
+      springs: this.springs.map((spring): SpringSnapshot => ({ id: spring.id, x: r2(spring.x), y: r2(spring.y),
+        ownerTeam: spring.ownerTeam, revealed: spring.revealed })),
       mines,
       teams,
       turn,

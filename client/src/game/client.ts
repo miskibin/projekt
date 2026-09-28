@@ -730,6 +730,17 @@ export class GameClient {
         this.sound.play("jump");
         break;
       }
+      case "treeFall": {
+        this.particles.sparks(ev.x, ev.y - 18, 12, "#9d734a");
+        this.camera.glance(ev.x + ev.direction * 38, ev.y - 32, 0.4);
+        break;
+      }
+      case "springTriggered": {
+        this.particles.sparks(ev.x, ev.y - 9, 17, "#ffce65");
+        this.particles.floatText(ev.x, ev.y - 40, "BOING!", "#ffda75", 20);
+        this.camera.glance(ev.x, ev.y - 35, 0.3);
+        break;
+      }
       case "suddenDeath": {
         this.hud.banner("SUDDEN DEATH!", 3);
         break;

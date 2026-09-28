@@ -15,6 +15,8 @@ export type WeaponId =
   | "drill"
   | "banana"
   | "bat"
+  | "axe"
+  | "spring"
   | "teleport"
   | "girder"
   | "jetpack"
@@ -100,7 +102,6 @@ export interface WormSnapshot {
   facing: 1 | -1;
   aim: number;
   onGround: boolean;
-  /** Pozostały czas aktywnej osłony obrońcy. */
   /** np. "jetpack" gdy używa plecaka, "bat" gdy macha kijem */
   anim?: string;
 }
@@ -129,6 +130,24 @@ export interface CrateSnapshot {
 }
 
 export interface BarrelSnapshot { id: number; x: number; y: number }
+
+export interface TreeSnapshot {
+  id: number;
+  x: number;
+  y: number;
+  height: number;
+  angle: number;
+  /** 0..1, po upadku drzewo znika */
+  opacity: number;
+}
+
+export interface SpringSnapshot {
+  id: number;
+  x: number;
+  y: number;
+  ownerTeam: number;
+  revealed: boolean;
+}
 
 export interface MineSnapshot {
   id: number;
@@ -173,7 +192,7 @@ export interface TurnInfo {
   girderAngle?: number;
   /** Drużyny, które mogą jeszcze odpowiedzieć na aktualny atak. */
   defenseReady?: number[];
-  /** Atak już się zaczął; można użyć uniku lub osłony. */
+  /** Atak już się zaczął; można odpowiedzieć krokiem lub skokiem. */
   defenseWindow?: boolean;
 }
 
@@ -187,6 +206,9 @@ export interface GameSnapshot {
   crates: CrateSnapshot[];
   /** Niszczalne beczki z paliwem na powierzchni mapy. */
   barrels?: BarrelSnapshot[];
+  trees?: TreeSnapshot[];
+  /** Pułapki są wysyłane tylko drużynie, która je położyła, dopóki nie zadziałają. */
+  springs?: SpringSnapshot[];
   mines: MineSnapshot[];
   teams: TeamSnapshot[];
   turn: TurnInfo;
@@ -227,7 +249,9 @@ export type GameEvent =
   | { t: "suddenDeath" }
   | { t: "message"; text: string } // komunikaty na ekranie ("Sudden death!", "Robak X utonął")
   | { t: "sound"; name: string; x?: number; y?: number }
-  | { t: "defense"; wormId: number; style: "step" | "jump"; x: number; y: number };
+  | { t: "defense"; wormId: number; style: "step" | "jump"; x: number; y: number }
+  | { t: "treeFall"; x: number; y: number; direction: -1 | 1 }
+  | { t: "springTriggered"; x: number; y: number; wormId: number };
 
 export interface TerrainSync {
   width: number;

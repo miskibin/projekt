@@ -5,7 +5,7 @@ import {
   WORM_MAX_HP,
   WORM_RADIUS,
 } from "@shared/constants";
-import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
+import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, SpringSnapshot, TreeSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { Particles } from "./particles";
 import type { RenderState } from "./state";
@@ -150,6 +150,8 @@ export class Renderer {
     this.updateAnimator(inp, dt);
     this.drawGraves(ctx, inp);
     this.drawBarrels(ctx, inp.state.barrels ?? []);
+    this.drawTrees(ctx, inp.state.trees ?? [], inp.theme);
+    this.drawSprings(ctx, inp.state.springs ?? [], inp.myTeam);
     this.drawMines(ctx, inp.state.mines, inp.time);
     this.drawCrates(ctx, inp.state.crates, inp.time);
     this.drawWorms(ctx, inp);
@@ -164,6 +166,92 @@ export class Renderer {
   }
 
   // ---------------- woda ----------------
+  private drawTrees(ctx: CanvasRenderingContext2D, trees: readonly TreeSnapshot[], theme: ThemeId): void {
+    const crown = theme === "snow" ? "#285969" : theme === "desert" ? "#779653" :
+      theme === "hell" ? "#9c3924" : "#4a9b43";
+    const highlight = theme === "snow" ? "#d3e8e8" : theme === "desert" ? "#a9b86c" :
+      theme === "hell" ? "#d67738" : "#96cc58";
+    const wood = theme === "hell" ? "#312c33" : "#705039";
+    for (const tree of trees) {
+      ctx.save();
+      ctx.globalAlpha = tree.opacity;
+      ctx.translate(tree.x, tree.y);
+      ctx.rotate(tree.angle);
+      const h = tree.height;
+      ctx.fillStyle = "rgba(9,20,21,.28)";
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 14, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineCap = "round";
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "#352f31";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(-2, -h * .76);
+      ctx.stroke();
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = wood;
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = wood;
+      ctx.beginPath();
+      ctx.moveTo(-2, -h * .57);
+      ctx.lineTo(-15, -h * .73);
+      ctx.moveTo(-2, -h * .64);
+      ctx.lineTo(14, -h * .82);
+      ctx.stroke();
+      // Proste wielokąty z kilkoma płatami – czytelne w zbliżeniu i tanie na GPU.
+      const lobes = theme === "desert" ? 3 : 5;
+      for (let i = 0; i < lobes; i++) {
+        const px = (i - (lobes - 1) / 2) * 10;
+        const py = -h + (i % 2) * 5;
+        const radius = theme === "desert" ? 12 : 15;
+        ctx.fillStyle = crown;
+        ctx.beginPath();
+        for (let j = 0; j < 7; j++) {
+          const a = j * Math.PI * 2 / 7;
+          const rr = radius * (j % 2 ? 0.83 : 1.07);
+          const xx = px + Math.cos(a) * rr;
+          const yy = py + Math.sin(a) * rr;
+          if (j === 0) ctx.moveTo(xx, yy);
+          else ctx.lineTo(xx, yy);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = highlight;
+        ctx.beginPath();
+        ctx.ellipse(px - 3, py - 7, radius * .48, radius * .19, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
+
+  private drawSprings(ctx: CanvasRenderingContext2D, springs: readonly SpringSnapshot[], team: number): void {
+    for (const spring of springs) {
+      // Serwer filtruje ukryte pułapki; ta kontrola chroni też lokalny podgląd.
+      if (!spring.revealed && spring.ownerTeam !== team) continue;
+      ctx.save();
+      ctx.translate(spring.x, spring.y - 3);
+      ctx.fillStyle = spring.revealed ? "#ffbc51" : teamColor(spring.ownerTeam);
+      ctx.strokeStyle = "#142434";
+      ctx.lineWidth = 2;
+      roundRect(ctx, -14, -5, 28, 7, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = "#d9f2ff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-8, 0);
+      ctx.lineTo(-4, -5);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(4, -5);
+      ctx.lineTo(8, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   private drawBarrels(ctx: CanvasRenderingContext2D, barrels: readonly BarrelSnapshot[]): void {
     for (const barrel of barrels) {
       const x = barrel.x;

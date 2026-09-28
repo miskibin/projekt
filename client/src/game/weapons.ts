@@ -3,7 +3,7 @@ import type { WeaponId } from "@shared/protocol";
 export const WEAPON_ORDER: WeaponId[] = [
   "bazooka", "grenade", "cluster", "banana",
   "shotgun", "uzi", "holy", "dynamite",
-  "mine", "airstrike", "homing", "drill", "bat",
+  "mine", "spring", "airstrike", "homing", "drill", "bat", "axe",
   "teleport", "girder", "jetpack", "skip",
 ];
 
@@ -21,6 +21,8 @@ export const WEAPON_NAMES: Record<WeaponId, string> = {
   drill: "Wiertło",
   banana: "Banan",
   bat: "Kij bejsbolowy",
+  axe: "Siekiera",
+  spring: "Katapulta",
   teleport: "Teleport",
   girder: "Belka",
   jetpack: "Plecak odrzutowy",
@@ -32,6 +34,7 @@ export const WEAPON_COLORS: Record<WeaponId, string> = {
   bazooka: "#ff9961", grenade: "#9de47f", cluster: "#66f2d1", banana: "#ffe467",
   shotgun: "#f6cb96", uzi: "#b9dbff", holy: "#ffecaa", dynamite: "#ff7368",
   mine: "#aab8c7", airstrike: "#ff8c75", homing: "#71e8ff", drill: "#a2eefb", bat: "#d9a274",
+  axe: "#d5e5ed", spring: "#ffca64",
   teleport: "#c99dff", girder: "#e3a471", jetpack: "#85d9ff", skip: "#bdc4d1",
 };
 
@@ -50,6 +53,8 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
   homing: "Wskaż cel; rakieta skoryguje lot.",
   drill: "Wierci tunel na 145 px i wybucha pod ziemią. Celuj w grunt pod rywalem.",
   bat: "Mocny cios z bliska – zepchnij rywala do wody.",
+  axe: "Tnie robaka z bliska albo przewraca drzewo w kierunku uderzenia.",
+  spring: "Jedna na drużynę w meczu. Ukryta katapulta wyrzuca rywala, gdy na nią wejdzie.",
   teleport: "Wskaż bezpieczne miejsce na mapie.",
   girder: "Postaw belkę jako osłonę lub most.",
   jetpack: "Lataj przyciskami ruchu, pilnując paliwa.",
@@ -58,7 +63,7 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
 
 /** Bronie strzelające natychmiast (bez ładowania mocy). */
 export const NO_CHARGE: ReadonlySet<WeaponId> = new Set<WeaponId>([
-  "shotgun", "uzi", "bat", "dynamite", "mine", "jetpack", "skip",
+  "shotgun", "uzi", "bat", "axe", "spring", "dynamite", "mine", "jetpack", "skip",
 ]);
 
 /** Bronie wymagające wskazania celu na mapie. */
@@ -206,6 +211,22 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       ctx.fill();
       break;
     }
+    case "spring": {
+      ctx.fillStyle = "#bb7c3a";
+      rrect(ctx, -13 * u, 7 * u, 26 * u, 5 * u, 2 * u);
+      ctx.strokeStyle = "#eef8fa";
+      ctx.lineWidth = 2.8 * u;
+      ctx.beginPath();
+      ctx.moveTo(-10 * u, 7 * u);
+      ctx.lineTo(-5 * u, -4 * u);
+      ctx.lineTo(0, 7 * u);
+      ctx.lineTo(5 * u, -4 * u);
+      ctx.lineTo(10 * u, 7 * u);
+      ctx.stroke();
+      ctx.fillStyle = "#ffbe5c";
+      rrect(ctx, -12 * u, -8 * u, 24 * u, 4 * u, 2 * u);
+      break;
+    }
     case "airstrike": {
       ctx.fillStyle = "#8fa0b8";
       ctx.beginPath();
@@ -274,6 +295,20 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       ctx.fill();
       ctx.fillStyle = "#7a4a1f";
       rrect(ctx, -14 * u, -1 * u, 5 * u, 4 * u, 1.5 * u);
+      break;
+    }
+    case "axe": {
+      ctx.rotate(-0.6);
+      ctx.fillStyle = "#87572e";
+      rrect(ctx, -2 * u, -14 * u, 4 * u, 29 * u, 2 * u);
+      ctx.fillStyle = "#b9d4df";
+      ctx.beginPath();
+      ctx.moveTo(-2 * u, -13 * u);
+      ctx.lineTo(-15 * u, -16 * u);
+      ctx.lineTo(-15 * u, -5 * u);
+      ctx.lineTo(-2 * u, -7 * u);
+      ctx.closePath();
+      ctx.fill();
       break;
     }
     case "teleport": {

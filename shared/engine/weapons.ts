@@ -61,6 +61,8 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   homing: D("homing", 1, 40, 50, 330, { charge: true, target: "optional" }),
   drill: D("drill", 2, 34, 42, 260, { charge: true }),
   bat: D("bat", 2, 0, 30, 500),
+  axe: D("axe", -1, 0, 37, 360),
+  spring: D("spring", 1, 0, 0, 700, { retreat: 0.7 }),
   teleport: D("teleport", 2, 0, 0, 0, { target: "required", retreat: 0.7 }),
   girder: D("girder", 3, 0, 0, 0, { target: "required", utility: true }),
   jetpack: D("jetpack", 1, 0, 0, 0, { utility: true }),
@@ -73,6 +75,7 @@ export const WEAPON_LABELS: Partial<Record<WeaponId, string>> = {
   banana: "Banan", holy: "Święty granat", dynamite: "Dynamit", airstrike: "Nalot",
   cluster: "Odłamkowy", homing: "Rakieta", mine: "Mina", uzi: "Uzi", bat: "Kij",
   drill: "Wiertło", teleport: "Teleport", girder: "Belka", jetpack: "Plecak",
+  axe: "Siekiera", spring: "Katapulta",
 };
 
 /** Bronie ze skończoną amunicją, które mogą wypaść ze skrzynki "weapon". */
@@ -106,6 +109,7 @@ export function startingAmmo(): Record<WeaponId, number> {
 export function matchArsenal(rng: Rng): { ammo: Record<WeaponId, number>; selected: WeaponId[] } {
   const ammo = startingAmmo();
   for (const id of WEAPON_IDS) if (ammo[id] > 0) ammo[id] = 0;
+  ammo.spring = 1;
 
   const spectacular: WeaponId[] = ["banana", "holy", "dynamite", "airstrike"];
   const tactical: WeaponId[] = ["cluster", "homing", "mine", "uzi", "bat", "drill"];

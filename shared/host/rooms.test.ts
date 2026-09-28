@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { MAX_PLAYERS } from "../constants";
+import { createGame } from "../engine";
 import {
   CODE_ALPHABET,
   RoomManager,
   ROOM_CODE_LENGTH,
   defaultConfig,
+  messageForTeam,
   sanitizeName,
   toRoomState,
   validateConfigPatch,
@@ -12,6 +14,19 @@ import {
 import type { Peer, Room } from "./rooms";
 
 const peer: Peer = { id: "peer", send: () => {} };
+
+it("nie wysyła lokalizacji cudzej ukrytej katapulty, nawet w surowym snapshocie", () => {
+  const snapshot = createGame(defaultConfig(), [
+    { team: 0, playerId: "p0", name: "A" }, { team: 1, playerId: "p1", name: "B" },
+  ]).snapshot();
+  snapshot.springs = [{ id: 1, x: 400, y: 500, ownerTeam: 0, revealed: false },
+    { id: 2, x: 600, y: 500, ownerTeam: 1, revealed: true }];
+  const message = { t: "snapshot" as const, snapshot };
+  const rival = messageForTeam(message, 1);
+  expect(rival.t === "snapshot" ? rival.snapshot.springs?.map((s) => s.id) : []).toEqual([2]);
+  const owner = messageForTeam(message, 0);
+  expect(owner.t === "snapshot" ? owner.snapshot.springs?.map((s) => s.id) : []).toEqual([1, 2]);
+});
 
 function makeRoom(mgr: RoomManager, hostName = "Host"): Room {
   return mgr.createRoom({ id: "host-id", name: hostName, peer });

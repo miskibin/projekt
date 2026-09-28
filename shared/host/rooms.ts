@@ -149,8 +149,15 @@ export function toRoomState(room: Room): RoomState {
 export function broadcast(room: Room, msg: ServerMessage, except?: RoomPlayer): void {
   for (const p of room.players) {
     if (p === except) continue;
-    p.peer?.send(msg);
+    p.peer?.send(messageForTeam(msg, p.team));
   }
+}
+
+/** Niewyzwolone katapulty są tajne nawet w przesyłanym pakiecie sieciowym. */
+export function messageForTeam(msg: ServerMessage, team: number): ServerMessage {
+  if (msg.t !== "snapshot" || !msg.snapshot.springs?.length) return msg;
+  return { ...msg, snapshot: { ...msg.snapshot,
+    springs: msg.snapshot.springs.filter((spring) => spring.ownerTeam === team || spring.revealed) } };
 }
 
 export function broadcastRoomState(room: Room): void {

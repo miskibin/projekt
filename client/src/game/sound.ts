@@ -166,6 +166,18 @@ export class Sound {
         this.noise(t, 0.12, 1800, 0.4, "bandpass", 900);
         this.tone(t, "triangle", 500, 160, 0.25, 0.14);
         break;
+      case "axe":
+        this.noise(t, 0.13, 1350, 0.3, "bandpass", 330);
+        this.tone(t, "triangle", 420, 110, 0.21, 0.18);
+        break;
+      case "wood":
+        this.noise(t, 0.27, 530, 0.32, "lowpass");
+        this.tone(t, "triangle", 145, 65, 0.18, 0.26);
+        break;
+      case "spring":
+        this.tone(t, "sine", 160, 760, 0.17, 0.2);
+        this.tone(t + 0.08, "triangle", 430, 225, 0.21, 0.16);
+        break;
       case "teleport":
         this.tone(t, "sine", 180, 1500, 0.2, 0.35);
         this.noise(t, 0.3, 2600, 0.16, "highpass");

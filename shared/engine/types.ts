@@ -22,7 +22,6 @@ export interface Worm {
   /** kąt względem kierunku patrzenia, [-PI/2, PI/2] */
   aim: number;
   onGround: boolean;
-  /** Czas silnika, do którego osłona zmniejsza obrażenia oraz odrzut. */
   anim?: string;
   /** licznik czasu animacji jednorazowej (bat) */
   animTimer: number;
@@ -101,6 +100,27 @@ export interface Mine {
   triggerFuse?: number;
   onGround: boolean;
   dead: boolean;
+}
+
+export interface FallingTree {
+  id: number;
+  x: number;
+  y: number;
+  height: number;
+  angle: number;
+  direction: -1 | 1;
+  falling: boolean;
+  fade: number;
+  hitWorms: Set<number>;
+}
+
+export interface SpringTrap {
+  id: number;
+  x: number;
+  y: number;
+  ownerTeam: number;
+  revealed: boolean;
+  life: number;
 }
 
 export interface TeamState {

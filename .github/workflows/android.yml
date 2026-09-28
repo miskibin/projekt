@@ -51,8 +51,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk Wormsy-Android.apk
           gh release create "android-${GITHUB_RUN_NUMBER}" \
-            "android/app/build/outputs/apk/debug/app-debug.apk#Wormsy-Android.apk" \
+            Wormsy-Android.apk \
             --title "Wormsy Android · build ${GITHUB_RUN_NUMBER}" \
             --notes "Android APK z Bluetooth i trybem solo. Wersja testowa podpisana kluczem debug." \
             --latest

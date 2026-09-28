@@ -231,7 +231,8 @@ describe("determinizm", () => {
     expect(red!.ammo).toEqual(blue!.ammo);
     expect(red!.ammo).toEqual(b.snapshot().teams[0]!.ammo);
     expect(red!.ammo.bazooka).toBe(-1);
-    expect(Object.entries(red!.ammo).filter(([id, amount]) => id !== "bazooka" && id !== "grenade" && id !== "shotgun" && id !== "skip" && amount! > 0)).toHaveLength(4);
+    expect(red!.ammo.spring).toBe(1);
+    expect(Object.entries(red!.ammo).filter(([id, amount]) => id !== "bazooka" && id !== "grenade" && id !== "shotgun" && id !== "skip" && id !== "spring" && amount! > 0)).toHaveLength(4);
     const variants = new Set([72, 73, 74, 75, 76].map((seed) => JSON.stringify(createGame(cfg({ mode: "arsenal", seed }), setups(2)).snapshot().teams[0]!.ammo)));
     expect(variants.size).toBeGreaterThan(1);
     expect(createGame(cfg({ mode: "classic" }), setups(2)).snapshot().teams[0]!.ammo.drill).toBe(2);
@@ -954,6 +955,51 @@ describe("terrainSync", () => {
     let diff = 0;
     for (let i = 0; i < g.terrain.data.length; i++) if (clone.data[i] !== g.terrain.data[i]) diff++;
     expect(diff).toBe(0);
+  });
+});
+
+describe("drzewa i katapulta", () => {
+  it("siekiera przewraca drzewo na rywala i drzewo znika po upadku", () => {
+    const game = createGame(cfg({ seed: 20240213, wormsPerTeam: 1 }), setups(2)) as GameImpl;
+    toActive(game);
+    const tree = game.trees[0]!;
+    expect(tree).toBeDefined();
+    const attacker = game.worms.find((w) => w.id === game.snapshot().turn.activeWormId)!;
+    const victim = game.worms.find((w) => w.team !== attacker.team)!;
+    for (let y = tree.y - 110; y < tree.y + 45; y++)
+      for (let x = tree.x - 85; x < tree.x + 110; x++) game.terrain.set(x, y, y >= tree.y ? 1 : 0);
+    attacker.x = tree.x - 51; attacker.y = tree.y - 9; attacker.facing = 1;
+    victim.x = tree.x + 53; victim.y = tree.y - 9; victim.vx = 0; victim.vy = 0;
+    game.applyAction(attacker.team, { kind: "selectWeapon", weapon: "axe" });
+    game.applyAction(attacker.team, { kind: "fire", power: 1 });
+    expect(tree.falling).toBe(true);
+    for (let n = 0; n < 85; n++) game.step(FIXED_DT);
+    expect(victim.hp).toBeLessThan(100);
+    expect(tree.hitWorms.has(victim.id)).toBe(true);
+    for (let n = 0; n < 110; n++) game.step(FIXED_DT);
+    expect(game.snapshot().trees?.some((t) => t.id === tree.id)).toBe(false);
+  });
+
+  it("jednorazowa katapulta ujawnia się po wejściu rywala i podrzuca go bez obrażeń", () => {
+    const game = createGame(cfg({ seed: 99, wormsPerTeam: 1 }), setups(2)) as GameImpl;
+    toActive(game);
+    const attacker = game.worms.find((w) => w.id === game.snapshot().turn.activeWormId)!;
+    game.terrain.data.fill(0);
+    for (let y = 450; y < game.terrain.height; y++)
+      game.terrain.data.fill(1, y * game.terrain.width, (y + 1) * game.terrain.width);
+    attacker.x = 500; attacker.y = 441; attacker.facing = 1; attacker.onGround = true;
+    const victim = game.worms.find((w) => w.team !== attacker.team)!;
+    victim.x = 900; victim.y = 441; victim.vx = 0; victim.vy = 0; victim.onGround = true;
+    game.applyAction(attacker.team, { kind: "selectWeapon", weapon: "spring" });
+    game.applyAction(attacker.team, { kind: "fire", power: 1 });
+    const trap = game.snapshot().springs?.[0];
+    expect(trap).toMatchObject({ x: 550, ownerTeam: attacker.team, revealed: false });
+    expect(game.snapshot().teams.find((t) => t.team === attacker.team)?.ammo.spring).toBe(0);
+    victim.x = 550; victim.y = 441;
+    game.step(FIXED_DT);
+    expect(victim.vy).toBeLessThan(-500);
+    expect(victim.hp).toBe(100);
+    expect(game.snapshot().springs?.[0]?.revealed).toBe(true);
   });
 });
 

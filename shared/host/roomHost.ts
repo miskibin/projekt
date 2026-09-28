@@ -9,6 +9,7 @@ import {
   RoomManager,
   broadcast,
   broadcastRoomState,
+  messageForTeam,
   randomId,
   sanitizeName,
   toPlayerInfo,
@@ -262,7 +263,7 @@ export class RoomHost {
         s.peer.send({ t: "gameStart", config: { ...s.room.config },
           players: s.room.players.map(toPlayerInfo), yourTeam: s.player.team });
         s.peer.send({ t: "terrainSync", terrain: s.room.loop.terrainSync() });
-        s.peer.send(s.room.loop.snapshotMessage());
+        s.peer.send(messageForTeam(s.room.loop.snapshotMessage(), s.player.team));
       }
       return;
     }
@@ -328,7 +329,7 @@ export class RoomHost {
       });
       try {
         s.peer.send({ t: "terrainSync", terrain: loop.terrainSync() });
-        s.peer.send(loop.snapshotMessage());
+        s.peer.send(messageForTeam(loop.snapshotMessage(), player.team));
       } catch (err) {
         this.log("[gra] nie udało się wysłać stanu przy reconnect:", err);
       }
