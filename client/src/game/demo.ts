@@ -1,4 +1,4 @@
-import { FIXED_DT, MAX_SHOT_POWER, TEAM_NAMES, WORM_RADIUS } from "@shared/constants";
+import { FIXED_DT, MAX_SHOT_POWER, TEAM_NAMES, WORM_MUZZLE_OFFSET, WORM_MUZZLE_LIFT } from "@shared/constants";
 import { createGame, type Game } from "@shared/engine";
 import type { Terrain } from "@shared/engine/terrain";
 import type { GameConfig, InputAction, InputState, PlayerInfo, RoomState, WeaponId, WormSnapshot } from "@shared/protocol";
@@ -248,7 +248,7 @@ export class ComputerShotSearch {
       const dirY = Math.sin(aim);
       const speed = power * MAX_SHOT_POWER;
       const trajectory = simulateTrajectory({
-        x: x + dirX * (WORM_RADIUS + 3), y: y + dirY * (WORM_RADIUS + 3),
+        x: x + dirX * WORM_MUZZLE_OFFSET, y: y - WORM_MUZZLE_LIFT + dirY * WORM_MUZZLE_OFFSET,
         vx: dirX * speed, vy: dirY * speed, wind, isSolid, maxTime: 4.5, maxPoints: 280,
       });
       for (let i = 6; i < trajectory.points.length; i += 2) {

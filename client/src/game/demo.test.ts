@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GameConfig } from "@shared/protocol";
 import { ComputerShotSearch, DemoDriver, chooseComputerShot } from "./demo";
-import { MAX_SHOT_POWER, WORM_RADIUS } from "@shared/constants";
+import { MAX_SHOT_POWER, WORM_MUZZLE_OFFSET, WORM_MUZZLE_LIFT } from "@shared/constants";
 import { simulateTrajectory } from "./trajectory";
 
 const config: GameConfig = {
@@ -96,8 +96,8 @@ describe("single player against the computer", () => {
     const directionX = Math.cos(shot.aim);
     const directionY = Math.sin(shot.aim);
     const path = simulateTrajectory({
-      x: 200 + directionX * (WORM_RADIUS + 3),
-      y: 600 + directionY * (WORM_RADIUS + 3),
+      x: 200 + directionX * WORM_MUZZLE_OFFSET,
+      y: 600 - WORM_MUZZLE_LIFT + directionY * WORM_MUZZLE_OFFSET,
       vx: directionX * shot.power * MAX_SHOT_POWER,
       vy: directionY * shot.power * MAX_SHOT_POWER,
       maxTime: 4.5,

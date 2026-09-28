@@ -19,7 +19,7 @@ describe("game controls", () => {
     vi.spyOn(performance, "now").mockImplementation(() => now);
     vi.stubGlobal("window", new EventTarget());
     callbacks = {
-      sendInput: vi.fn(), sendAction: vi.fn(), sendDefense: vi.fn(), toggleWeaponPanel: vi.fn(),
+      sendInput: vi.fn(), sendAction: vi.fn(), sendDefense: vi.fn(), selectDefense: vi.fn(), selectDefenseAt: vi.fn(), toggleWeaponPanel: vi.fn(),
       closeWeaponPanel: vi.fn(), toggleEscMenu: vi.fn(), gesture: vi.fn(),
       toggleMap: vi.fn(), fullscreen: vi.fn(),
     };
@@ -114,6 +114,15 @@ describe("game controls", () => {
     expect(callbacks.sendDefense).toHaveBeenNthCalledWith(1, "left");
     expect(callbacks.sendDefense).toHaveBeenNthCalledWith(2, "jump");
     expect(callbacks.sendDefense).toHaveBeenCalledTimes(2);
+    expect(callbacks.sendAction).not.toHaveBeenCalled();
+  });
+
+  it("switches the defending worm using the ordinary aim buttons", () => {
+    input.setContext({ myTurn: false, defenseReady: false, worm: null, weapon: "bazooka", blocked: false });
+    input.pressControl("aimUp");
+    input.pressControl("aimDown");
+    expect(callbacks.selectDefense).toHaveBeenNthCalledWith(1, -1);
+    expect(callbacks.selectDefense).toHaveBeenNthCalledWith(2, 1);
     expect(callbacks.sendAction).not.toHaveBeenCalled();
   });
 });

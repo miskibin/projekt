@@ -125,13 +125,7 @@
       <nav class="game-tools" aria-label="Opcje gry">
         <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
       </nav>
-      <div id="spectator-tools" class="spectator-tools" aria-label="Podczas tury drugiego gracza" hidden>
-        <span id="defense-status">Wybierz robaka. Po strzale: ◀ ▶ lub SKOK.</span>
-        <div id="defense-worms" class="defense-worms" role="group" aria-label="Wybierz swojego robaka"></div>
-        <div class="spectator-actions">
-          <button type="button" id="spectator-map" aria-label="Pokaż lub ukryj mapę" aria-pressed="false" title="Mapa">▧</button>
-        </div>
-      </div>
+      <div id="defense-status" class="defense-hint" role="status" aria-live="polite" hidden></div>
       <div id="touch-controls" class="touch-controls" aria-label="Sterowanie dotykowe">
         <div class="touch-move" aria-label="Chodzenie">
           <button class="touch-key touch-move-key" data-control="left" aria-label="Idź w lewo">◀</button>

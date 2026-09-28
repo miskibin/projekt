@@ -4,6 +4,8 @@ import {
   WORLD_WIDTH,
   WORM_MAX_HP,
   WORM_RADIUS,
+  WORM_MUZZLE_OFFSET,
+  WORM_MUZZLE_LIFT,
 } from "@shared/constants";
 import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, SpringSnapshot, TreeSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
@@ -256,6 +258,10 @@ export class Renderer {
     for (const barrel of barrels) {
       const x = barrel.x;
       const y = barrel.y;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(1.25, 1.25);
+      ctx.translate(-x, -y);
       ctx.fillStyle = "rgba(20, 10, 12, .28)";
       ctx.beginPath();
       ctx.ellipse(x, y + 11, 13, 3, 0, 0, Math.PI * 2);
@@ -274,6 +280,7 @@ export class Renderer {
       ctx.font = "bold 13px system-ui";
       ctx.textAlign = "center";
       ctx.fillText("!", x, y + 5);
+      ctx.restore();
     }
   }
 
@@ -390,7 +397,7 @@ export class Renderer {
     ctx.globalAlpha = 0.26 * pose.alpha;
     ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.ellipse(w.x, w.y + WORM_GROUND_OFFSET + 1, 10.2, 2.9, 0, 0, Math.PI * 2);
+    ctx.ellipse(w.x, w.y + WORM_GROUND_OFFSET + 1, 15, 3.5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
 
@@ -560,8 +567,8 @@ export class Renderer {
     if (inp.localCharge > 0.005) this.lastPower = inp.localCharge;
     const power = inp.localCharge > 0.005 ? inp.localCharge : this.lastPower;
 
-    const mx = worm.x + dirX * (WORM_RADIUS + 3);
-    const my = worm.y + dirY * (WORM_RADIUS + 3);
+    const mx = worm.x + dirX * WORM_MUZZLE_OFFSET;
+    const my = worm.y - WORM_MUZZLE_LIFT + dirY * WORM_MUZZLE_OFFSET;
 
     // Celownik pokazuje tylko kierunek i przybliżoną siłę. Nie symuluje pełnego toru
     // ani nie zdradza punktu uderzenia; wiatr, grawitację i teren trzeba ocenić samemu.
@@ -1018,6 +1025,7 @@ export class Renderer {
     for (const c of crates) {
       ctx.save();
       ctx.translate(c.x, c.y);
+      ctx.scale(1.3, 1.3);
       if (!c.landed) this.drawParachute(ctx, time, c.id);
 
       // cień pod skrzynką
@@ -1187,6 +1195,7 @@ export class Renderer {
     for (const m of mines) {
       ctx.save();
       ctx.translate(m.x, m.y);
+      ctx.scale(1.3, 1.3);
 
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = "#000";

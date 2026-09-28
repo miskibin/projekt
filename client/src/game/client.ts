@@ -50,9 +50,6 @@ interface Els {
   fire: HTMLButtonElement;
   currentWeapon: HTMLElement;
   currentAmmo: HTMLElement;
-  spectatorTools: HTMLElement;
-  spectatorMap: HTMLButtonElement;
-  defenseWorms: HTMLElement;
   defenseStatus: HTMLElement;
 }
 
@@ -100,7 +97,6 @@ export class GameClient {
   private autoFullscreenAttempted = false;
   private pixelRatio = 1;
   private shownCharge = -1;
-  private spectatorMapOpen = false;
   private selectedDefenseWormId: number | null = null;
   private defenseManual = false;
   private defenseTurnKey = "";
@@ -132,9 +128,6 @@ export class GameClient {
       fire: byId<HTMLButtonElement>("touch-fire"),
       currentWeapon: byId("current-weapon"),
       currentAmmo: byId("current-ammo"),
-      spectatorTools: byId("spectator-tools"),
-      spectatorMap: byId<HTMLButtonElement>("spectator-map"),
-      defenseWorms: byId("defense-worms"),
       defenseStatus: byId("defense-status"),
     };
     const ctx = this.els.canvas.getContext("2d");
@@ -163,6 +156,8 @@ export class GameClient {
         if (action.kind === "jump" || action.kind === "backflip") this.sound.play("jump");
       },
       sendDefense: (control) => this.sendDefense(control),
+      selectDefense: (direction) => this.selectDefense(direction),
+      selectDefenseAt: (x, y) => this.selectDefenseAt(x, y),
       toggleWeaponPanel: () => this.toggleWeapons(),
       closeWeaponPanel: () => this.setWeapons(false),
       toggleEscMenu: () => this.toggleEsc(),
@@ -233,10 +228,7 @@ export class GameClient {
     this.defenseManual = false;
     this.defenseTurnKey = "";
     this.defensePendingAt = 0;
-    this.els.defenseWorms.replaceChildren();
-    this.defenseTurnKey = "";
-    this.spectatorMapOpen = false;
-    this.els.spectatorTools.hidden = true;
+    this.els.defenseStatus.hidden = true;
     this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
     this.particles.clear();
     this.hud.clear();
@@ -244,7 +236,7 @@ export class GameClient {
     this.waterShown = WATER_LEVEL_START;
     this.showMap = false;
     byId("btn-map").setAttribute("aria-pressed", "false");
-    this.els.spectatorMap.setAttribute("aria-pressed", "false");
+    byId("screen-game").dataset.defending = "false";
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.terrainTex = new TerrainRenderer(this.terrain, config.theme, config.seed);
     this.renderer.regen(config.seed);
@@ -291,7 +283,7 @@ export class GameClient {
     this.resizeObserver.disconnect();
     this.demo = null;
     this.soloRun = null;
-    this.els.spectatorTools.hidden = true;
+    this.els.defenseStatus.hidden = true;
     this.prediction.reset();
     this.els.demoControls.hidden = true;
     this.input.setContext({ myTurn: false, worm: null, weapon: "bazooka", blocked: true });
@@ -329,6 +321,7 @@ export class GameClient {
     if (s.turn.selectedWeapon && (this.demo?.mode === "twoPlayers" || s.turn.activeTeam === this.myTeam)) {
       this.selectedWeapon = s.turn.selectedWeapon;
     }
+    if (s.turn.activeTeam !== this.myTeam && this.panelOpen) this.setWeapons(false);
     this.refreshWeaponPanel();
   }
 
@@ -369,7 +362,7 @@ export class GameClient {
 
   onGameOver(winnerTeam: number | null, winnerName: string | null, stats: Record<string, unknown>): void {
     this.overOpen = true;
-    this.els.spectatorTools.hidden = true;
+    this.els.defenseStatus.hidden = true;
     const next = byId<HTMLButtonElement>("btn-solo-next");
     next.hidden = !this.soloRun;
     next.hidden = !this.soloRun || winnerTeam === 0;
@@ -454,10 +447,10 @@ export class GameClient {
     if (state) {
       // Obrona trwa tylko ułamek sekundy; opóźnienie obrazu widza nie może opóźnić sterowania.
       const controlTurn = this.buffer.latest?.turn ?? state.turn;
-      const activeId = state.turn.activeWormId;
-      const active = state.worms.find((w) => w.id === activeId && w.alive);
+      const controlState = this.buffer.latest ?? state;
+      const active = controlState.worms.find((w) => w.id === controlTurn.activeWormId && w.alive);
       this.input.setContext({
-        myTurn: this.isMyTurn(state.turn.activeTeam, state.turn.phase),
+        myTurn: this.isMyTurn(controlTurn.activeTeam, controlTurn.phase),
         defenseReady: !!controlTurn.defenseWindow && !!controlTurn.defenseReady?.includes(this.myTeam) &&
           (!this.demo || this.demo.computerTurn) && (!this.defensePendingAt || now - this.defensePendingAt > 950),
         worm: active ?? null,
@@ -466,7 +459,7 @@ export class GameClient {
       });
     }
     this.input.update(dt);
-    this.updateSpectatorTools(state);
+    this.updateDefenseControls(state);
     if (state && !this.demo) {
       if (!this.demo) state = this.prediction.apply(state, this.terrain, this.input.currentState,
         this.myTeam, dt, now, this.cb.rtt());
@@ -544,7 +537,7 @@ export class GameClient {
         camera: this.camera,
         particles: this.particles,
         time: this.time,
-        selectedDefenseWormId: !myTurn && state.turn.defenseReady?.includes(this.myTeam) ? this.selectedDefenseWormId : null,
+        selectedDefenseWormId: !myTurn ? this.selectedDefenseWormId : null,
         myTeam: this.myTeam,
         myTurn,
         graves: this.graves,
@@ -843,6 +836,7 @@ export class GameClient {
   }
 
   private toggleWeapons(): void {
+    if (this.buffer.latest && this.buffer.latest.turn.activeTeam !== this.myTeam) return;
     this.setWeapons(!this.panelOpen);
   }
 
@@ -879,15 +873,6 @@ export class GameClient {
     byId("btn-weapons").addEventListener("click", () => this.toggleWeapons());
     byId("btn-close-weapons").addEventListener("click", () => this.setWeapons(false));
     byId("btn-map").addEventListener("click", () => this.toggleMap());
-    this.els.spectatorMap.addEventListener("click", () => this.toggleMap(true));
-    this.els.defenseWorms.addEventListener("click", (event) => {
-      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-worm]");
-      if (!button) return;
-      this.selectedDefenseWormId = Number(button.dataset.worm);
-      this.defenseManual = true;
-      this.updateSpectatorTools(this.buffer.latest);
-      this.els.canvas.focus({ preventScroll: true });
-    });
     this.els.demoSkip.addEventListener("click", () => {
       this.demo?.applyAction({ kind: "skipTurn" });
       this.setEsc(false);
@@ -946,26 +931,30 @@ export class GameClient {
     if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
   }
 
-  private toggleMap(fromSpectator = false): void {
+  private toggleMap(): void {
     this.showMap = !this.showMap;
-    this.spectatorMapOpen = fromSpectator && this.showMap;
     byId("btn-map").setAttribute("aria-pressed", String(this.showMap));
-    this.els.spectatorMap.setAttribute("aria-pressed", String(this.showMap));
     if (this.running && !this.escOpen && !this.panelOpen && !this.overOpen) this.els.canvas.focus({ preventScroll: true });
   }
 
-  private updateSpectatorTools(state: GameSnapshot | null): void {
+  private updateDefenseControls(state: GameSnapshot | null): void {
     const snapshot = this.buffer.latest ?? state;
     const turn = snapshot?.turn;
     const waiting = !!turn && (!this.demo || this.demo.computerTurn) && !this.overOpen && !this.escOpen && !this.panelOpen &&
       turn.phase !== "gameOver" && turn.activeTeam >= 0 && turn.activeTeam !== this.myTeam;
-    this.els.spectatorTools.hidden = !waiting;
-    if (!waiting && this.spectatorMapOpen) {
-      this.showMap = false;
-      this.spectatorMapOpen = false;
-      byId("btn-map").setAttribute("aria-pressed", "false");
-      this.els.spectatorMap.setAttribute("aria-pressed", "false");
+    this.els.defenseStatus.hidden = !waiting;
+    const screen = byId("screen-game");
+    if ((screen.dataset.defending === "true") !== waiting) {
+      screen.dataset.defending = String(waiting);
+      for (const button of document.querySelectorAll<HTMLButtonElement>('.touch-aim-key')) {
+        const label = button.querySelector("small");
+        if (label) label.textContent = waiting ? "ROBAK" : "CEL";
+        button.setAttribute("aria-label", waiting
+          ? (button.dataset.control === "aimUp" ? "Wybierz poprzedniego robaka" : "Wybierz następnego robaka")
+          : (button.dataset.control === "aimUp" ? "Celuj wyżej" : "Celuj niżej"));
+      }
     }
+    byId<HTMLButtonElement>("btn-weapons").hidden = waiting;
     if (waiting) {
       const key = `${turn.round}:${turn.activeWormId}`;
       if (key !== this.defenseTurnKey) {
@@ -973,7 +962,6 @@ export class GameClient {
         this.selectedDefenseWormId = null;
         this.defenseManual = false;
         this.defensePendingAt = 0;
-        this.els.defenseWorms.replaceChildren();
       }
       const worms = snapshot!.worms.filter((w) => w.team === this.myTeam && w.alive);
       if (!this.defenseManual || !worms.some((w) => w.id === this.selectedDefenseWormId)) {
@@ -985,31 +973,37 @@ export class GameClient {
         this.selectedDefenseWormId = worms.reduce<typeof worms[number] | null>((best, w) =>
           !best || score(w) < score(best) ? w : best, null)?.id ?? null;
       }
-      const ids = worms.map((w) => w.id).join(",");
-      if (this.els.defenseWorms.dataset.ids !== ids) {
-        this.els.defenseWorms.dataset.ids = ids;
-        this.els.defenseWorms.replaceChildren(...worms.map((w) => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.dataset.worm = String(w.id);
-          return button;
-        }));
-      }
-      for (const button of this.els.defenseWorms.querySelectorAll<HTMLButtonElement>("button[data-worm]")) {
-        const w = worms.find((item) => item.id === Number(button.dataset.worm));
-        if (!w) continue;
-        const label = `${w.name} ${Math.ceil(w.hp)}♥`;
-        if (button.textContent !== label) button.textContent = label;
-        button.setAttribute("aria-pressed", String(w.id === this.selectedDefenseWormId));
-      }
       const online = !!this.demo || this.cb.connected();
       const ready = online && !!turn.defenseWindow && !!turn.defenseReady?.includes(this.myTeam) &&
         this.selectedDefenseWormId !== null && (!this.defensePendingAt || performance.now() - this.defensePendingAt > 950);
+      const selected = worms.find((w) => w.id === this.selectedDefenseWormId);
       const status = !online ? "Brak połączenia" : !turn.defenseWindow
-        ? "Wybierz robaka. Po strzale: ◀ ▶ lub SKOK." :
-          ready ? "Atak! ◀ ▶ — krok, SKOK — odskok" : "Ruch obronny wykorzystany";
+        ? `${selected?.name ?? "Robak"} · ▲▼ wybór · po strzale ◀ ▶ / SKOK` :
+          ready ? `${selected?.name ?? "Robak"} · ◀ ▶ krok / SKOK odskok!` : "Ruch obronny wykorzystany";
       if (this.els.defenseStatus.textContent !== status) this.els.defenseStatus.textContent = status;
     }
+  }
+
+  private selectDefense(direction: -1 | 1): void {
+    const snap = this.buffer.latest;
+    if (!snap || snap.turn.activeTeam === this.myTeam || this.escOpen || this.overOpen) return;
+    const worms = snap.worms.filter((w) => w.team === this.myTeam && w.alive);
+    if (!worms.length) return;
+    const i = worms.findIndex((w) => w.id === this.selectedDefenseWormId);
+    this.selectedDefenseWormId = worms[i < 0 ? 0 : (i + direction + worms.length) % worms.length]!.id;
+    this.defenseManual = true;
+    this.updateDefenseControls(snap);
+  }
+
+  private selectDefenseAt(x: number, y: number): void {
+    const snap = this.buffer.latest;
+    if (!snap || snap.turn.activeTeam === this.myTeam || this.escOpen || this.overOpen) return;
+    const worm = snap.worms.filter((w) => w.team === this.myTeam && w.alive)
+      .find((w) => Math.abs(w.x - x) < 26 && y >= w.y - 40 && y <= w.y + 15);
+    if (!worm) return;
+    this.selectedDefenseWormId = worm.id;
+    this.defenseManual = true;
+    this.updateDefenseControls(snap);
   }
 
   private sendDefense(control: "left" | "right" | "jump"): void {
@@ -1021,13 +1015,13 @@ export class GameClient {
     this.sendAction(control === "jump"
       ? { kind: "defend", style: "jump", wormId: this.selectedDefenseWormId }
       : { kind: "defend", style: "step", wormId: this.selectedDefenseWormId, direction: control === "left" ? -1 : 1 });
-    this.updateSpectatorTools(snap);
+    this.updateDefenseControls(snap);
   }
 
   private syncControls(): void {
     const blocked = this.panelOpen || this.escOpen || this.overOpen;
     byId("touch-controls").hidden = !this.touchEnabled || blocked;
-    if (blocked) this.els.spectatorTools.hidden = true;
+    if (blocked) this.els.defenseStatus.hidden = true;
     if (!this.touchEnabled || blocked) {
       for (const reset of this.touchResetters) reset();
       this.input.cancelControls();

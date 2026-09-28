@@ -8,6 +8,8 @@ export interface InputCallbacks {
   sendAction(action: InputAction): void;
   /** Te same klawisze podczas ataku przeciwnika; jeden krótki ruch obronny. */
   sendDefense(control: "left" | "right" | "jump"): void;
+  selectDefense(direction: -1 | 1): void;
+  selectDefenseAt(x: number, y: number): void;
   toggleWeaponPanel(): void;
   closeWeaponPanel(): void;
   toggleEscMenu(): void;
@@ -106,6 +108,8 @@ export class InputController {
     if (!this.ctxInfo.myTurn) {
       if (this.ctxInfo.defenseReady && (control === "left" || control === "right" || control === "jump"))
         this.cb.sendDefense(control);
+      if (control === "aimUp" || control === "aimDown")
+        this.cb.selectDefense(control === "aimUp" ? -1 : 1);
       return;
     }
     this.touchKeys.add(control);
@@ -252,6 +256,8 @@ export class InputController {
     this.keys.add(e.code);
     if (this.ctxInfo.blocked) return;
     if (!this.ctxInfo.myTurn) {
+      if (e.code === "ArrowUp" || e.code === "KeyW") this.cb.selectDefense(-1);
+      if (e.code === "ArrowDown" || e.code === "KeyS") this.cb.selectDefense(1);
       if (this.ctxInfo.defenseReady) {
         if (e.code === "ArrowLeft" || e.code === "KeyA") this.cb.sendDefense("left");
         if (e.code === "ArrowRight" || e.code === "KeyD") this.cb.sendDefense("right");
@@ -348,7 +354,11 @@ export class InputController {
     this.dragging = false;
     if (!wasDragging) return;
     if (this.dragMoved > 6) return; // to było przeciąganie kamery
-    if (this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    if (this.ctxInfo.blocked) return;
+    if (!this.ctxInfo.myTurn) {
+      this.cb.selectDefenseAt(this.mouseWX, this.mouseWY);
+      return;
+    }
     if (TARGETED.has(this.ctxInfo.weapon)) {
       this.cb.sendAction({ kind: "target", x: Math.round(this.mouseWX), y: Math.round(this.mouseWY) });
     }

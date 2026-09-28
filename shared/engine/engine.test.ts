@@ -317,7 +317,7 @@ describe("rozstawienie robaków", () => {
     }
   });
 
-  it("nie pozwala robakowi przejść przez drugiego robaka", () => {
+  it("pozwala przejść przez drugiego robaka bez blokowania ruchu", () => {
     const g = createGame(cfg(), setups(2));
     const gi = g as GameImpl;
     toActive(g);
@@ -336,10 +336,10 @@ describe("rozstawienie robaków", () => {
       g.step(FIXED_DT);
     }
     expect(active.x).toBeGreaterThan(500);
-    expect(other.x - active.x).toBeGreaterThanOrEqual(WORM_SEPARATION - 0.01);
+    expect(active.x).toBeGreaterThan(other.x + 10);
   });
 
-  it("odbija robaka w locie bez przenikania przez sąsiada", () => {
+  it("nie odbija robaka w locie od innego robaka", () => {
     const g = createGame(cfg(), setups(2));
     const gi = g as GameImpl;
     toActive(g);
@@ -350,11 +350,8 @@ describe("rozstawienie robaków", () => {
     for (const w of gi.worms) { w.x = 900 + 100 * w.id; w.y = 440; w.onGround = false; w.vx = 0; w.vy = 0; }
     flying.x = 500; flying.y = 440; flying.vx = 240;
     other.x = 560; other.y = 440;
-    for (let i = 0; i < 14; i++) {
-      g.step(FIXED_DT);
-      expect(Math.hypot(flying.x - other.x, flying.y - other.y)).toBeGreaterThanOrEqual(WORM_SEPARATION - 0.01);
-    }
-    expect(flying.x).toBeLessThan(other.x);
+    for (let i = 0; i < 20; i++) g.step(FIXED_DT);
+    expect(flying.x).toBeGreaterThan(other.x);
   });
 
   it("robaki nie wpadają pod teren po 300 krokach spokoju", () => {

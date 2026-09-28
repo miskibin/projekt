@@ -238,32 +238,19 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .game-tool:active { background: var(--hud-bg-hi); }
 .game-tool:focus-visible, .touch-key:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Wybór bronionego robaka; reakcja korzysta ze zwykłych kontrolek ruchu. */
-.spectator-tools {
-  position: absolute; z-index: 12;
-  top: calc(max(10px, env(safe-area-inset-top)) + 56px);
-  right: max(12px, env(safe-area-inset-right));
-  display: grid; gap: 6px; padding: 8px; width: min(260px, calc(100vw - 26px));
-  background: rgba(12,32,40,.86); border: 1px solid var(--hud-line);
-  border-radius: var(--hud-r); backdrop-filter: blur(5px);
-  color: #cae5df; font: 600 10px var(--font);
+/* Krótka podpowiedź zamiast osobnego menu w turze przeciwnika. */
+.defense-hint {
+  position: absolute; z-index: 12; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 82px);
+  transform: translateX(-50%); max-width: min(420px, calc(100vw - 24px)); padding: 7px 12px;
+  border: 1px solid var(--hud-line); border-radius: 20px;
+  background: rgba(12,32,40,.84); color: #e2f8f4;
+  text-align: center; font: 700 11px var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  pointer-events: none;
 }
-.spectator-tools[hidden] { display: none; }
-.defense-worms { display: flex; gap: 5px; }
-.defense-worms button { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 5px 4px;
-  border: 1px solid var(--hud-line); border-radius: 7px; background: rgba(25,56,65,.78); color: #eef9fa;
-  font: 700 10px var(--font); touch-action: manipulation; cursor: pointer; }
-.defense-worms button[aria-pressed=true] { border-color: #ffe2a4; background: rgba(142,106,42,.65); }
-.defense-worms button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.spectator-actions { display: flex; gap: 5px; justify-content: flex-end; }
-.spectator-actions button {
-  width: 42px; height: 42px; padding: 0;
-  border: 1px solid var(--hud-line); border-radius: 10px;
-  background: rgba(45,82,87,.82); color: #f1f8ff;
-  font-size: 22px; line-height: 1; cursor: pointer; touch-action: manipulation;
-}
-.spectator-actions button:hover, .spectator-actions button[aria-pressed=true] { background: var(--hud-bg-hi); }
-.spectator-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.defense-hint[hidden] { display: none; }
+#screen-game[data-defending="true"] .touch-aim-key small { letter-spacing: 0; }
+#screen-game[data-defending="true"] .touch-fire { display: none; }
+#screen-game[data-defending="true"] .touch-aim-key { border-color: rgba(153,235,255,.83); }
 
 /* --- pigułka aktualnej broni w lewym górnym rogu --- */
 .weapon-tool {
@@ -276,6 +263,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   border-color: color-mix(in srgb, var(--weapon-color, #ff9961), transparent 50%);
   box-shadow: 0 7px 24px rgba(5, 13, 23, .3), inset 0 1px 0 rgba(255,255,255,.08);
 }
+.weapon-tool[hidden] { display: none; }
 .weapon-badge { flex: none; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--weapon-color, #ff9961), transparent 80%); }
 #current-weapon { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 #current-ammo { color: var(--weapon-color, #ff9961); font-weight: 800; font-variant-numeric: tabular-nums; }
@@ -333,8 +321,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
   .weapon-tool { height: 40px; padding: 0 9px 0 5px; gap: 5px; font-size: 12.5px; max-width: min(196px, calc(100vw - 66px)); }
   .weapon-badge { width: 30px; height: 30px; }
-  .spectator-tools { top: calc(max(8px, env(safe-area-inset-top)) + 46px); font-size: 9px; width: min(234px, calc(100vw - 18px)); }
-  .spectator-actions button { width: 32px; height: 32px; font-size: 18px; }
+  .defense-hint { font-size: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 67px); }
 }
 @media (max-height: 460px), (max-width: 430px) {
   .touch-move { left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }

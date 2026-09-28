@@ -10,6 +10,9 @@ export const WATER_LEVEL_START = WORLD_HEIGHT - 40; // y powierzchni wody (rośn
 export const WATER_RISE_PER_ROUND = 40;
 
 export const WORM_RADIUS = 8;
+/** Lufa większej postaci jest dalej niż fizyczny promień jej stóp. */
+export const WORM_MUZZLE_OFFSET = 22;
+export const WORM_MUZZLE_LIFT = 3;
 /** Minimalny odstęp środków postaci: duża grafika robaka wystaje poza hitbox terenu. */
 export const WORM_SEPARATION = 40;
 export const WORM_MAX_HP = 100;

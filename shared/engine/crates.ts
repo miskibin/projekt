@@ -5,11 +5,11 @@ import { CRATE_UTILITIES, CRATE_WEAPONS, WEAPONS } from "./weapons";
 import type { Crate, EngineCtx, Mine } from "./types";
 import type { CrateSnapshot, WeaponId } from "../protocol";
 
-export const CRATE_RADIUS = 8;
+export const CRATE_RADIUS = 12;
 export const CRATE_FALL_SPEED = 120;
-export const CRATE_PICKUP_DIST = 18;
+export const CRATE_PICKUP_DIST = 23;
 
-export const MINE_RADIUS = 4;
+export const MINE_RADIUS = 5;
 export const MINE_TRIGGER_DIST = 30;
 export const MINE_ARM_TIME = 2;
 export const MINE_FUSE = 1.5;

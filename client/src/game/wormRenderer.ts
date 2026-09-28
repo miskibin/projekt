@@ -935,6 +935,7 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
     ctx.translate(facing * rx * 0.5, 3.2);
     ctx.scale(facing, 1);
     ctx.rotate(p.hold);
+    ctx.scale(1.25, 1.25);
     drawHeldWeapon(ctx, o.weapon);
     ctx.restore();
   }

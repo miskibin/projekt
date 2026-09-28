@@ -21,6 +21,8 @@ import {
   WORM_MAX_HP,
   WORM_MAX_STEP_UP,
   WORM_RADIUS,
+  WORM_MUZZLE_OFFSET,
+  WORM_MUZZLE_LIFT,
   WORM_SEPARATION,
   WORM_WALK_SPEED,
 } from "../constants";
@@ -433,12 +435,6 @@ export class GameImpl implements Game, EngineCtx {
     return this.worms.find((w) => w.id === this.activeWormId);
   }
 
-  /** Grafika postaci jest większa niż jej hitbox terenu. */
-  private blockingWorm(w: Worm, x: number, y: number): Worm | undefined {
-    return this.worms.find((other) => other.alive && other.id !== w.id &&
-      (other.x - x) ** 2 + (other.y - y) ** 2 < WORM_SEPARATION ** 2);
-  }
-
   private teamAlive(team: number): boolean {
     const ts = this.teamState(team);
     if (!ts || ts.removed) return false;
@@ -458,8 +454,6 @@ export class GameImpl implements Game, EngineCtx {
     const dir = inp.left && !inp.right ? -1 : inp.right && !inp.left ? 1 : 0;
     if (!w.jetpackActive && dir !== 0) {
       if (w.onGround) {
-        const oldX = w.x;
-        const oldY = w.y;
         const res = walkStep(
           this.terrain,
           w,
@@ -468,10 +462,7 @@ export class GameImpl implements Game, EngineCtx {
           WORM_MAX_STEP_UP,
           WORM_STEP_DOWN,
         );
-        if (this.blockingWorm(w, w.x, w.y)) {
-          w.x = oldX;
-          w.y = oldY;
-        } else if (res === "fell") w.onGround = false;
+        if (res === "fell") w.onGround = false;
       } else {
         // Gentle air steering helps clear crater lips and narrow terrain gaps.
         w.vx = clamp(w.vx + dir * WORM_AIR_CONTROL * dt, -120, 120);
@@ -572,18 +563,6 @@ export class GameImpl implements Game, EngineCtx {
         w.y = ny;
         return;
       }
-      const other = this.blockingWorm(w, nx, ny);
-      if (other) {
-        // Wąski krok fizyki (maksymalnie 2 px) zatrzymuje wejście w ciało.
-        // Zderzenie w locie oddaje część pędu i pozwala opaść obok robaka.
-        const ox = w.x - other.x;
-        const oy = w.y - other.y;
-        const dist = Math.hypot(ox, oy) || 1;
-        const bounce = reflect(w.vx, w.vy, ox / dist, oy / dist, 0.28, 0.55);
-        w.vx = bounce.vx;
-        w.vy = bounce.vy;
-        return;
-      }
       if (circleHits(this.terrain, nx, ny, WORM_RADIUS)) {
         const impact = Math.hypot(w.vx, w.vy);
         const n = terrainNormal(this.terrain, nx, ny, WORM_RADIUS);
@@ -679,7 +658,7 @@ export class GameImpl implements Game, EngineCtx {
     // reakcję łańcuchową bez rekurencji i wysyła identyczne zdarzenia wszystkim.
     for (let i = this.barrels.length - 1; i >= 0; i--) {
       const barrel = this.barrels[i];
-      if (Math.hypot(barrel.x - xi, barrel.y - yi) > ri + 12) continue;
+      if (Math.hypot(barrel.x - xi, barrel.y - yi) > ri + 15) continue;
       this.barrels.splice(i, 1);
       this.explode(barrel.x, barrel.y, 47, 42, 390, "barrel");
     }
@@ -1139,8 +1118,8 @@ export class GameImpl implements Game, EngineCtx {
     const p01 = clamp(power, 0.05, 1);
     const dirX = Math.cos(w.aim) * w.facing;
     const dirY = Math.sin(w.aim);
-    const mx = w.x + dirX * (WORM_RADIUS + 3);
-    const my = w.y + dirY * (WORM_RADIUS + 3);
+    const mx = w.x + dirX * WORM_MUZZLE_OFFSET;
+    const my = w.y - WORM_MUZZLE_LIFT + dirY * WORM_MUZZLE_OFFSET;
     const speed = p01 * MAX_SHOT_POWER;
 
     if (id !== "jetpack" && w.jetpackActive) this.deactivateJetpack(w);
@@ -1421,8 +1400,8 @@ export class GameImpl implements Game, EngineCtx {
   }
 
   private traceBullet(w: Worm, dirX: number, dirY: number, style: "shotgun" | "uzi", carveTerrain: boolean): Worm | null {
-    const x0 = w.x + dirX * (WORM_RADIUS + 2);
-    const y0 = w.y + dirY * (WORM_RADIUS + 2);
+    const x0 = w.x + dirX * WORM_MUZZLE_OFFSET;
+    const y0 = w.y - WORM_MUZZLE_LIFT + dirY * WORM_MUZZLE_OFFSET;
     let px = x0;
     let py = y0;
     let target: Worm | null = null;
@@ -1481,8 +1460,7 @@ export class GameImpl implements Game, EngineCtx {
   private doTeleport(w: Worm, x: number, y: number): boolean {
     const tx = clamp(x, WORM_RADIUS, WORLD_WIDTH - 1 - WORM_RADIUS);
     const ty = clamp(y, WORM_RADIUS, WORLD_HEIGHT + 100);
-    if (ty + WORM_RADIUS >= this.waterLevel || circleHits(this.terrain, tx, ty, WORM_RADIUS) ||
-      this.blockingWorm(w, tx, ty)) {
+    if (ty + WORM_RADIUS >= this.waterLevel || circleHits(this.terrain, tx, ty, WORM_RADIUS)) {
       this.emit({ t: "message", text: "Tam się nie da teleportować!" });
       return false;
     }
