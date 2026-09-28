@@ -13,7 +13,7 @@ export const WORM_RADIUS = 8;
 /** Lufa większej postaci jest dalej niż fizyczny promień jej stóp. */
 export const WORM_MUZZLE_OFFSET = 22;
 export const WORM_MUZZLE_LIFT = 3;
-/** Minimalny odstęp środków postaci: duża grafika robaka wystaje poza hitbox terenu. */
+/** Odstęp przy rozmieszczaniu robaków na starcie; ruch nie blokuje się na innych postaciach. */
 export const WORM_SEPARATION = 40;
 export const WORM_MAX_HP = 100;
 export const WORM_WALK_SPEED = 80; // px/s

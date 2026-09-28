@@ -236,7 +236,8 @@ export class GameClient {
     this.waterShown = WATER_LEVEL_START;
     this.showMap = false;
     byId("btn-map").setAttribute("aria-pressed", "false");
-    byId("screen-game").dataset.defending = "false";
+    // Pierwsza klatka nowego meczu przywróci etykiety CEL po obronie w poprzednim meczu.
+    delete byId("screen-game").dataset.defending;
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.terrainTex = new TerrainRenderer(this.terrain, config.theme, config.seed);
     this.renderer.regen(config.seed);
