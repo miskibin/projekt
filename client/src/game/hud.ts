@@ -16,6 +16,7 @@ export interface HudInput {
   showMap: boolean;
   touch: boolean;
   stale: boolean;
+  topInset: number;
 }
 
 const FONT = "ui-sans-serif, system-ui, sans-serif";
@@ -96,52 +97,16 @@ export class Hud {
     ctx.restore();
   }
 
-  /** Stała informacja o tym, kto steruje oraz czy gra rozlicza strzał. */
+  /** Niski pasek: tura, czas i wiatr w jednym wierszu. */
   private drawClock(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, narrow: boolean): number {
     const turn = inp.state.turn;
-    const pw = narrow ? Math.min(248, width - 88) : 312;
-    const ph = narrow ? 70 : 82;
-    const py = narrow ? 52 : 8;
+    const pw = narrow ? Math.min(184, Math.max(128, width - 164)) : 236;
+    const ph = narrow ? 38 : 42;
+    const py = inp.topInset + (width < 280 ? 44 : 0);
     const px = Math.round(width / 2 - pw / 2);
-    panel(ctx, px, py, pw, ph, narrow ? 10 : 13);
-
-    const cy = py + (narrow ? 21 : 26);
+    panel(ctx, px, py, pw, ph, narrow ? 10 : 12);
     const seconds = Math.max(0, Math.ceil(turn.timeLeft));
     const hot = seconds <= 10 && turn.phase === "active";
-
-    // Dwie małe twarze od razu pokazują strony pojedynku. Rysowane w canvasie,
-    // bez dodatkowych bitmap i zapytań GPU na telefonie.
-    this.drawTeamPortrait(ctx, px + (narrow ? 24 : 33), cy, 1, turn.activeTeam === 1, narrow);
-    this.drawTeamPortrait(ctx, px + pw - (narrow ? 24 : 33), cy, 0, turn.activeTeam === 0, narrow);
-
-    ctx.textAlign = "center";
-    ctx.font = "850 " + (narrow ? 27 : 33) + "px " + FONT;
-    ctx.fillStyle = hot ? ALERT : TEXT;
-    ctx.fillText(String(seconds).padStart(2, "0"), px + pw / 2, cy - 3);
-
-    const cx = px + pw / 2;
-    const half = narrow ? 24 : 34;
-    ctx.fillStyle = "rgba(255,255,255,.16)";
-    roundRect(ctx, cx - half, cy + 16, half * 2, 3, 2);
-    ctx.fill();
-    const wind = Math.max(-1, Math.min(1, turn.wind / MAX_WIND));
-    const len = Math.abs(wind) * half;
-    if (len > 1) {
-      ctx.fillStyle = WIND;
-      roundRect(ctx, wind < 0 ? cx - len : cx, cy + 16, len, 3, 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,.45)";
-    ctx.fillRect(cx - 0.5, cy + 13, 1, 8);
-    arrow(ctx, cx - half - 5, cy + 17, -1, wind < -0.02 ? WIND : "rgba(255,255,255,.22)");
-    arrow(ctx, cx + half + 5, cy + 17, 1, wind > 0.02 ? WIND : "rgba(255,255,255,.22)");
-
-    ctx.strokeStyle = "rgba(190,215,255,.18)";
-    ctx.beginPath();
-    const separatorY = py + (narrow ? 41 : 47);
-    ctx.moveTo(px + 10, separatorY);
-    ctx.lineTo(px + pw - 10, separatorY);
-    ctx.stroke();
     const acting = turn.phase === "active" || turn.phase === "retreat";
     const mine = turn.activeTeam === inp.myTeam;
     const name = inp.state.teams.find((team) => team.team === turn.activeTeam)?.name
@@ -151,55 +116,38 @@ export class Hud {
       : turn.phase === "retreat"
         ? (mine ? "TWÓJ STRZAŁ" : `STRZAŁ: ${name.toLocaleUpperCase("pl")}`)
         : turn.phase === "gameOver" ? "KONIEC GRY" : "TRWA AKCJA / ZMIANA TURY";
-    const labelY = py + (narrow ? 55 : 62);
     ctx.fillStyle = acting ? teamColor(turn.activeTeam) : WIND;
     ctx.beginPath();
-    ctx.arc(px + 18, labelY, 4, 0, Math.PI * 2);
+    ctx.arc(px + 12, py + 16, 3.3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.font = `800 ${narrow ? 11 : 12}px ${FONT}`;
+    ctx.font = `800 ${narrow ? 10 : 11}px ${FONT}`;
     ctx.textAlign = "left";
     ctx.fillStyle = TEXT;
-    ctx.fillText(action, px + 29, labelY + 1, pw - 75);
-    ctx.font = `700 ${narrow ? 8 : 9}px ${FONT}`;
+    ctx.fillText(fitText(ctx, action, pw - 76), px + 22, py + 16);
+    ctx.font = `850 ${narrow ? 22 : 25}px ${FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillStyle = hot ? ALERT : TEXT;
+    ctx.fillText(String(seconds).padStart(2, "0"), px + pw - 10, py + 17);
+
+    const wind = Math.max(-1, Math.min(1, turn.wind / MAX_WIND));
+    const center = px + (pw - 54) / 2 + 8;
+    const half = (pw - 80) / 2;
+    ctx.fillStyle = "rgba(255,255,255,.18)";
+    roundRect(ctx, center - half, py + ph - 8, half * 2, 2, 1);
+    ctx.fill();
+    if (Math.abs(wind) > 0.03) {
+      ctx.fillStyle = WIND;
+      roundRect(ctx, wind < 0 ? center - half * -wind : center, py + ph - 8,
+        Math.max(1, Math.abs(wind) * half), 2, 1);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,.55)";
+    ctx.fillRect(center - .5, py + ph - 10, 1, 6);
+    ctx.font = `700 8px ${FONT}`;
     ctx.textAlign = "right";
     ctx.fillStyle = turn.suddenDeath ? ALERT : MUTED;
-    ctx.fillText(`R${turn.round}`, px + pw - 12, labelY, 26);
+    ctx.fillText(`R${turn.round}`, px + pw - 10, py + ph - 7);
     return py + ph;
-  }
-
-  private drawTeamPortrait(ctx: CanvasRenderingContext2D, x: number, y: number, team: number, active: boolean, narrow: boolean): void {
-    const r = narrow ? 12 : 15;
-    ctx.save();
-    ctx.globalAlpha = active ? 1 : 0.72;
-    ctx.fillStyle = teamColor(team);
-    ctx.strokeStyle = "#101c2d";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(x, y, r * 0.79, r, team ? 0.14 : -0.14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#fff";
-    for (const dx of [-r * 0.26, r * 0.26]) {
-      ctx.beginPath();
-      ctx.arc(x + dx, y - r * 0.19, r * 0.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#152137";
-    for (const dx of [-r * 0.22, r * 0.3]) {
-      ctx.beginPath();
-      ctx.arc(x + dx, y - r * 0.19, r * 0.08, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.beginPath();
-    ctx.arc(x + r * 0.04, y + r * 0.4, r * 0.19, 0.1, Math.PI - 0.1);
-    ctx.stroke();
-    if (active) {
-      ctx.fillStyle = "#fce1a5";
-      ctx.beginPath();
-      ctx.arc(x + r * 0.7, y - r * 0.85, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
   }
 
   private drawBanner(ctx: CanvasRenderingContext2D, text: string, width: number, cy: number, narrow: boolean): void {
@@ -254,17 +202,6 @@ function panel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   ctx.strokeStyle = PANEL_LINE;
   ctx.lineWidth = 1;
   ctx.stroke();
-}
-
-/** Trójkąt kierunku wiatru. */
-function arrow(ctx: CanvasRenderingContext2D, cx: number, cy: number, dir: number, color: string): void {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(cx + dir * 4, cy);
-  ctx.lineTo(cx - dir * 3, cy - 4.5);
-  ctx.lineTo(cx - dir * 3, cy + 4.5);
-  ctx.closePath();
-  ctx.fill();
 }
 
 /** Keep kill-feed text at its intended font size instead of squeezing long names. */

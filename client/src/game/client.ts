@@ -96,6 +96,7 @@ export class GameClient {
   private showMap = false;
   private autoFullscreenAttempted = false;
   private pixelRatio = 1;
+  private hudTop = 8;
   private shownCharge = -1;
   private selectedDefenseWormId: number | null = null;
   private defenseManual = false;
@@ -560,6 +561,7 @@ export class GameClient {
         showMap: this.showMap,
         touch: this.touchEnabled,
         stale: !this.demo && this.prediction.ageMs > 1_500,
+        topInset: this.hudTop,
       });
     } else {
       this.ctx.fillStyle = "#0a0e15";
@@ -1072,6 +1074,8 @@ export class GameClient {
 
   private resize(): void {
     this.pixelRatio = window.devicePixelRatio || 1;
+    const toolsTop = document.querySelector<HTMLElement>(".game-tools");
+    this.hudTop = toolsTop ? Number.parseFloat(getComputedStyle(toolsTop).top) || 8 : 8;
     const w = this.els.canvas.clientWidth || window.innerWidth;
     const h = this.els.canvas.clientHeight || window.innerHeight;
     const resolution = canvasResolution(w, h, this.pixelRatio, this.touchEnabled);

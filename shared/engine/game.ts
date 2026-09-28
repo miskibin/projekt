@@ -566,6 +566,23 @@ export class GameImpl implements Game, EngineCtx {
       if (circleHits(this.terrain, nx, ny, WORM_RADIUS)) {
         const impact = Math.hypot(w.vx, w.vy);
         const n = terrainNormal(this.terrain, nx, ny, WORM_RADIUS);
+        // Na skraju urwiska dolny bok hitboxu zahacza o pionową ścianę.
+        // Odbijanie i pushOut od poprzedniej (wolnej) pozycji zwracały
+        // robaka wciąż do tego samego punktu, więc wisiał w powietrzu.
+        // Jeśli pod stopami brak podparcia, odsuń go od ściany i pozwól opaść.
+        if (Math.abs(n.x) > 0.35 && !groundBelow(this.terrain, w.x, w.y, WORM_RADIUS, 3)) {
+          const outward = Math.sign(n.x);
+          for (let d = 1; d <= WORM_RADIUS * 2 + 2; d++) {
+            const freeX = clamp(nx + outward * d, WORM_RADIUS, WORLD_WIDTH - 1 - WORM_RADIUS);
+            if (!circleHits(this.terrain, freeX, ny, WORM_RADIUS)) {
+              w.x = freeX;
+              w.y = ny;
+              w.vx = outward * Math.max(0, w.vx * outward);
+              w.vy = Math.max(0, w.vy);
+              return;
+            }
+          }
+        }
         const bounced = reflect(w.vx, w.vy, n.x, n.y, WORM_RESTITUTION, WORM_BOUNCE_FRICTION);
         w.vx = bounced.vx;
         w.vy = bounced.vy;

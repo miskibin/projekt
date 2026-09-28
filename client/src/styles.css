@@ -323,6 +323,9 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .weapon-badge { width: 30px; height: 30px; }
   .defense-hint { font-size: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 67px); }
 }
+@media (max-width: 760px) {
+  .weapon-tool #current-weapon { display: none; }
+}
 @media (max-height: 460px), (max-width: 430px) {
   .touch-move { left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); gap: 8px; }
   .touch-move-key { width: 64px; height: 64px; border-radius: 19px; font-size: 22px; }

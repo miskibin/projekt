@@ -46,6 +46,28 @@ describe("skok i kolizje", () => {
     expect(groundBelow(t, 45, 45, 8, 3)).toBe(false);
   });
 
+  it.each(["prawa", "lewa"])("nie zawiesza robaka na %s krawędzi urwiska", (side) => {
+    const game = createGame(cfg(), setups(2));
+    const gi = game as GameImpl;
+    toActive(game);
+    clearMines(game);
+    gi.terrain.data.fill(0);
+    const edge = 500;
+    for (let y = 450; y < 900; y++) {
+      for (let x = 400; x < 700; x++) {
+        if (side === "prawa" ? x <= edge : x >= edge) gi.terrain.set(x, y, 1);
+      }
+    }
+    const worm = gi.worms.find((w) => w.id === game.snapshot().turn.activeWormId)!;
+    worm.x = side === "prawa" ? edge + 6 : edge - 6;
+    worm.y = 441;
+    worm.vx = 0;
+    worm.vy = 0;
+    worm.onGround = false;
+    stepN(game, 180);
+    expect(worm.onGround || worm.y > 530).toBe(true);
+  });
+
   it("wchodzi na niski brzeg krateru bez zaklinowania o pionowy piksel", () => {
     const t = new Terrain(120, 100);
     for (let y = 60; y < 100; y++) t.data.fill(1, y * 120, (y + 1) * 120);
