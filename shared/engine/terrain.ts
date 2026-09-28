@@ -90,6 +90,20 @@ export class Terrain {
     return out;
   }
 
+  /** Czy pełny stan z serwera jest taki sam jak lokalny teren? Odczyt bez alokacji bitmapy. */
+  matchesRLE(width: number, height: number, rle: readonly number[]): boolean {
+    if (this.width !== width || this.height !== height) return false;
+    let offset = 0;
+    let solid = 0;
+    for (const run of rle) {
+      if (!Number.isSafeInteger(run) || run < 0 || offset + run > this.data.length) return false;
+      for (let i = offset; i < offset + run; i++) if (this.data[i] !== solid) return false;
+      offset += run;
+      solid ^= 1;
+    }
+    return offset === this.data.length;
+  }
+
   static fromRLE(width: number, height: number, rle: number[]): Terrain {
     const t = new Terrain(width, height);
     let i = 0;
@@ -197,6 +211,23 @@ export function generateTerrain(seed: number, width: number, height: number, den
 
   // 4) dolna krawędź nie jest wypełniana do samego dna – zostaw miejsce na wodę
   for (let y = height - 30; y < height; y++) t.data.fill(0, y * width, (y + 1) * width);
+
+  // Dwie przerwy przecinają grzbiet. Wymuszają skok lub użycie narzędzia,
+  // ale nie przecinają unoszących się wysp ani nie tworzą zamkniętych pułapek.
+  // Są robione po jaskiniach, żeby przypadkowy tunel nie zmostkował szczeliny.
+  if (width >= 900) {
+    for (const fraction of [rng.range(0.29, 0.39), rng.range(0.62, 0.72)]) {
+      const cx = Math.round(width * fraction);
+      const half = Math.round(rng.range(37, 53) * Math.min(1, width / 1920));
+      for (let x = cx - half; x <= cx + half; x++) {
+        if (x < 0 || x >= width) continue;
+        // Pod powierzchnią wyspy zostawiamy ją nietkniętą. Wycinamy tylko
+        // główny grunt od jego lokalnej powierzchni aż do wody.
+        const top = Math.max(0, Math.round(surface[x] - 5));
+        for (let y = top; y < height - 30; y++) t.data[y * width + x] = 0;
+      }
+    }
+  }
   t.version = 0;
   return t;
 }

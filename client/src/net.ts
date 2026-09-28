@@ -168,6 +168,14 @@ export class NetClient {
         }
         return;
       }
+      if (msg?.t === "error" && msg.message === "Nieprawidłowa akcja." && this.actionQueue.length) {
+        // Odrzucona akcja nigdy nie dostanie ACK. Nie ponawiaj jej 12 razy
+        // i nie zasypuj gracza tym samym błędem.
+        this.stopActionRetry();
+        this.actionQueue.shift();
+        this.actionRetries = 0;
+        if (this.actionQueue.length) this.sendHeadAction();
+      }
       for (const h of this.handlers) h(msg);
     });
     transport.onStatus((s) => {

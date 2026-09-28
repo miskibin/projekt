@@ -337,7 +337,19 @@ export class GameClient {
     // opóźniamy o bufor interpolacji, żeby efekty pasowały do rysowanych pozycji
     const at = performance.now() + (this.demo ? this.buffer.interpolationDelayMs :
       this.buffer.latest?.turn.activeTeam === this.myTeam ? 0 : this.buffer.interpolationDelayMs);
-    for (const ev of events) this.pending.push({ at, ev, seq: seq ?? 0 });
+    let changedTerrain = false;
+    for (const ev of events) {
+      // Teren jest częścią stanu gry, więc zmieniamy go od razu. Opóźniona
+      // jest tylko animacja dla obserwatora. W przeciwnym razie terrainSync
+      // przychodzący po eventach wciąż widzi starą bitmapę i przebudowuje
+      // całą teksturę po każdym wybuchu.
+      if (seq === undefined || seq > this.terrainSyncSeq) {
+        this.applyTerrainEvent(ev);
+        changedTerrain ||= ev.t === "explosion" || ev.t === "burrow" || ev.t === "carveRect";
+      }
+      this.pending.push({ at, ev, seq: seq ?? 0 });
+    }
+    if (changedTerrain && seq !== undefined) this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, seq);
   }
 
   onTerrainSync(sync: TerrainSync): void {
@@ -345,8 +357,12 @@ export class GameClient {
       this.requestTerrainRepair();
       return;
     }
-    this.terrain = Terrain.fromRLE(sync.width, sync.height, sync.rle);
-    this.terrainTex?.setTerrain(this.terrain);
+    // Tury kończą się pełnym syncem, choć wybuchy zostały już odtworzone
+    // z eventów. Pełny repaint 1920x1080 powodował zauważalne przycięcie.
+    if (!this.terrain.matchesRLE(sync.width, sync.height, sync.rle)) {
+      this.terrain = Terrain.fromRLE(sync.width, sync.height, sync.rle);
+      this.terrainTex?.setTerrain(this.terrain);
+    }
     if (sync.eventSeq !== undefined) {
       this.terrainSyncSeq = Math.max(this.terrainSyncSeq, sync.eventSeq);
       this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, sync.eventSeq);
@@ -593,30 +609,35 @@ export class GameClient {
 
   private flushEvents(now: number): void {
     while (this.pending.length > 0 && this.pending[0].at <= now) {
-      const { ev, seq } = this.pending.shift()!;
-      const mutateTerrain = seq === 0 || seq > this.terrainSyncSeq;
-      this.applyEvent(ev, mutateTerrain);
-      if (mutateTerrain && (ev.t === "explosion" || ev.t === "carveRect" || ev.t === "burrow"))
-        this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, seq);
+      const { ev } = this.pending.shift()!;
+      this.applyEvent(ev);
     }
   }
 
-  private applyEvent(ev: GameEvent, mutateTerrain = true): void {
+  private applyTerrainEvent(ev: GameEvent): void {
+    switch (ev.t) {
+      case "burrow":
+      case "explosion":
+        this.terrain.carveCircle(ev.x, ev.y, ev.r);
+        this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
+        break;
+      case "carveRect": {
+        this.terrain.paintRotatedRect(ev.x, ev.y, ev.w, ev.h, ev.angle, ev.add ? 1 : 0);
+        const ext = Math.ceil(Math.hypot(ev.w, ev.h) / 2) + 2;
+        this.terrainTex?.markDirty(ev.x - ext, ev.y - ext, ext * 2, ext * 2);
+        break;
+      }
+    }
+  }
+
+  private applyEvent(ev: GameEvent): void {
     const pal = this.terrainTex?.palette;
     switch (ev.t) {
       case "burrow": {
-        if (mutateTerrain) {
-          this.terrain.carveCircle(ev.x, ev.y, ev.r);
-          this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
-        }
         this.particles.sparks(ev.x, ev.y, 2, "#a2eefb");
         break;
       }
       case "explosion": {
-        if (mutateTerrain) {
-          this.terrain.carveCircle(ev.x, ev.y, ev.r);
-          this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
-        }
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.renderer.onExplosion(ev.r, ev.power);
         this.renderer.onWormsStartled(ev.x, ev.y, ev.r);
@@ -628,11 +649,6 @@ export class GameClient {
         break;
       }
       case "carveRect": {
-        if (mutateTerrain) {
-          this.terrain.paintRotatedRect(ev.x, ev.y, ev.w, ev.h, ev.angle, ev.add ? 1 : 0);
-          const ext = Math.ceil(Math.hypot(ev.w, ev.h) / 2) + 2;
-          this.terrainTex?.markDirty(ev.x - ext, ev.y - ext, ext * 2, ext * 2);
-        }
         if (ev.add) this.particles.sparks(ev.x, ev.y, 10, "#ffd08a");
         break;
       }

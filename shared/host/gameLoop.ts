@@ -3,6 +3,7 @@
 // (setInterval w Node, requestAnimationFrame/setInterval w przeglądarce).
 import { FIXED_DT, SNAPSHOT_RATE, TICK_RATE } from "../constants";
 import { createGame } from "../engine";
+import { WEAPON_IDS } from "../engine/weapons";
 import type { Game, TeamSetup } from "../engine";
 import type { GameConfig, InputAction, InputState, ServerMessage, TerrainSync, TurnKey, WeaponId } from "../protocol";
 
@@ -14,25 +15,7 @@ export const MAX_STEPS_PER_TICK = 5;
 export const INPUT_TIMEOUT_MS = 650;
 
 /** Runtime'owa lista broni (protocol.ts eksportuje tylko typ WeaponId). */
-export const WEAPON_IDS = [
-  "bazooka",
-  "grenade",
-  "cluster",
-  "shotgun",
-  "uzi",
-  "holy",
-  "dynamite",
-  "mine",
-  "airstrike",
-  "homing",
-  "drill",
-  "banana",
-  "bat",
-  "teleport",
-  "girder",
-  "jetpack",
-  "skip",
-] as const satisfies readonly WeaponId[];
+export { WEAPON_IDS } from "../engine/weapons";
 
 const WEAPON_SET = new Set<string>(WEAPON_IDS);
 

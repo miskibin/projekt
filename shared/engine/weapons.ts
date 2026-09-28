@@ -48,7 +48,7 @@ const D = (
 });
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
-  bazooka: D("bazooka", -1, 37, 45, 300, { charge: true }),
+  bazooka: D("bazooka", -1, 34, 36, 290, { charge: true }),
   grenade: D("grenade", -1, 44, 55, 350, { charge: true }),
   cluster: D("cluster", 2, 20, 15, 155, { charge: true }),
   banana: D("banana", 1, 27, 25, 200, { charge: true }),

@@ -16,6 +16,7 @@ vi.mock("../engine", () => ({
 const { GameLoop, MAX_STEPS_PER_TICK, SNAPSHOT_MS, TICK_MS, validateAction, validateInputState } = await import(
   "./gameLoop"
 );
+const { WEAPON_IDS: engineWeaponIds } = await import("../engine/weapons");
 
 interface MockGame extends Game {
   steps: number;
@@ -399,6 +400,10 @@ describe("walidacja wejścia", () => {
     expect(validateAction({ kind: "surrender" })).toEqual({ kind: "surrender" });
     expect(validateAction({ kind: "girderRotate" })).toEqual({ kind: "girderRotate" });
     expect(validateAction({ kind: "selectWeapon", weapon: "holy" })).toEqual({ kind: "selectWeapon", weapon: "holy" });
+    // Siekiera/katapulta były dostępne w UI i silniku, ale serwer odrzucał
+    // ich wybór. Kontrakt serwera musi nadążać za katalogiem silnika.
+    for (const weapon of engineWeaponIds)
+      expect(validateAction({ kind: "selectWeapon", weapon })).toEqual({ kind: "selectWeapon", weapon });
     expect(validateAction({ kind: "selectWeapon", weapon: "nuke" })).toBeNull();
     expect(validateAction({ kind: "setTimer", seconds: 3 })).toEqual({ kind: "setTimer", seconds: 3 });
     expect(validateAction({ kind: "setTimer", seconds: 9 })).toBeNull();

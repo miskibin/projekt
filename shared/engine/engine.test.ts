@@ -6,7 +6,8 @@ import { GameImpl } from "./game";
 import { circleHits, groundBelow, walkStep } from "./physics";
 import { placeMine } from "./crates";
 import { detonateProjectile } from "./projectiles";
-import { Terrain } from "./terrain";
+import { Terrain, generateTerrain } from "./terrain";
+import { WEAPONS } from "./weapons";
 
 function cfg(over: Partial<GameConfig> = {}): GameConfig {
   return {
@@ -974,6 +975,32 @@ describe("terrainSync", () => {
     let diff = 0;
     for (let i = 0; i < g.terrain.data.length; i++) if (clone.data[i] !== g.terrain.data[i]) diff++;
     expect(diff).toBe(0);
+    expect(g.terrain.matchesRLE(sync.width, sync.height, sync.rle)).toBe(true);
+    g.terrain.set(10, 10, g.terrain.isSolid(10, 10) ? 0 : 1);
+    expect(g.terrain.matchesRLE(sync.width, sync.height, sync.rle)).toBe(false);
+  });
+});
+
+describe("mapa i balans", () => {
+  it("ma dwa rzeczywiste przejścia przez główny grunt, bez zamykania nieba", () => {
+    for (const seed of [1, 7, 26]) {
+      const terrain = generateTerrain(seed, WORLD_WIDTH, WORLD_HEIGHT);
+      const gaps: number[] = [];
+      for (let x = 150; x < WORLD_WIDTH - 150; x++) {
+        let empty = true;
+        for (let y = 600; y < WORLD_HEIGHT - 30; y += 10) {
+          if (terrain.isSolid(x, y)) { empty = false; break; }
+        }
+        if (empty) gaps.push(x);
+      }
+      expect(gaps.some((x) => x > WORLD_WIDTH * 0.29 && x < WORLD_WIDTH * 0.4)).toBe(true);
+      expect(gaps.some((x) => x > WORLD_WIDTH * 0.62 && x < WORLD_WIDTH * 0.73)).toBe(true);
+    }
+  });
+
+  it("bazooka ma niższy pułap obrażeń i mniejszy krater od granatu", () => {
+    expect(WEAPONS.bazooka.damage).toBeLessThan(WEAPONS.grenade.damage);
+    expect(WEAPONS.bazooka.radius).toBeLessThan(WEAPONS.grenade.radius);
   });
 });
 
