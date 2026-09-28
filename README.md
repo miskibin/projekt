@@ -3,6 +3,31 @@
 Turowa gra artyleryjska w stylu Worms z multiplayerem przez sieć (2–4 graczy, każdy z własną drużyną robaków).
 Całość w TypeScript: serwer Node lub tryb MQTT z hostem w przeglądarce oraz klient Canvas 2D.
 
+## Android: gra bez internetu przez Bluetooth
+
+Pobierz `app-debug.apk` z artefaktu **wormsy-android-bluetooth** w najnowszym
+[udanym przebiegu Android APK](https://github.com/miskibin/projekt/actions/workflows/android.yml)
+i zainstaluj ten sam plik na obu telefonach z Androidem 8 lub nowszym. Telefon
+może poprosić o zezwolenie na instalację z pobranego pliku. Jest to wersja testowa
+podpisywana przez GitHub Actions; podczas kolejnej instalacji może być potrzebne
+odinstalowanie poprzedniej testowej wersji aplikacji.
+
+Na pierwszym telefonie wybierz w menu **Bluetooth**, wpisz nick i kliknij
+**Stwórz pokój**. Zezwól na Bluetooth i widoczność urządzenia. Na drugim telefonie
+wybierz **Bluetooth**, wpisz nick oraz pokazany u gospodarza kod pokoju,
+kliknij **Dołącz** i wybierz telefon gospodarza na liście urządzeń. Oba telefony
+potwierdzają gotowość; gospodarz uruchamia grę. Telefony nie muszą być w tej samej
+sieci Wi-Fi ani mieć internetu. Po krótkim zerwaniu połączenia gość ponawia
+łączenie automatycznie. Bluetooth w tym wydaniu obsługuje jedną parę telefonów.
+
+W tej samej aplikacji działają także tryb serwerowy przez internet oraz
+**Wyprawa solo** offline. iPhone / Safari mogą grać przez stronę internetową;
+przeglądarkowy tryb Bluetooth jest dostępny tylko w aplikacji na Androida.
+
+APK buduje workflow `.github/workflows/android.yml`: klient Vite jest kopiowany
+do zasobów Androida, a Gradle kompiluje `assembleDebug`. Kod Bluetooth znajduje się
+w `android/app/src/main/java/pl/miskibin/wormsy/MainActivity.kt`.
+
 ## Gra na dwóch telefonach
 
 Otwórzcie **https://wormsy-online.onrender.com/** na obu telefonach. Domyślny tryb
@@ -33,7 +58,7 @@ które wstrzymuje lokalną symulację. Lobby multiplayer zawiera graczy i ustawi
 
 Gra wypełnia okno i dopasowuje kamerę do jego wymiarów. Przycisk **⛶ / F** uruchamia pełny ekran;
 wejście do demo z menu również go uruchamia, jeśli przeglądarka obsługuje tę funkcję.
-Canvas korzysta z rozdzielczości ekranu (DPR, do 8 megapikseli). Mapa jest dostępna pod **▧ / M**.
+Canvas korzysta z rozdzielczości ekranu z limitem dla telefonów, by nie przegrzewać urządzenia. Mapa jest dostępna pod **▧ / M**.
 Kamera miękko prowadzi aktywnego robaka podczas ruchu, a po strzale przejmuje lecący pocisk.
 Obraz korzysta z lekkiego bloom, korekcji koloru i winiety. Mocne eksplozje uruchamiają błysk,
 krótką aberrację barwną i screen shake zależny od promienia oraz siły wybuchu.
@@ -44,11 +69,12 @@ zwiększać moc, i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, 
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
 
-Gdy gra druga osoba, u góry pojawia się mały panel: **👏 / 😂 / 😱** wysyła
-krótką reakcję widoczną nad własnym robakiem obu graczom, a **▧** pozwala zajrzeć
-na mapę. Reakcje są tylko wizualne i mają 3-sekundową przerwę, więc nie wpływają
-na turę ani nie zalewają łącza. Mapa otwarta z tego panelu zamyka się, gdy
-zaczyna się Twoja tura.
+Gdy gra druga osoba, panel pozwala wskazać własnego robaka. Gdy przeciwnik zacznie
+atak, masz **jedną odpowiedź na turę**: **Unik** przesuwa wybranego robaka albo
+**Osłona** zmniejsza obrażenia i odrzut przez krótki czas. Taktyczną odpowiedź
+mogą wykonywać także gracze łączący się przez internet. W panelu są również
+reakcje **👏 / 😂 / 😱** i **▧** do mapy. Unik i osłona wymagają szybkiej reakcji
+po strzale, więc strzałów natychmiastowych nie da się zawsze przechwycić.
 
 ## Gra z komputerem
 
@@ -56,6 +82,13 @@ W menu wybierz **„Graj z komputerem”** albo otwórz stronę z `?computer=1`.
 a komputer prowadzi Niebieskich: sam wybiera najbliższy cel, broń, kierunek i siłę. Korzysta też
 z nalotu i rakiety naprowadzanej, gdy zwykły strzał nie ma dobrej drogi. Celowo ma niewielki błąd,
 więc może chybić.
+
+**Wyprawa solo** (`?gauntlet=1`) to seria kolejnych, losowanych pojedynków bez
+zapisu postępów między sesjami. Po zwycięstwie przycisk **Następna arena** zmienia
+teren, motyw, arsenał i przeciwnika; późniejsze areny mają więcej robaków i
+krótsze tury. Komputer używa różnych stylów broni, próbuje uników i osłon.
+Po porażce **Nowa wyprawa** startuje od początku. Cała symulacja działa offline
+na telefonie, więc nie zależy od połączenia z serwerem.
 
 Celownik pokazuje kierunek oraz przybliżoną siłę strzału, ale nie rysuje pełnej trajektorii ani
 punktu uderzenia. Wpływ wiatru, grawitacji i terenu trzeba ocenić samodzielnie.
@@ -87,7 +120,8 @@ LAN_MODE=1 npm start               # wypisuje adresy komputera w lokalnej sieci
 Na obu telefonach otwórz wypisany adres, np. `http://192.168.1.10:3000`, lub
 komputer i telefony muszą być w tej samej sieci; hotspot działa, jeżeli komputer
 też do niego dołączy. Wariant LAN nie używa serwera Render, lecz wymaga działającego komputera.
-Samo połączenie dwóch telefonów hotspotem ani Bluetooth nie uruchamia serwera gry.
+Samo połączenie dwóch telefonów hotspotem nie uruchamia serwera gry. W aplikacji
+Android tryb Bluetooth uruchamia hosta lokalnie na pierwszym telefonie.
 
 ## Rozwój
 

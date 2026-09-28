@@ -64,6 +64,10 @@ export function validateAction(raw: unknown): InputAction | null {
       if (!isFiniteNumber(v.power)) return null;
       return { kind: "fire", power: Math.min(1, Math.max(0, v.power)) };
     }
+    case "defend": {
+      if ((v.style !== "dodge" && v.style !== "brace") || !Number.isSafeInteger(v.wormId) || (v.wormId as number) < 0) return null;
+      return { kind: "defend", style: v.style, wormId: v.wormId as number };
+    }
     case "selectWeapon": {
       if (typeof v.weapon !== "string" || !WEAPON_SET.has(v.weapon)) return null;
       return { kind: "selectWeapon", weapon: v.weapon as WeaponId };
@@ -204,6 +208,12 @@ export class GameLoop {
     return active.activeTeam === team && active.round === turn.round && active.activeWormId === turn.wormId;
   }
 
+  private currentTurn(turn?: TurnKey): boolean {
+    if (!turn) return true;
+    const active = this.game.snapshot().turn;
+    return active.round === turn.round && active.activeWormId === turn.wormId;
+  }
+
   applyInput(team: number, raw: unknown, seq?: number, turn?: TurnKey): boolean {
     const state = validateInputState(raw);
     if (!state) return false;
@@ -225,12 +235,13 @@ export class GameLoop {
   applyAction(team: number, raw: unknown, seq?: number, turn?: TurnKey): boolean {
     const action = validateAction(raw);
     if (!action) return false;
+    if (action.kind === "defend" && (!turn || !Number.isSafeInteger(turn.round) || !Number.isSafeInteger(turn.wormId))) return false;
     if (seq !== undefined) {
       if (!Number.isSafeInteger(seq) || seq < 0) return false;
       if (seq <= (this.actionSeq.get(team) ?? -1)) return true;
       this.actionSeq.set(team, seq);
     }
-    if (!this.sameTurn(team, turn)) return true;
+    if (!(action.kind === "defend" ? this.currentTurn(turn) : this.sameTurn(team, turn))) return true;
     this.game.applyAction(team, action);
     return true;
   }

@@ -70,6 +70,7 @@ export type InputAction =
   | { kind: "target"; x: number; y: number } // airstrike / teleport / girder / homing
   | { kind: "girderRotate" }
   | { kind: "skipTurn" }
+  | { kind: "defend"; style: "dodge" | "brace"; wormId: number }
   | { kind: "surrender" };
 
 /** Wyłącznie ozdobna reakcja w cudzej turze; nie trafia do silnika fizyki. */
@@ -105,6 +106,8 @@ export interface WormSnapshot {
   facing: 1 | -1;
   aim: number;
   onGround: boolean;
+  /** Pozostały czas aktywnej osłony obrońcy. */
+  guard?: number;
   /** np. "jetpack" gdy używa plecaka, "bat" gdy macha kijem */
   anim?: string;
 }
@@ -175,6 +178,10 @@ export interface TurnInfo {
   /** true jeśli aktywny robak już oddał strzał w tej turze (dla broni wielostrzałowych: pozostałe) */
   shotsLeft: number;
   girderAngle?: number;
+  /** Drużyny, które mogą jeszcze odpowiedzieć na aktualny atak. */
+  defenseReady?: number[];
+  /** Atak już się zaczął; można użyć uniku lub osłony. */
+  defenseWindow?: boolean;
 }
 
 export interface GameSnapshot {
@@ -226,7 +233,8 @@ export type GameEvent =
   | { t: "turnStart"; team: number; wormId: number; wind: number }
   | { t: "suddenDeath" }
   | { t: "message"; text: string } // komunikaty na ekranie ("Sudden death!", "Robak X utonął")
-  | { t: "sound"; name: string; x?: number; y?: number };
+  | { t: "sound"; name: string; x?: number; y?: number }
+  | { t: "defense"; wormId: number; style: "dodge" | "brace"; x: number; y: number };
 
 export interface TerrainSync {
   width: number;

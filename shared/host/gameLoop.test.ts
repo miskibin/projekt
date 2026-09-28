@@ -322,6 +322,17 @@ describe("GameLoop – wejście gracza", () => {
     expect(h.game.actions).toHaveLength(2);
   });
 
+  it("przyjmuje obronę od nieaktywnego gracza tylko dla aktualnego klucza tury", () => {
+    const h = setup();
+    const defend = { kind: "defend" as const, style: "dodge" as const, wormId: 12 };
+    expect(h.loop.applyAction(1, defend, 1)).toBe(false);
+    expect(h.loop.applyAction(1, defend, 2, { round: 1, wormId: 0 })).toBe(true);
+    expect(h.game.actions).toHaveLength(0);
+    expect(h.loop.applyAction(1, defend, 3, { round: 2, wormId: 0 })).toBe(true);
+    expect(h.loop.applyAction(1, defend, 3, { round: 2, wormId: 0 })).toBe(true);
+    expect(h.game.actions).toEqual([[1, defend]]);
+  });
+
   it("przekazuje poprawny input i akcję do silnika", () => {
     const h = setup();
     expect(h.loop.applyInput(0, { left: true, right: false, aim: -0.5, charge: false })).toBe(true);
@@ -393,6 +404,8 @@ describe("walidacja wejścia", () => {
     expect(validateAction({ kind: "setTimer", seconds: 9 })).toBeNull();
     expect(validateAction({ kind: "target", x: 100, y: 200 })).toEqual({ kind: "target", x: 100, y: 200 });
     expect(validateAction({ kind: "target", x: "100", y: 200 })).toBeNull();
+    expect(validateAction({ kind: "defend", style: "brace", wormId: 8 })).toEqual({ kind: "defend", style: "brace", wormId: 8 });
+    expect(validateAction({ kind: "defend", style: "dodge", wormId: "8" })).toBeNull();
     expect(validateAction({})).toBeNull();
     expect(validateAction(undefined)).toBeNull();
   });

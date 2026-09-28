@@ -20,10 +20,10 @@ export interface CoverPlacement {
 }
 
 export const LANDSCAPE_ASSETS: Record<BgStyle, string> = {
-  mountains: "/assets/meadow-v2.webp",
-  dunes: "/assets/desert-v2.webp",
-  peaks: "/assets/winter-v2.webp",
-  spires: "/assets/volcano-v2.webp",
+  mountains: `${import.meta.env.BASE_URL}assets/meadow-hd.webp`,
+  dunes: `${import.meta.env.BASE_URL}assets/desert-hd.webp`,
+  peaks: `${import.meta.env.BASE_URL}assets/winter-hd.webp`,
+  spires: `${import.meta.env.BASE_URL}assets/volcano-hd.webp`,
 };
 
 /**

@@ -72,6 +72,9 @@ const BAT_RANGE = 25 + WORM_RADIUS;
 const HITSCAN_RANGE = 800;
 /** Klient podtrzymuje wejście co 0.5 s; po zaniku transmisji nie trzymaj ruchu ani ładowania w nieskończoność. */
 const INPUT_TIMEOUT = 0.9;
+const GUARD_SECONDS = 1.6;
+const DODGE_HORIZONTAL_SPEED = 205;
+const DODGE_VERTICAL_SPEED = -260;
 
 const NEUTRAL_INPUT: InputState = { left: false, right: false, aim: 0, charge: false };
 
@@ -140,6 +143,8 @@ export class GameImpl implements Game, EngineCtx {
   private chargePower = 0;
   private shotsLeft = 1;
   private firedThisTurn = 0;
+  private attackStarted = false;
+  private readonly defendedTeams = new Set<number>();
   private girderAngle = 0;
   private target: { x: number; y: number } | undefined;
   private burst: Burst | null = null;
@@ -251,6 +256,7 @@ export class GameImpl implements Game, EngineCtx {
       }
       if (surface < 0) continue;
       const y = surface - WORM_RADIUS - 1;
+      if (y < WORLD_HEIGHT * 0.44) continue;
       if (circleHits(this.terrain, x, y, WORM_RADIUS)) continue;
       if (!groundBelow(this.terrain, x, y, WORM_RADIUS, 3)) continue;
       sites.push({ x, y });
@@ -505,7 +511,8 @@ export class GameImpl implements Game, EngineCtx {
 
   damageWorm(w: Worm, amount: number, reason: DeathReason): void {
     if (!w.alive) return;
-    const amt = Math.max(0, Math.round(amount));
+    const guarding = reason === "explosion" && (w.guardUntil ?? 0) > this.time;
+    const amt = Math.max(0, Math.round(amount * (guarding ? 0.45 : 1)));
     if (amt <= 0) return;
     w.hp -= amt;
     this.emit({ t: "damage", wormId: w.id, amount: amt, x: Math.round(w.x), y: Math.round(w.y) });
@@ -572,7 +579,7 @@ export class GameImpl implements Game, EngineCtx {
       const d = Math.hypot(dx, dy);
       if (d > reach) continue;
       const falloff = 1 - d / reach;
-      const kp = power * falloff;
+      const kp = power * falloff * ((w.guardUntil ?? 0) > this.time ? 0.5 : 1);
       let ux = 0;
       let uy = -1;
       if (d > 0.001) {
@@ -697,6 +704,8 @@ export class GameImpl implements Game, EngineCtx {
     this.charging = false;
     this.chargePower = 0;
     this.firedThisTurn = 0;
+    this.attackStarted = false;
+    this.defendedTeams.clear();
     this.target = undefined;
     this.girderAngle = 0;
     this.burst = null;
@@ -863,6 +872,10 @@ export class GameImpl implements Game, EngineCtx {
       return;
     }
     if (this.phase === "gameOver") return;
+    if (action.kind === "defend") {
+      this.defend(team, action);
+      return;
+    }
     if (team !== this.activeTeam) return;
     const ts = this.teamState(team);
     if (!ts) return;
@@ -919,6 +932,30 @@ export class GameImpl implements Game, EngineCtx {
       default:
         return;
     }
+  }
+
+  /** Jedna odpowiedź każdej drużyny na aktualny atak, zawsze rozstrzygana przez silnik. */
+  private defend(team: number, action: Extract<InputAction, { kind: "defend" }>): void {
+    if (!this.attackStarted || !this.teamAlive(team) || team === this.activeTeam ||
+        this.defendedTeams.has(team) || !["active", "retreat", "settling"].includes(this.phase)) return;
+    if (action.style !== "dodge" && action.style !== "brace") return;
+    if (!Number.isSafeInteger(action.wormId)) return;
+    const worm = this.worms.find((w) => w.id === action.wormId && w.team === team && w.alive);
+    if (!worm) return;
+    this.defendedTeams.add(team);
+    if (action.style === "brace") {
+      worm.guardUntil = this.time + GUARD_SECONDS;
+    } else {
+      const closest = this.projectiles.filter((p) => !p.dead && p.ownerTeam !== team)
+        .sort((a, b) => Math.hypot(a.x - worm.x, a.y - worm.y) - Math.hypot(b.x - worm.x, b.y - worm.y))[0];
+      const sourceX = closest?.x ?? this.activeWorm()?.x ?? worm.x - worm.facing;
+      const direction = sourceX === worm.x ? (closest?.vx ?? 1) < 0 ? 1 : -1 : worm.x > sourceX ? 1 : -1;
+      worm.vx = direction * DODGE_HORIZONTAL_SPEED;
+      worm.vy = Math.min(worm.vy, DODGE_VERTICAL_SPEED);
+      worm.onGround = false;
+      this.lastGroundedAt.delete(worm.id);
+    }
+    this.emit({ t: "defense", wormId: worm.id, style: action.style, x: Math.round(worm.x), y: Math.round(worm.y) });
   }
 
   private jump(w: Worm, back: boolean): void {
@@ -1136,6 +1173,7 @@ export class GameImpl implements Game, EngineCtx {
         break;
       }
       case "uzi": {
+        this.attackStarted = true;
         this.burst = { wormId: w.id, remaining: 10, timer: 0, interval: 0.08 };
         break;
       }
@@ -1216,6 +1254,7 @@ export class GameImpl implements Game, EngineCtx {
   }
 
   private emitShot(id: WeaponId, w: Worm): void {
+    if (!WEAPONS[id].utility) this.attackStarted = true;
     this.emit({ t: "shot", weapon: id, x: Math.round(w.x), y: Math.round(w.y) });
     this.emit({ t: "sound", name: id === "shotgun" ? "shotgun" : id === "holy" ? "hallelujah" : "shot", x: w.x, y: w.y });
   }
@@ -1380,6 +1419,7 @@ export class GameImpl implements Game, EngineCtx {
         onGround: w.onGround,
       };
       if (w.anim) s.anim = w.anim;
+      if ((w.guardUntil ?? 0) > this.time) s.guard = r2(w.guardUntil! - this.time);
       worms[i] = s;
     }
 
@@ -1448,6 +1488,9 @@ export class GameImpl implements Game, EngineCtx {
       chargePower: r3(this.charging || this.chargePower > 0 ? this.chargePower : 0),
       shotsLeft: this.shotsLeft,
       girderAngle: r3(this.girderAngle),
+      defenseReady: this.attackStarted ? this.teams.filter((t) => t.team !== this.activeTeam &&
+        this.teamAlive(t.team) && !this.defendedTeams.has(t.team)).map((t) => t.team) : [],
+      defenseWindow: this.attackStarted && (this.phase === "active" || this.phase === "retreat" || this.phase === "settling"),
     };
 
     return {

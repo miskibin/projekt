@@ -51,6 +51,7 @@ export interface RenderInput {
   mouseWorld: { x: number; y: number } | null;
   waterLevel: number;
   reactions: readonly { wormId: number; kind: SpectatorReaction; age: number }[];
+  selectedDefenseWormId?: number | null;
 }
 
 const teamColor = (t: number): string => TEAM_COLORS[((t % TEAM_COLORS.length) + TEAM_COLORS.length) % TEAM_COLORS.length];
@@ -358,6 +359,18 @@ export class Renderer {
     ctx.restore();
 
     if (!w.alive) return;
+
+    if ((w.guard ?? 0) > 0 || (w.id === inp.selectedDefenseWormId && !inp.myTurn)) {
+      ctx.save();
+      const guarded = (w.guard ?? 0) > 0;
+      ctx.strokeStyle = guarded ? "rgba(255,224,151,.9)" : "rgba(153,235,255,.68)";
+      ctx.lineWidth = guarded ? 2.8 : 1.7;
+      ctx.setLineDash(guarded ? [] : [4, 4]);
+      ctx.beginPath();
+      ctx.ellipse(w.x, w.y - visualLift - 1, 17 + Math.sin(inp.time * 8) * 1.5, 21, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // ------- etykieta: nazwa + pastylka HP (stały rozmiar na ekranie) -------
     const t = inp.time;

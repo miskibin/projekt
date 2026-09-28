@@ -24,8 +24,8 @@ export function viewportZoom(width: number, height: number): number {
 export function canvasResolution(width: number, height: number, deviceRatio: number, touch = false) {
   // Repainting a 3x full-screen canvas 60 times/s heats up phones quickly.
   // Keep CSS/world coordinates unchanged while capping only the backing store.
-  const pixels = touch ? 2_500_000 : 8_388_608;
-  const ratio = Math.min(Math.max(1, deviceRatio), touch ? 1.75 : 3,
+  const pixels = touch ? 3_200_000 : 8_388_608;
+  const ratio = Math.min(Math.max(1, deviceRatio), touch ? 2.25 : 3,
     Math.sqrt(pixels / Math.max(1, width * height)));
   return { width: Math.round(width * ratio), height: Math.round(height * ratio) };
 }

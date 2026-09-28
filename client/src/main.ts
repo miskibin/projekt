@@ -56,11 +56,14 @@ const TRANSPORT_MODE = (() => {
   const configured = (import.meta.env as unknown as Record<string, string | undefined>).VITE_TRANSPORT;
   const requested = new URLSearchParams(location.search).get("transport");
   const serverAvailable = configured === "ws";
+  if (requested === "bluetooth" && window.WormsBluetooth) return "bluetooth";
   return requested === "mqtt" || !serverAvailable ? "mqtt" : "ws";
 })();
 
 export function createTransport(): Transport {
-  return TRANSPORT_MODE === "ws"
+  return TRANSPORT_MODE === "bluetooth"
+    ? new LazyTransport(async () => new (await import("./net/bluetoothTransport")).BluetoothTransport())
+    : TRANSPORT_MODE === "ws"
     ? new WebSocketTransport(wsUrl())
     : new LazyTransport(async () => new (await import("./net/trysteroTransport")).TrysteroTransport());
 }
@@ -69,17 +72,18 @@ type Screen = "menu" | "lobby" | "game";
 
 const params = new URLSearchParams(location.search);
 let COMPUTER = params.get("computer") === "1";
-let DEMO = params.get("demo") === "1" || COMPUTER;
+let GAUNTLET = params.get("gauntlet") === "1";
+let DEMO = params.get("demo") === "1" || COMPUTER || GAUNTLET;
 const DEMO_LOBBY = params.get("demoLobby") === "1";
 const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 function roomUrl(code: string): string {
   const search = new URLSearchParams({ room: code });
-  if (TRANSPORT_MODE === "mqtt") search.set("transport", "mqtt");
+  if (TRANSPORT_MODE !== "ws") search.set("transport", TRANSPORT_MODE);
   return `${location.pathname}?${search}`;
 }
 function menuUrl(): string {
-  return `${location.pathname}${TRANSPORT_MODE === "mqtt" ? "?transport=mqtt" : ""}`;
+  return `${location.pathname}${TRANSPORT_MODE !== "ws" ? `?transport=${TRANSPORT_MODE}` : ""}`;
 }
 // Jedna karta zachowuje tożsamość przez odświeżenie i zmianę WebSocket.
 const reconnectToken = (() => {
@@ -118,11 +122,12 @@ const el = {
 
 const serverChoice = byId<HTMLElement>("transport-ws-option");
 if ((import.meta.env as unknown as Record<string, string | undefined>).VITE_TRANSPORT !== "ws") serverChoice.hidden = true;
+byId("transport-bt-option").hidden = !window.WormsBluetooth;
 for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) {
   radio.checked = radio.value === TRANSPORT_MODE;
   radio.addEventListener("change", () => {
     if (!radio.checked || radio.value === TRANSPORT_MODE) return;
-    location.assign(`${location.pathname}${radio.value === "mqtt" ? "?transport=mqtt" : ""}`);
+    location.assign(`${location.pathname}${radio.value === "mqtt" ? "?transport=mqtt" : radio.value === "bluetooth" ? "?transport=bluetooth" : ""}`);
   });
 }
 
@@ -404,6 +409,18 @@ byId("btn-computer").addEventListener("click", (event) => {
   void game.fullscreen();
 });
 
+byId("btn-solo").addEventListener("click", (event) => {
+  event.preventDefault();
+  DEMO = true;
+  COMPUTER = false;
+  GAUNTLET = true;
+  net.close();
+  history.replaceState(null, "", `${location.pathname}?gauntlet=1`);
+  showScreen("game");
+  game.start({ ...DEMO_CONFIG, seed: Math.floor(Math.random() * 0x7fffffff) }, [], 0, "gauntlet");
+  void game.fullscreen();
+});
+
 if (DEMO || DEBUG) {
   // uchwyt dla podglądu deweloperskiego / testów wizualnych (?demo=1 lub ?debug=1)
   (window as unknown as Record<string, unknown>).__game = game;
@@ -424,7 +441,8 @@ if (DEMO || DEBUG) {
 
 if (DEMO) {
   showScreen("game");
-  game.start(DEMO_CONFIG, [], 0, COMPUTER ? "computer" : "twoPlayers");
+  game.start({ ...DEMO_CONFIG, seed: GAUNTLET ? Math.floor(Math.random() * 0x7fffffff) : DEMO_CONFIG.seed }, [], 0,
+    GAUNTLET ? "gauntlet" : COMPUTER ? "computer" : "twoPlayers");
 } else if (DEMO_LOBBY) {
   const d = demoRoom();
   playerId = d.playerId;

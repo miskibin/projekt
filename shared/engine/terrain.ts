@@ -110,11 +110,20 @@ export function generateTerrain(seed: number, width: number, height: number, den
 
   // Dwa szerokie grzbiety i dolina dają wyraźną różnicę wysokości bez pionowych
   // ścian, na których robaki blokowałyby się podczas chodzenia.
+  const landform = rng.int(0, 2); // doliny, łagodne pasma lub szeroki płaskowyż
   const ridge = [
     { cx: width * rng.range(0.23, 0.31), half: rng.range(95, 150), edge: rng.range(95, 135), rise: rng.range(115, 165) },
     { cx: width * rng.range(0.69, 0.77), half: rng.range(95, 155), edge: rng.range(100, 145), rise: rng.range(115, 165) },
   ];
+  if (landform === 1) ridge.push({
+    cx: width * rng.range(0.43, 0.6), half: rng.range(50, 95),
+    edge: rng.range(70, 105), rise: rng.range(70, 120),
+  });
   const valley = { cx: width * rng.range(0.47, 0.56), spread: rng.range(170, 245), depth: rng.range(65, 105) };
+  const plateau = {
+    cx: width * rng.range(0.34, 0.68), half: rng.range(105, 190),
+    edge: rng.range(35, 65), rise: rng.range(105, 150),
+  };
   // Drobniejsza, niska fala rozbija regularność dużych formacji.
   const waves = Array.from({ length: 4 }, (_, i) => ({
     amp: rng.range(11, 26) / (i + 1) ** 0.7,
@@ -132,7 +141,12 @@ export function generateTerrain(seed: number, width: number, height: number, den
       y -= hill.rise * (left - right) * 0.5;
     }
     const v = (x - valley.cx) / valley.spread;
-    y += valley.depth * Math.exp(-v * v * 0.5);
+    y += (landform === 2 ? valley.depth * 0.55 : valley.depth) * Math.exp(-v * v * 0.5);
+    if (landform === 2) {
+      const left = Math.tanh((x - plateau.cx + plateau.half) / plateau.edge);
+      const right = Math.tanh((x - plateau.cx - plateau.half) / plateau.edge);
+      y -= plateau.rise * (left - right) * 0.5;
+    }
     for (const w of waves) y += Math.sin(x * w.freq + w.phase) * w.amp;
     rawSurface[x] = y;
   }

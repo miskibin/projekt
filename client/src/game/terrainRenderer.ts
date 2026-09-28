@@ -766,7 +766,14 @@ export class TerrainRenderer {
             }
           }
           if (solid === 0) {
-            p[o + 3] = 0;
+            // Cienka tylna ścianka przesunięta względem frontu: stała tekstura,
+            // bez kosztownego filtra/cienia liczonego ponownie przy każdej klatce.
+            if (x >= 7 && y >= 11 && t.data[(y - 10) * w + x - 7]) {
+              p[o] = moR * 0.75;
+              p[o + 1] = moG * 0.75;
+              p[o + 2] = moB * 0.75;
+              p[o + 3] = 135;
+            } else p[o + 3] = 0;
             continue;
           }
           const a = solid * 0.15;
@@ -787,6 +794,7 @@ export class TerrainRenderer {
         const dy = vy[i];
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const uy = dy / dist;
+        const sideLight = -dx / dist * 0.48 - uy * 0.68;
         let r: number;
         let g: number;
         let b: number;
@@ -821,15 +829,17 @@ export class TerrainRenderer {
             b += (olB - b) * ow;
           }
           const gr = (fine(x, y) - 128) * 0.1;
-          r += gr;
-          g += gr;
-          b += gr;
+          const light = 1 + sideLight * 0.18;
+          r = r * light + gr;
+          g = g * light + gr;
+          b = b * light + gr;
         } else {
           const tn = tint[i] / 255;
           r = sbR + (saR - sbR) * tn;
           g = sbG + (saG - sbG) * tn;
           b = sbB + (saB - sbB) * tn;
-          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade * (0.86 + (sm[i] / 255) * 0.28);
+          const directional = 1 + sideLight * 0.25 * clamp01((17 - dist) / 17);
+          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade * directional * (0.86 + (sm[i] / 255) * 0.28);
           r *= mul;
           g *= mul;
           b *= mul;

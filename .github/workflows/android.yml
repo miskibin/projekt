@@ -1,0 +1,45 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - "client/**"
+      - "shared/**"
+      - "package*.json"
+      - "vite.config.ts"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - run: npm ci
+      - run: npm run typecheck && npm test
+      - run: VITE_TRANSPORT=ws npm run build
+      - run: mkdir -p android/app/src/main/assets/www && cp -R dist/client/. android/app/src/main/assets/www/
+      - run: gradle -p android assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wormsy-android-bluetooth
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

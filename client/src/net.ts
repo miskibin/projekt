@@ -18,6 +18,7 @@ export interface Transport {
 
 /** Buduje adres WebSocket z bieżącej lokalizacji (dev: proxy Vite na /ws). */
 export function wsUrl(): string {
+  if (location.host === "appassets.androidplatform.net") return "wss://wormsy-online.onrender.com/ws";
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}/ws`;
 }

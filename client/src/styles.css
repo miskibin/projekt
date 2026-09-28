@@ -238,17 +238,28 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .game-tool:active { background: var(--hud-bg-hi); }
 .game-tool:focus-visible, .touch-key:focus-visible, .wslot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Czysto towarzyskie reakcje i mapa dostępne tylko podczas cudzej tury. */
+/* Szybka reakcja obrońcy oraz dodatkowe gesty podczas cudzej tury. */
 .spectator-tools {
   position: absolute; z-index: 12;
   top: calc(max(10px, env(safe-area-inset-top)) + 56px);
   right: max(12px, env(safe-area-inset-right));
-  display: grid; gap: 5px; padding: 8px;
+  display: grid; gap: 6px; padding: 8px; width: min(260px, calc(100vw - 26px));
   background: rgba(12,32,40,.86); border: 1px solid var(--hud-line);
   border-radius: var(--hud-r); backdrop-filter: blur(5px);
   color: #cae5df; font: 600 10px var(--font);
 }
 .spectator-tools[hidden] { display: none; }
+.defense-worms, .defense-actions { display: flex; gap: 5px; }
+.defense-worms button { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; padding: 5px 4px;
+  border: 1px solid var(--hud-line); border-radius: 7px; background: rgba(25,56,65,.78); color: #eef9fa;
+  font: 700 10px var(--font); touch-action: manipulation; cursor: pointer; }
+.defense-worms button[aria-pressed=true] { border-color: #ffe2a4; background: rgba(142,106,42,.65); }
+.defense-actions button { flex: 1; min-height: 42px; border: 1px solid #a9dbee; border-radius: 10px;
+  background: linear-gradient(155deg, #287487, #164957); color: white; font: 800 13px var(--font);
+  touch-action: manipulation; cursor: pointer; }
+.defense-actions button:last-child { border-color: #ffe3aa; background: linear-gradient(155deg, #8b6735, #574027); }
+.defense-actions button:disabled { opacity: .38; cursor: default; }
+.defense-worms button:focus-visible, .defense-actions button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .spectator-actions { display: flex; gap: 5px; justify-content: flex-end; }
 .spectator-actions button {
   width: 42px; height: 42px; padding: 0;
@@ -328,7 +339,7 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
   .game-tools .game-tool { height: 40px; min-width: 40px; width: 40px; font-size: 17px; }
   .weapon-tool { height: 40px; padding: 0 9px 0 5px; gap: 5px; font-size: 12.5px; max-width: min(196px, calc(100vw - 66px)); }
   .weapon-badge { width: 30px; height: 30px; }
-  .spectator-tools { top: calc(max(8px, env(safe-area-inset-top)) + 46px); font-size: 9px; }
+  .spectator-tools { top: calc(max(8px, env(safe-area-inset-top)) + 46px); font-size: 9px; width: min(234px, calc(100vw - 18px)); }
   .spectator-actions button { width: 38px; height: 38px; font-size: 21px; }
 }
 @media (max-height: 460px), (max-width: 430px) {

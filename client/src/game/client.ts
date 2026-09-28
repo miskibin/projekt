@@ -14,6 +14,7 @@ import type {
 } from "@shared/protocol";
 import { Camera } from "./camera";
 import { DemoDriver, type LocalMode } from "./demo";
+import { soloArena } from "./solo";
 import { Hud } from "./hud";
 import { InputController } from "./input";
 import { Particles } from "./particles";
@@ -53,6 +54,10 @@ interface Els {
   currentAmmo: HTMLElement;
   spectatorTools: HTMLElement;
   spectatorMap: HTMLButtonElement;
+  defenseWorms: HTMLElement;
+  defenseStatus: HTMLElement;
+  defenseDodge: HTMLButtonElement;
+  defenseBrace: HTMLButtonElement;
 }
 
 /** Spina render, wejście, dźwięk i sieć w jedną pętlę gry. */
@@ -88,6 +93,7 @@ export class GameClient {
   private time = 0;
   private running = false;
   private demo: DemoDriver | null = null;
+  private soloRun: { stage: number; seed: number; base: GameConfig } | null = null;
   private demoAcc = 0;
   private waterShown = WATER_LEVEL_START;
   private selectedWeapon: WeaponId = "bazooka";
@@ -100,6 +106,10 @@ export class GameClient {
   private shownCharge = -1;
   private lastSpectatorReaction = Number.NEGATIVE_INFINITY;
   private spectatorMapOpen = false;
+  private selectedDefenseWormId: number | null = null;
+  private defenseManual = false;
+  private defenseTurnKey = "";
+  private defensePendingAt = 0;
   private reactions: { team: number; wormId: number; kind: SpectatorReaction; at: number }[] = [];
   private readonly reactionButtons: HTMLButtonElement[];
   private touchEnabled = matchMedia("(any-pointer: coarse)").matches;
@@ -131,6 +141,10 @@ export class GameClient {
       currentAmmo: byId("current-ammo"),
       spectatorTools: byId("spectator-tools"),
       spectatorMap: byId<HTMLButtonElement>("spectator-map"),
+      defenseWorms: byId("defense-worms"),
+      defenseStatus: byId("defense-status"),
+      defenseDodge: byId<HTMLButtonElement>("defense-dodge"),
+      defenseBrace: byId<HTMLButtonElement>("defense-brace"),
     };
     this.reactionButtons = Array.from(this.els.spectatorTools.querySelectorAll<HTMLButtonElement>("[data-reaction]"));
     const ctx = this.els.canvas.getContext("2d");
@@ -203,6 +217,10 @@ export class GameClient {
   // ---------------- cykl życia ----------------
 
   start(config: GameConfig, players: PlayerInfo[], myTeam: number, localMode: LocalMode | false = false): void {
+    if (localMode === "gauntlet") {
+      this.soloRun ??= { stage: 1, seed: config.seed, base: config };
+      config = soloArena(this.soloRun.base, this.soloRun.seed, this.soloRun.stage);
+    } else this.soloRun = null;
     this.config = config;
     this.players = players;
     this.myTeam = myTeam;
@@ -221,7 +239,13 @@ export class GameClient {
     this.prediction.reset();
     this.inputSeq = 0;
     this.lastSpectatorReaction = Number.NEGATIVE_INFINITY;
+    this.selectedDefenseWormId = null;
+    this.defenseManual = false;
+    this.defenseTurnKey = "";
+    this.defensePendingAt = 0;
+    this.els.defenseWorms.replaceChildren();
     this.reactions = [];
+    this.defenseTurnKey = "";
     this.spectatorMapOpen = false;
     this.els.spectatorTools.hidden = true;
     this.buffer.setInterpolationDelay(localMode ? LOCAL_INTERP_DELAY_MS : INTERP_DELAY_MS);
@@ -244,7 +268,7 @@ export class GameClient {
     this.setEsc(false);
     this.els.volume.value = String(Math.round(this.sound.volume * 100));
 
-    this.demo = localMode ? new DemoDriver(config, localMode) : null;
+    this.demo = localMode ? new DemoDriver(config, localMode, this.soloRun?.stage ?? 0) : null;
     this.demoAcc = 0;
     this.els.demoControls.hidden = !localMode;
     byId("btn-back-lobby").textContent = localMode ? "Wróć do menu" : "Wróć do lobby";
@@ -273,6 +297,7 @@ export class GameClient {
     window.visualViewport?.removeEventListener("resize", this.onResize);
     this.resizeObserver.disconnect();
     this.demo = null;
+    this.soloRun = null;
     this.reactions = [];
     this.els.spectatorTools.hidden = true;
     this.prediction.reset();
@@ -360,6 +385,9 @@ export class GameClient {
   onGameOver(winnerTeam: number | null, winnerName: string | null, stats: Record<string, unknown>): void {
     this.overOpen = true;
     this.els.spectatorTools.hidden = true;
+    const next = byId<HTMLButtonElement>("btn-solo-next");
+    next.hidden = !this.soloRun;
+    if (this.soloRun) next.textContent = winnerTeam === 0 ? "Następna arena →" : "Nowa wyprawa";
     this.syncControls();
     const title = this.els.goTitle;
     if (winnerTeam === null) {
@@ -371,6 +399,7 @@ export class GameClient {
     }
     const st = this.buffer.latest;
     const rows: string[] = [];
+    if (this.soloRun) rows.push(`<div class="go-row"><span class="grow">Wyprawa solo</span><b>Arena ${this.soloRun.stage}</b></div>`);
     if (st) {
       for (const t of st.teams) {
         rows.push(
@@ -526,6 +555,7 @@ export class GameClient {
         particles: this.particles,
         time: this.time,
         reactions: this.reactions.map((r) => ({ wormId: r.wormId, kind: r.kind, age: this.time - r.at })),
+        selectedDefenseWormId: !myTurn && state.turn.defenseReady?.includes(this.myTeam) ? this.selectedDefenseWormId : null,
         myTeam: this.myTeam,
         myTurn,
         graves: this.graves,
@@ -705,6 +735,14 @@ export class GameClient {
         this.hud.banner(ev.team === this.myTeam ? "Twoja tura" : `${label} rozpoczyna turę`, 1.1);
         break;
       }
+      case "defense": {
+        this.particles.sparks(ev.x, ev.y, ev.style === "brace" ? 19 : 12,
+          ev.style === "brace" ? "#ffe6a9" : "#9debff");
+        this.particles.floatText(ev.x, ev.y - 32, ev.style === "brace" ? "OSŁONA!" : "UNIK!",
+          ev.style === "brace" ? "#ffdf91" : "#aff0ff", 17);
+        this.sound.play(ev.style === "brace" ? "pickup" : "jump");
+        break;
+      }
       case "suddenDeath": {
         this.hud.banner("SUDDEN DEATH!", 3);
         break;
@@ -844,6 +882,15 @@ export class GameClient {
     byId("btn-close-weapons").addEventListener("click", () => this.setWeapons(false));
     byId("btn-map").addEventListener("click", () => this.toggleMap());
     this.els.spectatorMap.addEventListener("click", () => this.toggleMap(true));
+    this.els.defenseWorms.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-worm]");
+      if (!button) return;
+      this.selectedDefenseWormId = Number(button.dataset.worm);
+      this.defenseManual = true;
+      this.updateSpectatorTools(this.buffer.latest);
+    });
+    this.els.defenseDodge.addEventListener("click", () => this.sendDefense("dodge"));
+    this.els.defenseBrace.addEventListener("click", () => this.sendDefense("brace"));
     for (const button of this.reactionButtons) button.addEventListener("click", () => {
       if (this.els.spectatorTools.hidden || button.disabled || !this.cb.connected()) return;
       const kind = button.dataset.reaction as SpectatorReaction;
@@ -876,6 +923,14 @@ export class GameClient {
       this.overOpen = false;
       this.cb.backToLobby();
     });
+    byId("btn-solo-next").addEventListener("click", () => {
+      const run = this.soloRun;
+      if (!run) return;
+      if (this.demo?.winner.team === 0) run.stage++;
+      else { run.stage = 1; run.seed = Math.floor(Math.random() * 0x7fffffff); }
+      this.start(run.base, [], 0, "gauntlet");
+      this.hud.banner(`Arena ${run.stage} · nowy przeciwnik`, 2.2);
+    });
     this.els.volume.addEventListener("input", () => {
       this.sound.volume = Number(this.els.volume.value) / 100;
     });
@@ -902,8 +957,9 @@ export class GameClient {
   }
 
   private updateSpectatorTools(state: GameSnapshot | null): void {
-    const turn = this.buffer.latest?.turn ?? state?.turn;
-    const waiting = !!turn && !this.demo && !this.overOpen && !this.escOpen && !this.panelOpen &&
+    const snapshot = this.buffer.latest ?? state;
+    const turn = snapshot?.turn;
+    const waiting = !!turn && (!this.demo || this.demo.computerTurn) && !this.overOpen && !this.escOpen && !this.panelOpen &&
       turn.phase !== "gameOver" && turn.activeTeam >= 0 && turn.activeTeam !== this.myTeam;
     this.els.spectatorTools.hidden = !waiting;
     if (!waiting && this.spectatorMapOpen) {
@@ -913,9 +969,62 @@ export class GameClient {
       this.els.spectatorMap.setAttribute("aria-pressed", "false");
     }
     if (waiting) {
-      const disabled = !this.cb.connected() || performance.now() - this.lastSpectatorReaction < REACTION_COOLDOWN_MS;
+      const key = `${turn.round}:${turn.activeWormId}`;
+      if (key !== this.defenseTurnKey) {
+        this.defenseTurnKey = key;
+        this.selectedDefenseWormId = null;
+        this.defenseManual = false;
+        this.defensePendingAt = 0;
+        this.els.defenseWorms.replaceChildren();
+      }
+      const worms = snapshot!.worms.filter((w) => w.team === this.myTeam && w.alive);
+      if (!this.defenseManual || !worms.some((w) => w.id === this.selectedDefenseWormId)) {
+        const threats = snapshot!.projectiles;
+        const active = snapshot!.worms.find((w) => w.id === turn.activeWormId);
+        const score = (w: typeof worms[number]): number => threats.length
+          ? Math.min(...threats.map((p) => Math.hypot(p.x - w.x, p.y - w.y)))
+          : Math.abs(w.x - (active?.x ?? w.x));
+        this.selectedDefenseWormId = worms.reduce<typeof worms[number] | null>((best, w) =>
+          !best || score(w) < score(best) ? w : best, null)?.id ?? null;
+      }
+      const ids = worms.map((w) => w.id).join(",");
+      if (this.els.defenseWorms.dataset.ids !== ids) {
+        this.els.defenseWorms.dataset.ids = ids;
+        this.els.defenseWorms.replaceChildren(...worms.map((w) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.worm = String(w.id);
+          return button;
+        }));
+      }
+      for (const button of this.els.defenseWorms.querySelectorAll<HTMLButtonElement>("button[data-worm]")) {
+        const w = worms.find((item) => item.id === Number(button.dataset.worm));
+        if (!w) continue;
+        const label = `${w.name} ${Math.ceil(w.hp)}♥`;
+        if (button.textContent !== label) button.textContent = label;
+        button.setAttribute("aria-pressed", String(w.id === this.selectedDefenseWormId));
+      }
+      const online = !!this.demo || this.cb.connected();
+      const ready = online && !!turn.defenseWindow && !!turn.defenseReady?.includes(this.myTeam) &&
+        this.selectedDefenseWormId !== null && (!this.defensePendingAt || performance.now() - this.defensePendingAt > 950);
+      this.els.defenseDodge.disabled = !ready;
+      this.els.defenseBrace.disabled = !ready;
+      const status = !online ? "Brak połączenia" : !turn.defenseWindow
+        ? "Wybierz robaka. Gdy padnie strzał, możesz raz zareagować." :
+          ready ? "Atak! Wybierz: unik albo osłona" : "Obrona wykorzystana w tej turze";
+      if (this.els.defenseStatus.textContent !== status) this.els.defenseStatus.textContent = status;
+      const disabled = !online || performance.now() - this.lastSpectatorReaction < REACTION_COOLDOWN_MS;
       for (const button of this.reactionButtons) button.disabled = disabled;
     }
+  }
+
+  private sendDefense(style: "dodge" | "brace"): void {
+    const snap = this.buffer.latest;
+    if (!snap?.turn.defenseWindow || !snap.turn.defenseReady?.includes(this.myTeam) ||
+      this.selectedDefenseWormId === null || (this.demo ? !this.demo.computerTurn : !this.cb.connected())) return;
+    this.defensePendingAt = performance.now();
+    this.sendAction({ kind: "defend", style, wormId: this.selectedDefenseWormId });
+    this.updateSpectatorTools(snap);
   }
 
   private syncControls(): void {

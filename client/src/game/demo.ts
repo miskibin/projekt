@@ -4,7 +4,9 @@ import type { Terrain } from "@shared/engine/terrain";
 import type { GameConfig, InputAction, InputState, PlayerInfo, RoomState } from "@shared/protocol";
 import { simulateTrajectory } from "./trajectory";
 
-export type LocalMode = "twoPlayers" | "computer";
+export type LocalMode = "twoPlayers" | "computer" | "gauntlet";
+
+export const SOLO_OPPONENTS = ["Zwiadowca", "Piroman", "Snajper", "Saper", "Burza", "Weteran", "Boss"] as const;
 
 interface ShotPlan { aim: number; power: number; missDistance: number }
 
@@ -17,11 +19,13 @@ export class DemoDriver {
   private botShot = false;
   private botPlan: ShotPlan | null = null;
   private botSearch: ComputerShotSearch | null = null;
+  private defenseDelay = 0;
 
-  constructor(config: GameConfig, readonly mode: LocalMode = "twoPlayers") {
+  constructor(config: GameConfig, readonly mode: LocalMode = "twoPlayers", readonly stage = 0) {
     this.game = createGame(config, [
-      { team: 0, playerId: "demo-0", name: mode === "computer" ? "Ty" : "Gracz 1" },
-      { team: 1, playerId: "demo-1", name: mode === "computer" ? "Komputer" : "Gracz 2" },
+      { team: 0, playerId: "demo-0", name: mode === "twoPlayers" ? "Gracz 1" : "Ty" },
+      { team: 1, playerId: "demo-1", name: mode === "twoPlayers" ? "Gracz 2" :
+        mode === "computer" ? "Komputer" : SOLO_OPPONENTS[(stage - 1) % SOLO_OPPONENTS.length]! },
     ]);
     this.terrain = (this.game as Game & { readonly terrain: Terrain }).terrain;
   }
@@ -29,8 +33,8 @@ export class DemoDriver {
   get snapshot() { return this.game.snapshot(); }
   get isOver() { return this.game.isOver(); }
   get winner() { return this.game.winner(); }
-  get computerTurn() { return this.mode === "computer" && this.snapshot.turn.activeTeam === 1; }
-  get controlledTeam() { return this.mode === "computer" ? 0 : this.snapshot.turn.activeTeam; }
+  get computerTurn() { return this.mode !== "twoPlayers" && this.snapshot.turn.activeTeam === 1; }
+  get controlledTeam() { return this.mode === "twoPlayers" ? this.snapshot.turn.activeTeam : 0; }
 
   terrainSync() { return this.game.terrainSync(); }
 
@@ -40,14 +44,37 @@ export class DemoDriver {
   }
 
   applyAction(action: InputAction): void {
+    if (action.kind === "defend" && this.computerTurn) {
+      this.game.applyAction(0, action);
+      return;
+    }
     if (this.computerTurn) return;
     this.game.applyAction(this.snapshot.turn.activeTeam, action);
   }
 
   update() {
     this.game.step(FIXED_DT);
-    if (this.mode === "computer") this.updateComputer(FIXED_DT);
+    if (this.mode !== "twoPlayers") {
+      this.updateComputer(FIXED_DT);
+      this.updateComputerDefense(FIXED_DT);
+    }
     return { snapshot: this.snapshot, events: this.game.drainEvents() };
+  }
+
+  private updateComputerDefense(dt: number): void {
+    const state = this.snapshot;
+    if (state.turn.activeTeam !== 0 || !state.turn.defenseReady?.includes(1)) {
+      this.defenseDelay = 0;
+      return;
+    }
+    this.defenseDelay += dt;
+    const worms = state.worms.filter((w) => w.team === 1 && w.alive);
+    if (!worms.length || !state.projectiles.length) return;
+    const danger = worms.flatMap((w) => state.projectiles.map((p) => ({
+      worm: w, distance: Math.hypot(w.x - p.x, w.y - p.y),
+    }))).sort((a, b) => a.distance - b.distance)[0];
+    if (!danger || danger.distance > 130 + this.stage * 17 || this.defenseDelay < Math.max(0.18, 0.6 - this.stage * 0.05)) return;
+    this.game.applyAction(1, { kind: "defend", style: this.stage % 3 === 0 ? "brace" : "dodge", wormId: danger.worm.id });
   }
 
   private updateComputer(dt: number): void {
@@ -95,13 +122,27 @@ export class DemoDriver {
     if (this.botTime >= 1.15 && !this.botShot) {
       this.botShot = true;
       const ammo = state.teams.find((team) => team.team === 1)?.ammo;
-      if (this.botPlan.missDistance > 80 && ammo?.airstrike !== 0) {
+      const close = Math.hypot(target.x - worm.x, target.y - worm.y);
+      const style = this.stage % 4;
+      if ((this.botPlan.missDistance > 80 || style === 3 && turn.round % 3 === 0) && ammo?.airstrike !== 0) {
         this.game.applyAction(1, { kind: "selectWeapon", weapon: "airstrike" });
         this.game.applyAction(1, { kind: "target", x: target.x, y: target.y });
-      } else if (this.botPlan.missDistance > 80 && ammo?.homing !== 0) {
+      } else if ((this.botPlan.missDistance > 80 || style === 3) && ammo?.homing !== 0) {
         this.game.applyAction(1, { kind: "selectWeapon", weapon: "homing" });
         this.game.applyAction(1, { kind: "target", x: target.x, y: target.y });
         this.game.applyAction(1, { kind: "fire", power: Math.max(0.6, this.botPlan.power) });
+      } else if (style === 1 && close < 390 && ammo?.banana !== 0 && turn.round % 3 === 0) {
+        this.game.applyAction(1, { kind: "selectWeapon", weapon: "banana" });
+        this.game.applyAction(1, { kind: "setTimer", seconds: 2 });
+        this.game.applyAction(1, { kind: "fire", power: Math.max(0.5, this.botPlan.power) });
+      } else if (style === 1 && close < 340 && ammo?.cluster !== 0) {
+        this.game.applyAction(1, { kind: "selectWeapon", weapon: "cluster" });
+        this.game.applyAction(1, { kind: "setTimer", seconds: 2 });
+        this.game.applyAction(1, { kind: "fire", power: Math.max(0.5, this.botPlan.power) });
+      } else if (style === 2 && close < 160 && ammo?.shotgun !== 0) {
+        this.game.applyAction(1, { kind: "selectWeapon", weapon: "shotgun" });
+        this.game.applyAction(1, { kind: "fire", power: 1 });
+        this.game.applyAction(1, { kind: "fire", power: 1 });
       } else {
         this.game.applyAction(1, { kind: "selectWeapon", weapon: "bazooka" });
         this.game.applyAction(1, { kind: "fire", power: this.botPlan.power });

@@ -162,6 +162,51 @@ function countSolid(t: Terrain, x0: number, y0: number, x1: number, y1: number):
   return n;
 }
 
+describe("obrona podczas cudzego ataku", () => {
+  it("wymaga oddanego strzału, działa na wybranego własnego robaka i tylko raz na turę", () => {
+    const game = createGame(cfg(), setups(2)) as GameImpl;
+    toActive(game);
+    clearMines(game);
+    const attacker = game.snapshot().turn.activeTeam;
+    const defender = attacker === 0 ? 1 : 0;
+    const own = game.worms.find((w) => w.team === defender)!;
+    const enemy = game.worms.find((w) => w.team === attacker)!;
+    const hp = own.hp;
+    game.applyAction(defender, { kind: "defend", style: "brace", wormId: own.id });
+    expect(game.snapshot().turn.defenseWindow).toBe(false);
+    expect(own.guardUntil).toBeUndefined();
+    game.applyAction(attacker, { kind: "fire", power: 0.3 });
+    expect(game.snapshot().turn.defenseReady).toContain(defender);
+    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: enemy.id });
+    expect(game.snapshot().turn.defenseReady).toContain(defender);
+    game.applyAction(defender, { kind: "defend", style: "brace", wormId: own.id });
+    expect(game.snapshot().turn.defenseReady).not.toContain(defender);
+    expect(game.snapshot().worms.find((w) => w.id === own.id)?.guard).toBeGreaterThan(1);
+    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: own.id });
+    expect(own.vx).toBe(0);
+    game.damageWorm(own, 40, "explosion");
+    expect(own.hp).toBe(hp - 18);
+    expect(game.drainEvents().some((e) => e.t === "defense" && e.wormId === own.id && e.style === "brace")).toBe(true);
+  });
+
+  it("unik naprawdę przenosi robaka po strzale, nie zmieniając tury atakującego", () => {
+    const game = createGame(cfg(), setups(2)) as GameImpl;
+    toActive(game);
+    clearMines(game);
+    const turn = game.snapshot().turn;
+    const defender = turn.activeTeam === 0 ? 1 : 0;
+    const worm = game.worms.find((w) => w.team === defender)!;
+    game.applyAction(turn.activeTeam, { kind: "fire", power: 0.4 });
+    const x = worm.x;
+    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: worm.id });
+    expect(worm.onGround).toBe(false);
+    expect(worm.vy).toBeLessThan(-200);
+    expect(game.snapshot().turn.activeTeam).toBe(turn.activeTeam);
+    stepN(game, 8);
+    expect(Math.abs(worm.x - x)).toBeGreaterThan(5);
+  });
+});
+
 // ---------------------------------------------------------------- determinizm
 
 describe("determinizm", () => {

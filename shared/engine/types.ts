@@ -22,6 +22,8 @@ export interface Worm {
   /** kąt względem kierunku patrzenia, [-PI/2, PI/2] */
   aim: number;
   onGround: boolean;
+  /** Czas silnika, do którego osłona zmniejsza obrażenia oraz odrzut. */
+  guardUntil?: number;
   anim?: string;
   /** licznik czasu animacji jednorazowej (bat) */
   animTimer: number;
