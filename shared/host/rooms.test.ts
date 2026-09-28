@@ -146,6 +146,7 @@ describe("walidacja configu", () => {
     expect(cfg.turnTime).toBe(45);
     expect(cfg.suddenDeathAfterRounds).toBe(10);
     expect(cfg.terrainDensity).toBe(1);
+    expect(cfg.mode).toBe("arsenal");
     expect(["grass", "desert", "snow", "hell"]).toContain(cfg.theme);
     expect(Number.isFinite(cfg.seed)).toBe(true);
   });
@@ -157,6 +158,7 @@ describe("walidacja configu", () => {
       suddenDeathAfterRounds: 30,
       terrainDensity: 0.3,
       theme: "hell",
+      mode: "classic",
     });
     expect(res.ok).toBe(true);
     if (res.ok) {
@@ -166,6 +168,7 @@ describe("walidacja configu", () => {
         suddenDeathAfterRounds: 30,
         terrainDensity: 0.3,
         theme: "hell",
+        mode: "classic",
       });
     }
   });
@@ -186,6 +189,7 @@ describe("walidacja configu", () => {
 
   it("odrzuca zły motyw i nie-liczby", () => {
     expect(validateConfigPatch({ theme: "rainbow" }).ok).toBe(false);
+    expect(validateConfigPatch({ mode: "impossible" }).ok).toBe(false);
     expect(validateConfigPatch({ turnTime: "45" }).ok).toBe(false);
     expect(validateConfigPatch({ terrainDensity: Number.NaN }).ok).toBe(false);
     expect(validateConfigPatch(null).ok).toBe(false);

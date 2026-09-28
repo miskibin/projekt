@@ -574,6 +574,17 @@ export class Renderer {
     ctx.translate(p.x, p.y);
 
     switch (p.kind) {
+      case "drill": {
+        ctx.rotate(ang);
+        if (this.emitTrail(p.id, inp.time, 16)) inp.particles.sparks(p.x - Math.cos(ang) * 5, p.y - Math.sin(ang) * 5, 2, "#8aeaff");
+        ctx.fillStyle = "#276b83";
+        ctx.fillRect(-11, -4, 14, 8);
+        ctx.fillStyle = "#a4e9f4";
+        for (const dx of [-8, -3]) ctx.fillRect(dx, -4, 2, 8);
+        ctx.fillStyle = "#effcff";
+        ctx.beginPath(); ctx.moveTo(3, -6); ctx.lineTo(12, 0); ctx.lineTo(3, 6); ctx.closePath(); ctx.fill();
+        break;
+      }
       case "bazooka":
       case "homing": {
         const homing = p.kind === "homing";

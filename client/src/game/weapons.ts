@@ -3,7 +3,7 @@ import type { WeaponId } from "@shared/protocol";
 export const WEAPON_ORDER: WeaponId[] = [
   "bazooka", "grenade", "cluster", "banana",
   "shotgun", "uzi", "holy", "dynamite",
-  "mine", "airstrike", "homing", "bat",
+  "mine", "airstrike", "homing", "drill", "bat",
   "teleport", "girder", "jetpack", "skip",
 ];
 
@@ -18,6 +18,7 @@ export const WEAPON_NAMES: Record<WeaponId, string> = {
   mine: "Mina",
   airstrike: "Nalot",
   homing: "Rakieta nakierowana",
+  drill: "Wiertło",
   banana: "Banan",
   bat: "Kij bejsbolowy",
   teleport: "Teleport",
@@ -30,7 +31,7 @@ export const WEAPON_NAMES: Record<WeaponId, string> = {
 export const WEAPON_COLORS: Record<WeaponId, string> = {
   bazooka: "#ff9961", grenade: "#9de47f", cluster: "#66f2d1", banana: "#ffe467",
   shotgun: "#f6cb96", uzi: "#b9dbff", holy: "#ffecaa", dynamite: "#ff7368",
-  mine: "#aab8c7", airstrike: "#ff8c75", homing: "#71e8ff", bat: "#d9a274",
+  mine: "#aab8c7", airstrike: "#ff8c75", homing: "#71e8ff", drill: "#a2eefb", bat: "#d9a274",
   teleport: "#c99dff", girder: "#e3a471", jetpack: "#85d9ff", skip: "#bdc4d1",
 };
 
@@ -47,6 +48,7 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
   mine: "Stawiasz ją przed sobą; po uzbrojeniu czeka na zbliżającego się robaka.",
   airstrike: "Wskaż miejsce na mapie; sześć bomb spadnie po kolei przez cały obszar.",
   homing: "Wskaż cel; rakieta skoryguje lot.",
+  drill: "Drąży wąski tunel w ziemi, a na końcu wybucha. Celuj w grunt pod rywalem.",
   bat: "Mocny cios z bliska – zepchnij rywala do wody.",
   teleport: "Wskaż bezpieczne miejsce na mapie.",
   girder: "Postaw belkę jako osłonę lub most.",
@@ -226,6 +228,18 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
         ctx.ellipse(dx * u, 7 * u, 2 * u, 4 * u, 0, 0, Math.PI * 2);
         ctx.fill();
       }
+      break;
+    }
+    case "drill": {
+      ctx.rotate(-0.6);
+      ctx.fillStyle = "#276b83";
+      rrect(ctx, -14 * u, -5 * u, 19 * u, 10 * u, 3 * u);
+      ctx.fillStyle = "#a4e9f4";
+      for (const dx of [-10, -4, 2]) ctx.fillRect(dx * u, -5 * u, 2 * u, 10 * u);
+      ctx.fillStyle = "#e6f7ff";
+      ctx.beginPath();
+      ctx.moveTo(5 * u, -7 * u); ctx.lineTo(15 * u, 0); ctx.lineTo(5 * u, 7 * u);
+      ctx.closePath(); ctx.fill();
       break;
     }
     case "homing": {

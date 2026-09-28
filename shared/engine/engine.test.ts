@@ -165,6 +165,19 @@ function countSolid(t: Terrain, x0: number, y0: number, x1: number, y1: number):
 // ---------------------------------------------------------------- determinizm
 
 describe("determinizm", () => {
+  it("losuje wspólny arsenał na jeden mecz i nie dziedziczy go między grami", () => {
+    const a = createGame(cfg({ mode: "arsenal", seed: 72 }), setups(2));
+    const b = createGame(cfg({ mode: "arsenal", seed: 72 }), setups(2));
+    const [red, blue] = a.snapshot().teams;
+    expect(red!.ammo).toEqual(blue!.ammo);
+    expect(red!.ammo).toEqual(b.snapshot().teams[0]!.ammo);
+    expect(red!.ammo.bazooka).toBe(-1);
+    expect(Object.entries(red!.ammo).filter(([id, amount]) => id !== "bazooka" && id !== "grenade" && id !== "shotgun" && id !== "skip" && amount! > 0)).toHaveLength(4);
+    const variants = new Set([72, 73, 74, 75, 76].map((seed) => JSON.stringify(createGame(cfg({ mode: "arsenal", seed }), setups(2)).snapshot().teams[0]!.ammo)));
+    expect(variants.size).toBeGreaterThan(1);
+    expect(createGame(cfg({ mode: "classic" }), setups(2)).snapshot().teams[0]!.ammo.drill).toBe(2);
+  });
+
   it("dwie gry z tym samym seedem i inputami dają identyczne snapshoty po 600 krokach", () => {
     const drive = (g: Game, i: number) => {
       const s = g.snapshot();
@@ -258,6 +271,28 @@ describe("rozstawienie robaków", () => {
 // ---------------------------------------------------------------- bronie
 
 describe("bronie", () => {
+  it("wiertło wycina zsynchronizowany tunel przed wybuchem", () => {
+    const g = createGame(cfg({ seed: 813, mode: "classic" }), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const w = gi.worms.find((worm) => worm.id === g.snapshot().turn.activeWormId)!;
+    w.x = 500; w.y = 438; w.facing = 1; w.onGround = true;
+    const team = g.snapshot().turn.activeTeam;
+    g.applyAction(team, { kind: "selectWeapon", weapon: "drill" });
+    g.applyInput(team, { ...NEUTRAL, aim: 0.35 });
+    g.applyAction(team, { kind: "fire", power: 1 });
+    const events: GameEvent[] = [];
+    stepN(g, 150, events);
+    const tunnels = events.filter((ev): ev is Extract<GameEvent, { t: "burrow" }> => ev.t === "burrow");
+    expect(tunnels.length).toBeGreaterThan(3);
+    expect(tunnels.length).toBeLessThan(100);
+    for (const e of tunnels) expect(gi.terrain.isSolid(e.x, e.y)).toBe(false);
+    expect(events.some((ev) => ev.t === "explosion" && ev.style === "drill")).toBe(true);
+  });
   it("host puszcza ruch i ładowanie po utracie sygnału sterowania", () => {
     const g = createGame(cfg({ seed: 999 }), setups(2));
     const gi = g as unknown as { input: InputState };

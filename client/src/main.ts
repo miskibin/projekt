@@ -51,14 +51,16 @@ class LazyTransport implements Transport {
   }
 }
 
-/**
- * Wybór transportu. Domyślnie WebSocket (self-host, serwer Node przez proxy Vite `/ws`).
- * Produkcja używa lekkiego publicznego brokera MQTT. Nie wymaga własnego serwera ani Supabase.
- * `VITE_TRANSPORT=ws` pozostawia tryb własnego serwera Node do developmentu/self-hostingu.
- */
+/** Wybór per link: serwer na Render lub pierwotny MQTT z symulacją na telefonie hosta. */
+const TRANSPORT_MODE = (() => {
+  const configured = (import.meta.env as unknown as Record<string, string | undefined>).VITE_TRANSPORT;
+  const requested = new URLSearchParams(location.search).get("transport");
+  const serverAvailable = configured === "ws";
+  return requested === "mqtt" || !serverAvailable ? "mqtt" : "ws";
+})();
+
 export function createTransport(): Transport {
-  const env = import.meta.env as unknown as Record<string, string | undefined>;
-  return env.VITE_TRANSPORT === "ws"
+  return TRANSPORT_MODE === "ws"
     ? new WebSocketTransport(wsUrl())
     : new LazyTransport(async () => new (await import("./net/trysteroTransport")).TrysteroTransport());
 }
@@ -71,6 +73,14 @@ let DEMO = params.get("demo") === "1" || COMPUTER;
 const DEMO_LOBBY = params.get("demoLobby") === "1";
 const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+function roomUrl(code: string): string {
+  const search = new URLSearchParams({ room: code });
+  if (TRANSPORT_MODE === "mqtt") search.set("transport", "mqtt");
+  return `${location.pathname}?${search}`;
+}
+function menuUrl(): string {
+  return `${location.pathname}${TRANSPORT_MODE === "mqtt" ? "?transport=mqtt" : ""}`;
+}
 // Jedna karta zachowuje tożsamość przez odświeżenie i zmianę WebSocket.
 const reconnectToken = (() => {
   const makeToken = () => {
@@ -105,6 +115,16 @@ const el = {
   connText: byId("conn-text"),
   toasts: byId("toasts"),
 };
+
+const serverChoice = byId<HTMLElement>("transport-ws-option");
+if ((import.meta.env as unknown as Record<string, string | undefined>).VITE_TRANSPORT !== "ws") serverChoice.hidden = true;
+for (const radio of document.querySelectorAll<HTMLInputElement>('input[name="transport"]')) {
+  radio.checked = radio.value === TRANSPORT_MODE;
+  radio.addEventListener("change", () => {
+    if (!radio.checked || radio.value === TRANSPORT_MODE) return;
+    location.assign(`${location.pathname}${radio.value === "mqtt" ? "?transport=mqtt" : ""}`);
+  });
+}
 
 // ---------------- toasty ----------------
 function toast(text: string, kind: "info" | "err" | "ok" = "info", ms = 4200): void {
@@ -241,7 +261,7 @@ function handle(msg: ServerMessage): void {
         roomCode = "";
         inGame = false;
         game.stop();
-        history.replaceState(null, "", location.pathname);
+        history.replaceState(null, "", menuUrl());
         showScreen("menu");
       }
       break;
@@ -260,8 +280,8 @@ function handle(msg: ServerMessage): void {
       } else if (!inGame && screen !== "game") {
         showScreen("lobby");
       }
-      const url = `${location.pathname}?room=${msg.room.code}`;
-      if (location.search !== `?room=${msg.room.code}`) history.replaceState(null, "", url);
+      const url = roomUrl(msg.room.code);
+      if (location.pathname + location.search !== url) history.replaceState(null, "", url);
       break;
     }
 
@@ -270,7 +290,7 @@ function handle(msg: ServerMessage): void {
       inGame = false;
       gameOverOpen = false;
       game.stop();
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", menuUrl());
       showScreen("menu");
       break;
 
@@ -339,16 +359,6 @@ el.join.addEventListener("click", () => {
 
 el.joinCode.addEventListener("input", () => {
   el.joinCode.value = el.joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
-});
-
-byId<HTMLButtonElement>("btn-lan").addEventListener("click", () => {
-  const raw = byId<HTMLInputElement>("lan-address").value.trim().replace(/^https?:\/\//i, "");
-  // Przechodzimy na serwer lokalny całym oknem: strona HTTPS nie może otworzyć ws://LAN.
-  if (!/^(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?$|^[\w-]+\.local(?::\d{2,5})?$/i.test(raw)) {
-    toast("Podaj adres komputera w sieci, np. 192.168.1.10:3000", "err");
-    return;
-  }
-  location.assign(`http://${raw.includes(":") ? raw : `${raw}:3000`}/`);
 });
 
 el.nick.addEventListener("keydown", (e) => {

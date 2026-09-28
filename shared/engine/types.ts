@@ -66,6 +66,9 @@ export interface Projectile {
   restTimer: number;
   restFuse: number;
   sangHallelujah: boolean;
+  /** Ostatni punkt wycięty przez wiertło; pozwala ograniczyć zdarzenia sieciowe. */
+  lastCarveX?: number;
+  lastCarveY?: number;
 }
 
 export interface Crate {

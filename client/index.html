@@ -42,15 +42,11 @@
         <a id="btn-demo" href="?demo=1" class="btn btn-go btn-lg demo-link demo-link-secondary">Demo — steruj 2 graczami</a>
         <p class="hint">Sam przeciw komputerowi albo dwie drużyny na jednym ekranie.</p>
         <p class="hint">Sterowanie: A/D – ruch, W/S – celowanie, SPACJA – strzał (przytrzymaj), Enter – skok, Tab – bronie</p>
-        <details class="lan-options">
-          <summary>Gra w tej samej sieci Wi-Fi (LAN)</summary>
-          <p>Wymaga uruchomienia serwera gry na komputerze podłączonym do tej samej sieci lub hotspotu.</p>
-          <label for="lan-address">Adres komputera z serwerem</label>
-          <div class="lan-row">
-            <input id="lan-address" type="text" placeholder="192.168.1.10:3000" autocapitalize="off" autocomplete="off" spellcheck="false" />
-            <button id="btn-lan" class="btn" type="button">Otwórz</button>
-          </div>
-        </details>
+        <fieldset class="transport-options">
+          <legend>Połączenie</legend>
+          <label id="transport-ws-option"><input type="radio" name="transport" value="ws" /> Serwer gry <small>zalecany, działa niezależnie od telefonu hosta</small></label>
+          <label><input type="radio" name="transport" value="mqtt" /> MQTT <small>tryb pierwotny, telefon hosta prowadzi grę</small></label>
+        </fieldset>
       </div>
     </section>
 
@@ -86,6 +82,11 @@
           <div class="panel">
             <h2>Ustawienia</h2>
             <div id="settings" class="settings">
+              <label class="set"><span>Tryb meczu</span>
+                <select id="set-mode">
+                  <option value="arsenal">Losowany arsenał</option>
+                  <option value="classic">Klasyk</option>
+                </select><b></b></label>
               <label class="set"><span>Robaki na drużynę</span>
                 <input id="set-worms" type="range" min="1" max="6" step="1" /><b id="val-worms">3</b></label>
               <label class="set"><span>Czas tury (s)</span>

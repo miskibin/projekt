@@ -88,7 +88,7 @@ function projectileExplosionStyle(kind: ProjectileKind): ExplosionStyle | undefi
   if (kind === "airstrikeBomb") return "airstrike";
   if (
     kind === "bazooka" || kind === "homing" || kind === "grenade" || kind === "cluster" ||
-    kind === "banana" || kind === "holy" || kind === "dynamite"
+    kind === "banana" || kind === "holy" || kind === "dynamite" || kind === "drill"
   ) return kind;
   return undefined;
 }
@@ -156,6 +156,20 @@ export function stepProjectiles(ctx: EngineCtx, dt: number): void {
 
       const terrainHit = circleHits(ctx.terrain, nx, ny, p.hitRadius);
       const wormHit = !terrainHit && hitWorm(ctx, p, nx, ny);
+
+      if (p.kind === "drill" && terrainHit) {
+        // Tylko punkty wycinania trafiają do sieci; obie strony odtwarzają ten sam tunel.
+        if (p.lastCarveX === undefined || Math.hypot(nx - p.lastCarveX, ny - p.lastCarveY!) >= 8) {
+          const x = Math.round(nx), y = Math.round(ny), r = 10;
+          ctx.terrain.carveCircle(x, y, r);
+          ctx.emit({ t: "burrow", x, y, r });
+          p.lastCarveX = nx;
+          p.lastCarveY = ny;
+        }
+        p.x = nx;
+        p.y = ny;
+        continue;
+      }
 
       if (terrainHit || wormHit) {
         if (p.explodeOnContact) {

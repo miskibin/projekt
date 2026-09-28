@@ -6,7 +6,7 @@ import type { Crate, EngineCtx, Mine } from "./types";
 import type { CrateSnapshot, WeaponId } from "../protocol";
 
 export const CRATE_RADIUS = 8;
-export const CRATE_FALL_SPEED = 60;
+export const CRATE_FALL_SPEED = 120;
 export const CRATE_PICKUP_DIST = 18;
 
 export const MINE_RADIUS = 4;
@@ -18,10 +18,23 @@ export function crateSnapshot(c: Crate): CrateSnapshot {
   return { id: c.id, kind: c.kind, x: c.x, y: c.y, vy: c.vy, landed: c.landed };
 }
 
-export function spawnCrate(ctx: EngineCtx, forcedKind?: Crate["kind"]): Crate {
+export function spawnCrate(ctx: EngineCtx, forcedKind?: Crate["kind"], contested = false): Crate {
   const roll = ctx.rng.next();
   const kind: Crate["kind"] = forcedKind ?? (roll < 0.4 ? "health" : roll < 0.8 ? "weapon" : "utility");
-  const x = ctx.rng.int(40, WORLD_WIDTH - 40);
+  let x = ctx.rng.int(40, WORLD_WIDTH - 40);
+  if (contested) {
+    const alive = ctx.worms.filter((w) => w.alive);
+    let closest = Infinity;
+    for (const a of alive) for (const b of alive) {
+      if (a.team === b.team) continue;
+      const distance = Math.abs(a.x - b.x);
+      if (distance < closest) {
+        closest = distance;
+        x = Math.round((a.x + b.x) / 2);
+      }
+    }
+    x = Math.max(40, Math.min(WORLD_WIDTH - 40, x + ctx.rng.int(-60, 60)));
+  }
   const crate: Crate = {
     id: ctx.nextId(),
     kind,

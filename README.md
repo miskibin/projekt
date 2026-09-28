@@ -1,27 +1,30 @@
 # Worms Online
 
 Turowa gra artyleryjska w stylu Worms z multiplayerem przez sieć (2–4 graczy, każdy z własną drużyną robaków).
-Całość w TypeScript: autorytatywny serwer Node + klient w przeglądarce (Canvas 2D), bez żadnych plików assetów.
+Całość w TypeScript: serwer Node lub tryb MQTT z hostem w przeglądarce oraz klient Canvas 2D.
 
-## Szybki start (bez własnego serwera – Vercel/GitHub Pages + Supabase)
+## Gra na dwóch telefonach
 
-Domyślnie gra nie potrzebuje serwera: klient jest statyczną stroną, a gracz tworzący pokój
-uruchamia logikę gry u siebie w przeglądarce. Komunikacja idzie przez **Supabase Realtime**
-(klucze publiczne w `.env`, projekt `worms-online`). Wystarczy więc hostować `dist/client`:
+Otwórzcie **https://wormsy-online.onrender.com/** na obu telefonach. Domyślny tryb
+„Serwer gry” prowadzi symulację na Render: gra działa także po chwilowej utracie
+połączenia telefonu hosta. Host tworzy pokój i kopiuje link zaproszenia; druga osoba
+otwiera link lub wpisuje czteroliterowy kod, zaznacza gotowość i host zaczyna mecz.
 
-- **Vercel**: *Add New → Project → Import* `miskibin/projekt`. `vercel.json` ustawia build
-  (`npm run build`, katalog `dist/client`). Jeśli nie mergujesz na `main`, w *Settings → Git*
-  ustaw *Production Branch* na `claude/worms-multiplayer-game-4rpz13`.
-- **GitHub Pages**: workflow `.github/workflows/pages.yml` buduje klienta przy każdym pushu.
-  W *Settings → Pages* ustaw *Source: GitHub Actions* (jeśli workflow nie włączył tego sam).
+W menu można wybrać **MQTT**, żeby symulację prowadził telefon hosta przez publiczny
+broker. Oba telefony muszą mieć internet; link zaproszenia zapisuje wybrany tryb.
+Ten wariant zależy od połączenia i działania telefonu hosta. Przełączenie trybu
+po stworzeniu pokoju wymaga założenia nowego pokoju.
 
-Potem: otwórz stronę, wpisz nick, „Stwórz pokój”, wyślij kolegom link z kodem.
+Domyślny **Losowany arsenał** daje obu drużynom ten sam zestaw specjalnych broni
+na czas jednego meczu; skrzynki pod walką dodają nowe opcje. W lobby możesz wybrać
+**Klasyk**, żeby cały arsenał był dostępny od początku. Wyniki i bronie nie przechodzą
+między meczami.
 
 ## Demo — jedna osoba, dwie drużyny
 
 W menu wybierz **„Demo — steruj 2 graczami”** albo otwórz stronę z `?demo=1`.
 To pełny lokalny mecz: sterujesz na zmianę Graczem 1 i Graczem 2, bez drugiej karty,
-połączenia z Supabase ani drugiej osoby. Działają normalne bronie, fizyka, obrażenia i tury.
+połączenia z serwerem ani drugiej osoby. Działają normalne bronie, fizyka, obrażenia i tury.
 
 Sterowanie automatycznie przechodzi na aktywną drużynę. **F1 / „Pomiń turę”** kończy turę,
 **„Nowa gra”** resetuje mecz i losuje mapę. Te opcje oraz wyjście są w menu **☰ / Esc**,
@@ -52,15 +55,14 @@ punktu uderzenia. Wpływ wiatru, grawitacji i terenu trzeba ocenić samodzielnie
 
 ## Stały serwer dla gry na dwóch telefonach
 
-Wersja na Vercel używa telefonu tworzącego pokój jako hosta symulacji. Hotspot
+Tryb MQTT używa telefonu tworzącego pokój jako hosta symulacji. Hotspot
 nie usuwa tej zależności: pakiety nadal przechodzą przez publiczny broker.
-`render.yaml` uruchamia istniejący serwer Node w regionie Frankfurt na jednej
-stale działającej instancji. Grę otwiera się z adresu utworzonej usługi Render:
+`render.yaml` uruchamia serwer Node w regionie Frankfurt na jednej instancji. Grę otwiera się z adresu usługi Render:
 serwer udostępnia stronę i `/ws` z tej samej domeny. Nie trzeba podawać osobnego
 adresu API ani udostępniać telefonu jako hosta gry.
 
-[Utwórz serwer na Render](https://render.com/deploy?repo=https://github.com/miskibin/projekt)
-— przed zatwierdzeniem sprawdź plan `0.5c-512mb` (płatny, około 7 USD/mies.);
+[Utwórz własny serwer na Render](https://render.com/deploy?repo=https://github.com/miskibin/projekt)
+— przed zatwierdzeniem sprawdź wybrany plan;
 po wdrożeniu otwórz adres `https://<nazwa-usługi>.onrender.com/` na obu telefonach.
 Blueprint nie wdraża kolejnych commitów automatycznie, żeby aktualizacja kodu
 nie przerywała trwającej gry. Nowe wersje trzeba uruchamiać ręcznie w panelu.
@@ -76,9 +78,8 @@ LAN_MODE=1 npm start               # wypisuje adresy komputera w lokalnej sieci
 ```
 
 Na obu telefonach otwórz wypisany adres, np. `http://192.168.1.10:3000`, lub
-wpisz go w rozwijanym polu LAN na publicznej stronie gry. Komputer i telefony
-muszą być w tej samej sieci; hotspot działa, jeżeli komputer też do niego
-dołączy. Wariant LAN nie używa serwera Render, lecz wymaga działającego komputera.
+komputer i telefony muszą być w tej samej sieci; hotspot działa, jeżeli komputer
+też do niego dołączy. Wariant LAN nie używa serwera Render, lecz wymaga działającego komputera.
 Samo połączenie dwóch telefonów hotspotem ani Bluetooth nie uruchamia serwera gry.
 
 ## Rozwój

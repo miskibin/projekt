@@ -552,7 +552,7 @@ export class GameClient {
       const { ev, seq } = this.pending.shift()!;
       const mutateTerrain = seq === 0 || seq > this.terrainSyncSeq;
       this.applyEvent(ev, mutateTerrain);
-      if (mutateTerrain && (ev.t === "explosion" || ev.t === "carveRect"))
+      if (mutateTerrain && (ev.t === "explosion" || ev.t === "carveRect" || ev.t === "burrow"))
         this.appliedTerrainSeq = Math.max(this.appliedTerrainSeq, seq);
     }
   }
@@ -560,6 +560,14 @@ export class GameClient {
   private applyEvent(ev: GameEvent, mutateTerrain = true): void {
     const pal = this.terrainTex?.palette;
     switch (ev.t) {
+      case "burrow": {
+        if (mutateTerrain) {
+          this.terrain.carveCircle(ev.x, ev.y, ev.r);
+          this.terrainTex?.markDirty(ev.x - ev.r - 2, ev.y - ev.r - 2, ev.r * 2 + 4, ev.r * 2 + 4);
+        }
+        this.particles.sparks(ev.x, ev.y, 2, "#a2eefb");
+        break;
+      }
       case "explosion": {
         if (mutateTerrain) {
           this.terrain.carveCircle(ev.x, ev.y, ev.r);
@@ -926,6 +934,7 @@ function weaponFireEffect(weapon: WeaponId): { color: string; sparks: number; ki
   switch (weapon) {
     case "homing": return { color: "#79efff", sparks: 12, kick: 1.8 };
     case "cluster": return { color: "#66ffd3", sparks: 13, kick: 1.4 };
+    case "drill": return { color: "#a2eefb", sparks: 12, kick: 1.7 };
     case "banana": return { color: "#fff04d", sparks: 15, kick: 2 };
     case "holy": return { color: "#fffbd1", sparks: 20, kick: 3 };
     case "dynamite": return { color: "#ff4b35", sparks: 9, kick: 1 };

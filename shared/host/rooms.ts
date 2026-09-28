@@ -67,6 +67,7 @@ export function defaultConfig(): GameConfig {
     seed: randomSeed(),
     terrainDensity: 1,
     theme: THEMES[Math.floor(Math.random() * THEMES.length)]!,
+    mode: "arsenal",
   };
 }
 
@@ -113,6 +114,13 @@ export function validateConfigPatch(raw: unknown): ConfigValidation {
       return { ok: false, error: `Motyw: dozwolone ${THEMES.join(", ")}.` };
     }
     patch.theme = input.theme as GameConfig["theme"];
+  }
+
+  if (input.mode !== undefined) {
+    if (input.mode !== "arsenal" && input.mode !== "classic") {
+      return { ok: false, error: "Tryb: wybierz Losowany arsenał lub Klasyk." };
+    }
+    patch.mode = input.mode;
   }
 
   if (input.seed !== undefined) {

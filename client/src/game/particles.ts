@@ -129,6 +129,7 @@ const DEFAULT_EXPLOSION: ExplosionVisual = {
 const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
   bazooka: { ...DEFAULT_EXPLOSION, flash: "#fff0c4", ring: "rgba(255,176,76,1)", fire: ["#fff8d8", "#ffd05a", "#ff7a20", "#a9280c"] },
   homing: { ...DEFAULT_EXPLOSION, flash: "#c9f8ff", ring: "rgba(77,224,255,1)", embers: ["#edfdff", "#70eaff", "#ff557c"], fire: ["#effeff", "#82efff", "#2e9fff", "#7833b8"], extraRings: 1 },
+  drill: { ...DEFAULT_EXPLOSION, flash: "#d9fbff", ring: "rgba(104,216,236,1)", embers: ["#ffffff", "#9de8f5", "#46718e"], fire: ["#efffff", "#9de8f5", "#42769e", "#244966"], fireballs: 0, rays: 8 },
   grenade: { ...DEFAULT_EXPLOSION, flash: "#efffc0", ring: "rgba(183,238,102,1)", embers: ["#f7ffc5", "#c7eb58", "#ffb137"], fire: ["#ffffdc", "#d9ed73", "#e68d26", "#75561a"] },
   cluster: { ...DEFAULT_EXPLOSION, flash: "#c9fff5", ring: "rgba(65,255,207,1)", embers: ["#effffb", "#63f4ce", "#4aa8ff"], fire: ["#edfffb", "#61f0ca", "#3397d8", "#135172"], extraRings: 2, rays: 14 },
   clusterlet: { ...DEFAULT_EXPLOSION, flash: "#efffff", ring: "rgba(105,255,223,1)", embers: ["#ffffff", "#55ffcc", "#8fdfff"], smoke: ["rgba(44,104,112,1)", "rgba(25,56,75,1)"], fire: ["#ffffff", "#aefff1", "#39d9be", "#18778b"], fireballs: 0, rays: 5 },

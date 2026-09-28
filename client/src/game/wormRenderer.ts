@@ -1174,6 +1174,16 @@ function drawLimb(ctx: CanvasRenderingContext2D, o: WormDrawOpts, g: ArmGeom): v
 export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId): void {
   ctx.lineJoin = "round";
   switch (weapon) {
+    case "drill": {
+      ctx.fillStyle = "#276b83";
+      roundRect(ctx, -2, -2.8, 13, 5.6, 1.5);
+      ctx.fill();
+      ctx.fillStyle = "#a4e9f4";
+      ctx.fillRect(4, -2.8, 2, 5.6);
+      ctx.fillStyle = "#effcff";
+      ctx.beginPath(); ctx.moveTo(11, -3.5); ctx.lineTo(17, 0); ctx.lineTo(11, 3.5); ctx.closePath(); ctx.fill();
+      break;
+    }
     case "bazooka":
     case "homing": {
       const homing = weapon === "homing";

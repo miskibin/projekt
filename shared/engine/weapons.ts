@@ -1,5 +1,6 @@
 import { RETREAT_TIME } from "../constants";
 import type { WeaponId } from "../protocol";
+import type { Rng } from "./rng";
 
 // Tabela broni: startowa amunicja + parametry wybuchu i zachowania w turze.
 
@@ -58,6 +59,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   mine: D("mine", 2, 26, 55, 420, { retreat: 1.5 }),
   airstrike: D("airstrike", 1, 21, 32, 250, { target: "required" }),
   homing: D("homing", 1, 40, 50, 330, { charge: true, target: "optional" }),
+  drill: D("drill", 2, 34, 42, 260, { charge: true }),
   bat: D("bat", 2, 0, 30, 500),
   teleport: D("teleport", 2, 0, 0, 0, { target: "required", retreat: 0.7 }),
   girder: D("girder", 3, 0, 0, 0, { target: "required", utility: true }),
@@ -66,6 +68,12 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 };
 
 export const WEAPON_IDS: readonly WeaponId[] = Object.keys(WEAPONS) as WeaponId[];
+
+export const WEAPON_LABELS: Partial<Record<WeaponId, string>> = {
+  banana: "Banan", holy: "Święty granat", dynamite: "Dynamit", airstrike: "Nalot",
+  cluster: "Odłamkowy", homing: "Rakieta", mine: "Mina", uzi: "Uzi", bat: "Kij",
+  drill: "Wiertło", teleport: "Teleport", girder: "Belka", jetpack: "Plecak",
+};
 
 /** Bronie ze skończoną amunicją, które mogą wypaść ze skrzynki "weapon". */
 export const CRATE_WEAPONS: readonly WeaponId[] = [
@@ -76,6 +84,7 @@ export const CRATE_WEAPONS: readonly WeaponId[] = [
   "mine",
   "airstrike",
   "homing",
+  "drill",
   "uzi",
   "bat",
 ];
@@ -91,4 +100,18 @@ export function startingAmmo(): Record<WeaponId, number> {
   const out = {} as Record<WeaponId, number>;
   for (const id of WEAPON_IDS) out[id] = WEAPONS[id].ammo;
   return out;
+}
+
+/** Każda drużyna dostaje ten sam losowany zestaw tylko na czas bieżącego meczu. */
+export function matchArsenal(rng: Rng): { ammo: Record<WeaponId, number>; selected: WeaponId[] } {
+  const ammo = startingAmmo();
+  for (const id of WEAPON_IDS) if (ammo[id] > 0) ammo[id] = 0;
+
+  const spectacular: WeaponId[] = ["banana", "holy", "dynamite", "airstrike"];
+  const tactical: WeaponId[] = ["cluster", "homing", "mine", "uzi", "bat", "drill"];
+  const utility: WeaponId[] = ["teleport", "girder", "jetpack"];
+  const pick = <T>(pool: T[]): T => pool.splice(rng.int(0, pool.length - 1), 1)[0]!;
+  const selected = [pick(spectacular), pick(tactical), pick(tactical), pick(utility)];
+  for (const id of selected) ammo[id] = WEAPONS[id].ammo;
+  return { ammo, selected };
 }

@@ -45,7 +45,7 @@ import type { Game, TeamSetup } from "./index";
 import { Rng } from "./rng";
 import { Terrain, generateTerrain } from "./terrain";
 import { circleHits, clamp, groundBelow, pushOut, reflect, terrainNormal, walkStep } from "./physics";
-import { WEAPONS, startingAmmo, type WeaponDef } from "./weapons";
+import { WEAPONS, WEAPON_LABELS, matchArsenal, startingAmmo, type WeaponDef } from "./weapons";
 import { makeProjectile, detonateProjectile, stepProjectiles } from "./projectiles";
 import { placeMine, spawnCrate, spawnInitialMines, stepCrates, stepMines, MINE_RADIUS } from "./crates";
 import { WORM_NAMES } from "./names";
@@ -151,13 +151,14 @@ export class GameImpl implements Game, EngineCtx {
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.rng = new Rng((Math.imul(config.seed >>> 0, 747796405) + 2891336453) >>> 0);
     this.spawnSites = this.findSpawnSites(setups.length * config.wormsPerTeam > 8);
+    const draft = config.mode === "arsenal" ? matchArsenal(this.rng) : null;
 
     for (const s of setups) {
       this.teams.push({
         team: s.team,
         playerId: s.playerId,
         name: s.name,
-        ammo: startingAmmo(),
+        ammo: draft ? { ...draft.ammo } : startingAmmo(),
         removed: false,
         selectedWeapon: "bazooka",
         weaponTimer: 3,
@@ -165,6 +166,7 @@ export class GameImpl implements Game, EngineCtx {
       this.wormPointer[s.team] = -1;
     }
     this.teamOrder = this.teams.map((t) => t.team).sort((a, b) => a - b);
+    if (draft) this.emit({ t: "message", text: `Arsenał meczu: ${draft.selected.map((id) => WEAPON_LABELS[id] ?? id).join(", ")}. Skrzynki mogą dać inne bronie.` });
 
     // Imiona: losowa permutacja listy (bez powtórzeń dopóki starczy imion).
     const pool = [...WORM_NAMES];
@@ -185,6 +187,10 @@ export class GameImpl implements Game, EngineCtx {
 
     spawnInitialMines(this);
     this.spawnBarrels();
+    if (draft) {
+      spawnCrate(this, "weapon", true);
+      spawnCrate(this, "utility", true);
+    }
     this.beginNextTurn();
   }
 
@@ -696,7 +702,7 @@ export class GameImpl implements Game, EngineCtx {
 
     this.emit({ t: "turnStart", team, wormId: worm.id, wind: this.wind });
 
-    if (this.rng.chance(CRATE_DROP_CHANCE)) spawnCrate(this);
+    if (this.rng.chance(this.config.mode === "arsenal" ? 0.6 : CRATE_DROP_CHANCE)) spawnCrate(this, undefined, this.config.mode === "arsenal");
   }
 
   /** Koniec tury bez strzału (czas minął / skip / śmierć robaka). */
@@ -984,6 +990,18 @@ export class GameImpl implements Game, EngineCtx {
           explodeOnContact: true,
           ownerWorm: w.id,
           ownerTeam: w.team,
+        });
+        break;
+      }
+      case "drill": {
+        this.emitShot(id, w);
+        makeProjectile(this, {
+          kind: "drill", x: mx, y: my,
+          vx: dirX * Math.max(260, speed * 0.8),
+          vy: dirY * Math.max(260, speed * 0.8),
+          fuse: 1.6, radius: def.radius, damage: def.damage, power: def.power,
+          gravityScale: 0, windAffected: false, hitRadius: 4,
+          ownerWorm: w.id, ownerTeam: w.team,
         });
         break;
       }

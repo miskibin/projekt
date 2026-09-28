@@ -32,6 +32,7 @@ export class Lobby {
     status: byId("lobby-status"),
     ready: byId<HTMLButtonElement>("btn-ready"),
     start: byId<HTMLButtonElement>("btn-start"),
+    mode: byId<HTMLSelectElement>("set-mode"),
     worms: byId<HTMLInputElement>("set-worms"),
     turnTime: byId<HTMLInputElement>("set-turntime"),
     sd: byId<HTMLInputElement>("set-sd"),
@@ -52,7 +53,8 @@ export class Lobby {
     this.el.copy.addEventListener("click", () => {
       const code = this.room?.code;
       if (!code) return;
-      const url = `${location.origin}${location.pathname}?room=${code}`;
+      const mode = new URLSearchParams(location.search).get("transport");
+      const url = `${location.origin}${location.pathname}?room=${code}${mode === "mqtt" ? "&transport=mqtt" : ""}`;
       void navigator.clipboard
         .writeText(url)
         .then(() => this.cb.toast("Link skopiowany do schowka", "ok"))
@@ -85,6 +87,7 @@ export class Lobby {
     };
 
     this.el.worms.addEventListener("input", () => push({ wormsPerTeam: Number(this.el.worms.value) }));
+    this.el.mode.addEventListener("change", () => push({ mode: this.el.mode.value as GameConfig["mode"] }));
     this.el.turnTime.addEventListener("input", () => push({ turnTime: Number(this.el.turnTime.value) }));
     this.el.sd.addEventListener("input", () => push({ suddenDeathAfterRounds: Number(this.el.sd.value) }));
     this.el.density.addEventListener("input", () => push({ terrainDensity: Number(this.el.density.value) }));
@@ -163,18 +166,20 @@ export class Lobby {
 
     // ustawienia
     const c = room.config;
+    this.el.mode.value = c.mode ?? "classic";
     this.el.worms.value = String(c.wormsPerTeam);
     this.el.turnTime.value = String(c.turnTime);
     this.el.sd.value = String(c.suddenDeathAfterRounds);
     this.el.density.value = String(c.terrainDensity);
     this.el.theme.value = c.theme;
-    for (const inp of [this.el.worms, this.el.turnTime, this.el.sd, this.el.density, this.el.theme]) {
+    for (const inp of [this.el.mode, this.el.worms, this.el.turnTime, this.el.sd, this.el.density, this.el.theme]) {
       inp.disabled = !host;
     }
     this.el.reroll.disabled = !host;
-    this.el.note.textContent = host
-      ? "Jesteś hostem – twoje ustawienia obowiązują wszystkich."
-      : `Ustawienia zmienia host. Motyw: ${THEME_LABELS[c.theme]}.`;
+    this.el.note.textContent = c.mode === "arsenal"
+      ? "Każdy mecz losuje równy dla drużyn zestaw broni. Skrzynki mogą odblokować pozostałe."
+      : host ? "Klasyk: wszystkie bronie dostępne od startu."
+        : `Klasyk: wszystkie bronie od startu. Motyw: ${THEME_LABELS[c.theme]}.`;
     this.syncSettingLabels();
     this.schedulePreview();
   }

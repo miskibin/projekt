@@ -12,6 +12,7 @@ export type WeaponId =
   | "mine"
   | "airstrike"
   | "homing"
+  | "drill"
   | "banana"
   | "bat"
   | "teleport"
@@ -27,6 +28,8 @@ export interface GameConfig {
   /** 1 = normalny teren, 0..1 = mniej/więcej ziemi */
   terrainDensity: number;
   theme: "grass" | "desert" | "snow" | "hell";
+  /** Arsenał losowany na czas jednego meczu lub wszystkie bronie od początku. */
+  mode?: "arsenal" | "classic";
 }
 
 export interface PlayerInfo {
@@ -188,6 +191,7 @@ export interface GameSnapshot {
 export type ExplosionStyle =
   | "bazooka"
   | "homing"
+  | "drill"
   | "grenade"
   | "cluster"
   | "clusterlet"
@@ -202,6 +206,7 @@ export type ExplosionStyle =
 
 export type GameEvent =
   | { t: "explosion"; x: number; y: number; r: number; power: number; style?: ExplosionStyle } // niszczy teren okręgiem o promieniu r (int)
+  | { t: "burrow"; x: number; y: number; r: number } // ciągły tunel wiertła, też synchronizowany klientom
   | { t: "carveRect"; x: number; y: number; w: number; h: number; angle: number; add: boolean } // girder (add=true) lub wycięcie
   | { t: "damage"; wormId: number; amount: number; x: number; y: number }
   | { t: "wormDied"; wormId: number; reason: "explosion" | "drown" | "fall" | "surrender" }

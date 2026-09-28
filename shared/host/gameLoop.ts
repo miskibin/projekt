@@ -25,6 +25,7 @@ export const WEAPON_IDS = [
   "mine",
   "airstrike",
   "homing",
+  "drill",
   "banana",
   "bat",
   "teleport",
