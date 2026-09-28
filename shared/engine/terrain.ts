@@ -108,10 +108,17 @@ export function generateTerrain(seed: number, width: number, height: number, den
   const rng = new Rng(seed);
   const t = new Terrain(width, height);
 
-  // 1) profil powierzchni: suma sinusów o losowych fazach
-  const waves = Array.from({ length: 5 }, (_, i) => ({
-    amp: rng.range(20, 52) / (i + 1) ** 0.65,
-    freq: rng.range(0.0017, 0.004) * (i + 1),
+  // Dwa szerokie grzbiety i dolina dają wyraźną różnicę wysokości bez pionowych
+  // ścian, na których robaki blokowałyby się podczas chodzenia.
+  const ridge = [
+    { cx: width * rng.range(0.23, 0.31), half: rng.range(95, 150), edge: rng.range(95, 135), rise: rng.range(115, 165) },
+    { cx: width * rng.range(0.69, 0.77), half: rng.range(95, 155), edge: rng.range(100, 145), rise: rng.range(115, 165) },
+  ];
+  const valley = { cx: width * rng.range(0.47, 0.56), spread: rng.range(170, 245), depth: rng.range(65, 105) };
+  // Drobniejsza, niska fala rozbija regularność dużych formacji.
+  const waves = Array.from({ length: 4 }, (_, i) => ({
+    amp: rng.range(11, 26) / (i + 1) ** 0.7,
+    freq: rng.range(0.003, 0.006) * (i + 1),
     phase: rng.range(0, Math.PI * 2),
   }));
   // Niższa linia lądu zostawia więcej czystego kadru nad robakami i ogranicza ściany zajmujące cały ekran.
@@ -119,6 +126,13 @@ export function generateTerrain(seed: number, width: number, height: number, den
   const rawSurface = new Float32Array(width);
   for (let x = 0; x < width; x++) {
     let y = base;
+    for (const hill of ridge) {
+      const left = Math.tanh((x - hill.cx + hill.half) / hill.edge);
+      const right = Math.tanh((x - hill.cx - hill.half) / hill.edge);
+      y -= hill.rise * (left - right) * 0.5;
+    }
+    const v = (x - valley.cx) / valley.spread;
+    y += valley.depth * Math.exp(-v * v * 0.5);
     for (const w of waves) y += Math.sin(x * w.freq + w.phase) * w.amp;
     rawSurface[x] = y;
   }

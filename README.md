@@ -70,14 +70,16 @@ przerywa trwającą rundę; krótkie zerwanie połączenia telefonu można wznow
 ### Własny serwer w sieci lokalnej
 
 ```bash
-npm install
+npm ci
 VITE_TRANSPORT=ws npm run build   # klient łączy się WebSocketem z serwerem Node
-npm start                          # http://localhost:3000 (PORT=xxxx żeby zmienić)
+LAN_MODE=1 npm start               # wypisuje adresy komputera w lokalnej sieci
 ```
 
-Serwer po starcie wypisze adresy w sieci lokalnej, np. `http://192.168.1.10:3000`.
-Telefon i komputer uruchamiający serwer muszą być w tej samej sieci. Sam hotspot
-między telefonami bez komputera z procesem Node nie tworzy serwera gry.
+Na obu telefonach otwórz wypisany adres, np. `http://192.168.1.10:3000`, lub
+wpisz go w rozwijanym polu LAN na publicznej stronie gry. Komputer i telefony
+muszą być w tej samej sieci; hotspot działa, jeżeli komputer też do niego
+dołączy. Wariant LAN nie używa serwera Render, lecz wymaga działającego komputera.
+Samo połączenie dwóch telefonów hotspotem ani Bluetooth nie uruchamia serwera gry.
 
 ## Rozwój
 

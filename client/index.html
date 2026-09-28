@@ -42,6 +42,15 @@
         <a id="btn-demo" href="?demo=1" class="btn btn-go btn-lg demo-link demo-link-secondary">Demo — steruj 2 graczami</a>
         <p class="hint">Sam przeciw komputerowi albo dwie drużyny na jednym ekranie.</p>
         <p class="hint">Sterowanie: A/D – ruch, W/S – celowanie, SPACJA – strzał (przytrzymaj), Enter – skok, Tab – bronie</p>
+        <details class="lan-options">
+          <summary>Gra w tej samej sieci Wi-Fi (LAN)</summary>
+          <p>Wymaga uruchomienia serwera gry na komputerze podłączonym do tej samej sieci lub hotspotu.</p>
+          <label for="lan-address">Adres komputera z serwerem</label>
+          <div class="lan-row">
+            <input id="lan-address" type="text" placeholder="192.168.1.10:3000" autocapitalize="off" autocomplete="off" spellcheck="false" />
+            <button id="btn-lan" class="btn" type="button">Otwórz</button>
+          </div>
+        </details>
       </div>
     </section>
 

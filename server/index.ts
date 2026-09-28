@@ -157,8 +157,8 @@ export function startServer(port = PORT) {
     console.log(`\n  Worms Online – serwer wystartował (${IS_PROD ? "produkcja" : "dev"})`);
     console.log(`  Lokalnie:      http://localhost:${port}`);
     if (!IS_PROD) console.log(`  Klient (Vite): http://localhost:5173`);
-    if (!IS_PROD) for (const ip of lanAddresses()) {
-      console.log(`  Graj z kolegami: http://${ip}:5173`);
+    if (!IS_PROD || process.env.LAN_MODE === "1") for (const ip of lanAddresses()) {
+      console.log(`  Graj w LAN:    http://${ip}:${IS_PROD ? port : 5173}`);
     }
     console.log(`  WebSocket:     ws://localhost:${port}/ws\n`);
   });

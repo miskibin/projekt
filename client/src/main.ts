@@ -73,14 +73,23 @@ const DEBUG = params.get("debug") === "1";
 const ROOM_PARAM = (params.get("room") ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 // Jedna karta zachowuje tożsamość przez odświeżenie i zmianę WebSocket.
 const reconnectToken = (() => {
+  const makeToken = () => {
+    if (crypto.randomUUID) return crypto.randomUUID();
+    // Na lokalnym HTTP randomUUID może być niedostępne (brak secure context).
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  };
   try {
     const saved = sessionStorage.getItem("worms.reconnectToken");
     if (saved && /^[a-f0-9-]{36}$/i.test(saved)) return saved;
-    const token = crypto.randomUUID();
+    const token = makeToken();
     sessionStorage.setItem("worms.reconnectToken", token);
     return token;
   } catch {
-    return crypto.randomUUID();
+    return makeToken();
   }
 })();
 
@@ -330,6 +339,16 @@ el.join.addEventListener("click", () => {
 
 el.joinCode.addEventListener("input", () => {
   el.joinCode.value = el.joinCode.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+});
+
+byId<HTMLButtonElement>("btn-lan").addEventListener("click", () => {
+  const raw = byId<HTMLInputElement>("lan-address").value.trim().replace(/^https?:\/\//i, "");
+  // Przechodzimy na serwer lokalny całym oknem: strona HTTPS nie może otworzyć ws://LAN.
+  if (!/^(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?$|^[\w-]+\.local(?::\d{2,5})?$/i.test(raw)) {
+    toast("Podaj adres komputera w sieci, np. 192.168.1.10:3000", "err");
+    return;
+  }
+  location.assign(`http://${raw.includes(":") ? raw : `${raw}:3000`}/`);
 });
 
 el.nick.addEventListener("keydown", (e) => {

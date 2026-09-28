@@ -103,6 +103,7 @@ export class GameImpl implements Game, EngineCtx {
   readonly mines: Mine[] = [];
   readonly barrels: BarrelSnapshot[] = [];
   readonly teams: TeamState[] = [];
+  private readonly spawnSites: Array<{ x: number; y: number }>;
 
   wind = 0;
   waterLevel = WATER_LEVEL_START;
@@ -149,6 +150,7 @@ export class GameImpl implements Game, EngineCtx {
     this.config = { ...config };
     this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
     this.rng = new Rng((Math.imul(config.seed >>> 0, 747796405) + 2891336453) >>> 0);
+    this.spawnSites = this.findSpawnSites(setups.length * config.wormsPerTeam > 8);
 
     for (const s of setups) {
       this.teams.push({
@@ -215,43 +217,50 @@ export class GameImpl implements Game, EngineCtx {
 
   // ---------------------------------------------------------------- setup
 
+  private findSpawnSites(crowded: boolean): Array<{ x: number; y: number }> {
+    const sites: Array<{ x: number; y: number }> = [];
+    for (let x = crowded ? 72 : 420; x < WORLD_WIDTH - (crowded ? 72 : 420); x += 12) {
+      // surfaceY zatrzymuje się na pierwszej wyspie. Szukamy również gruntu
+      // pod nią, o ile robak ma nad głową wolne miejsce.
+      let surface = -1;
+      for (let y = Math.round(WORLD_HEIGHT * 0.3); y < this.waterLevel - WORM_RADIUS - 6; y++) {
+        if (!this.terrain.isSolid(x, y) || this.terrain.isSolid(x, y - 1)) continue;
+        let support = 0;
+        for (const depth of [90, 150, 210]) {
+          if (this.terrain.isSolid(x, Math.min(WORLD_HEIGHT - 50, y + depth))) support++;
+        }
+        if (support < 2) continue;
+        surface = y;
+        break;
+      }
+      if (surface < 0) continue;
+      const y = surface - WORM_RADIUS - 1;
+      if (circleHits(this.terrain, x, y, WORM_RADIUS)) continue;
+      if (!groundBelow(this.terrain, x, y, WORM_RADIUS, 3)) continue;
+      sites.push({ x, y });
+    }
+    return sites.sort((a, b) => a.y - b.y);
+  }
+
   private spawnWorm(team: number, name: string): Worm {
     let px = -1;
     let py = -1;
-    // Mecz na telefonie zaczyna się w środkowym sektorze mapy: częściej widać
-    // rywala bez ręcznego oddalania, a nadal jest miejsce na dalekie strzały.
+    // Pierwsze dwa robaki trafiają na wysokie i niskie stanowisko. Następne
+    // rozkładamy po pozostałych wysokościach, nie grupując całych drużyn.
+    const altitudeOrder = [0.08, 0.91, 0.54, 0.3, 0.75, 0.43, 0.97, 0.16];
+    const rank = altitudeOrder[this.worms.length % altitudeOrder.length]!;
+    const targetY = this.spawnSites[Math.round(rank * (this.spawnSites.length - 1))]?.y;
     const dists = [110, 90, 70, 50, 35, 20];
-    const crowded = this.teams.length * this.config.wormsPerTeam > 8;
     for (const minDist of dists) {
-      for (let attempt = 0; attempt < 300; attempt++) {
-        const x = this.rng.int(crowded ? 60 : 420, WORLD_WIDTH - (crowded ? 60 : 420));
-        const surf = this.terrain.surfaceY(x);
-        if (surf >= WORLD_HEIGHT) continue;
-        if (surf >= this.waterLevel - WORM_RADIUS - 6) continue; // ląd pod wodą
-        if (surf < WORLD_HEIGHT * 0.43) continue; // wysokie wyspy są do zdobycia, nie na start
-        // A high floating island may be hundreds of pixels above solid land.
-        // Starting there forces a damaging fall before either player moves.
-        let support = 0;
-        for (const depth of [90, 150, 210]) {
-          if (this.terrain.isSolid(x, Math.min(WORLD_HEIGHT - 50, surf + depth))) support++;
-        }
-        if (support < 2) continue;
-        const y = surf - WORM_RADIUS - 1;
-        if (y < 12) continue;
-        if (circleHits(this.terrain, x, y, WORM_RADIUS)) continue;
-        if (!groundBelow(this.terrain, x, y, WORM_RADIUS, 3)) continue;
-        let ok = true;
-        for (const o of this.worms) {
-          if (Math.hypot(o.x - x, o.y - y) < minDist) {
-            ok = false;
-            break;
-          }
-        }
-        if (!ok) continue;
-        px = x;
-        py = y;
-        break;
-      }
+      const available = this.spawnSites.filter((site) => this.worms.every(
+        (other) => Math.hypot(other.x - site.x, other.y - site.y) >= minDist,
+      ));
+      if (!available.length) continue;
+      const best = Math.min(...available.map((site) => Math.abs(site.y - (targetY ?? site.y))));
+      const close = available.filter((site) => Math.abs(site.y - (targetY ?? site.y)) <= best + 8);
+      const choice = this.rng.pick(close);
+      px = choice.x;
+      py = choice.y;
       if (px >= 0) break;
     }
     if (px < 0) {

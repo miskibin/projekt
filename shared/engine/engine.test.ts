@@ -27,6 +27,18 @@ function setups(n = 2): TeamSetup[] {
 const NEUTRAL: InputState = { left: false, right: false, aim: 0, charge: false };
 
 describe("skok i kolizje", () => {
+  it("start stawia rywali na różnych, bezpiecznych wysokościach na wielu mapach", () => {
+    for (const seed of [1, 2, 7, 13, 14, 26, 35, 43, 20240213]) {
+      const game = createGame(cfg({ seed }), setups(2));
+      const worms = game.snapshot().worms;
+      expect(Math.abs(worms[0]!.y - worms[1]!.y)).toBeGreaterThanOrEqual(90);
+      for (const worm of worms) {
+        expect(circleHits(game.terrain, worm.x, worm.y, WORM_RADIUS)).toBe(false);
+        expect(groundBelow(game.terrain, worm.x, worm.y, WORM_RADIUS, 3)).toBe(true);
+      }
+    }
+  });
+
   it("boczna ściana nie udaje podłoża", () => {
     const t = new Terrain(100, 100);
     for (let y = 20; y < 75; y++) for (let x = 52; x < 75; x++) t.set(x, y, 1);
