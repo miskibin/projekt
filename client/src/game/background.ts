@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 5649)
-Total output lines: 707
-
 import { WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
 import type { Camera } from "./camera";
 import type { BgStyle, ThemePalette } from "./terrainRenderer";
@@ -251,7 +248,192 @@ export class Background {
     const cam = inp.camera;
     const z = cam.zoom;
     const view = cam.viewRect();
-    cons…1649 tokens truncated…  const pal = inp.palette;
+    const camX = view.x + view.w / 2;
+    const camY = view.y + view.h / 2;
+    const refX = WORLD_WIDTH / 2;
+    const refY = WORLD_HEIGHT / 2;
+    const horizonWorld = WORLD_HEIGHT * pal.horizon;
+    const zs = Math.pow(z, 0.55);
+
+    // --- poświata / słońce ---
+    const sunX = W * 0.74;
+    const sunY = H * 0.13;
+    const key = `${W}x${H}|${pal.glow}`;
+    if (!this.glow || this.glow.key !== key) {
+      const g = ctx.createRadialGradient(sunX, sunY, 8, sunX, sunY, Math.max(W, H) * 0.7);
+      g.addColorStop(0, pal.glow);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      this.glow = { key, grad: g };
+    }
+    ctx.fillStyle = this.glow.grad;
+    ctx.fillRect(0, 0, W, H);
+    if (!pal.embers) {
+      const rr = H * 0.24;
+      const disc = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, rr);
+      disc.addColorStop(0, pal.sun);
+      disc.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = disc;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, rr, 0, Math.PI * 2);
+      ctx.fill();
+
+      // wyraźna tarcza i bardzo subtelne promienie
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.globalAlpha = pal.stars ? 0.32 : 0.48;
+      ctx.fillStyle = pal.sun;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, Math.max(9, H * 0.026), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.35)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(sunX, sunY, Math.max(13, H * 0.038), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha *= 0.13;
+      ctx.translate(sunX, sunY);
+      for (let i = 0; i < 8; i++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(H * 0.065, -H * 0.006);
+        ctx.lineTo(H * 0.24, 0);
+        ctx.lineTo(H * 0.065, H * 0.006);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // --- gwiazdy ---
+    if (pal.stars) {
+      ctx.fillStyle = "#dceaff";
+      const span = WORLD_WIDTH * 1.2;
+      for (const st of this.stars) {
+        const px = (((st.x - camX * 0.08) % span) + span) % span;
+        const sx = (px / span) * W * 1.1 - W * 0.05;
+        const sy = st.y * 0.42 - (camY - refY) * 0.06 * z;
+        if (sy < -5 || sy > H) continue;
+        ctx.globalAlpha = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(inp.time * 1.7 + st.tw));
+        ctx.beginPath();
+        ctx.arc(sx, sy, st.r, 0, Math.PI * 2);
+        ctx.fill();
+        if (st.r > 1.45) {
+          const ray = st.r * (2.2 + Math.sin(inp.time * 1.7 + st.tw));
+          ctx.strokeStyle = "rgba(220,238,255,0.55)";
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(sx - ray, sy); ctx.lineTo(sx + ray, sy);
+          ctx.moveTo(sx, sy - ray); ctx.lineTo(sx, sy + ray);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // --- chmury / smugi żaru ---
+    this.drawClouds(ctx, inp, camX, camY, refY, z, W, H);
+
+    // --- warstwy parallaxu ---
+    for (const L of this.layers) {
+      const s = L.spec;
+      const scale = s.scale * zs;
+      const dw = L.canvas.width * scale;
+      const dh = L.canvas.height * scale;
+      const baseY = H / 2 + z * (horizonWorld - refY + s.depth * (refY - camY)) + s.yOff * scale;
+      const top = baseY - dh;
+      if (top < H) {
+        const ax = W / 2 + z * s.depth * (refX - camX);
+        let sx = (ax - dw / 2) % dw;
+        if (sx > 0) sx -= dw;
+        ctx.globalAlpha = s.alpha;
+        const tw = Math.ceil(dw) + 1;
+        const th = Math.ceil(dh) + 1;
+        const ty = Math.round(top);
+        for (let x = sx; x < W; x += dw) ctx.drawImage(L.canvas, Math.round(x), ty, tw, th);
+        ctx.globalAlpha = 1;
+      }
+      if (baseY < H) {
+        ctx.fillStyle = L.ground;
+        ctx.globalAlpha = s.alpha;
+        ctx.fillRect(0, Math.round(baseY) - 1, W, H - Math.round(baseY) + 2);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // --- delikatna mgiełka nad horyzontem ---
+    const hy = H / 2 + z * (horizonWorld - camY);
+    if (hy > -H && hy < H * 2) {
+      const fog = ctx.createLinearGradient(0, hy - H * 0.32, 0, hy + H * 0.06);
+      fog.addColorStop(0, "rgba(0,0,0,0)");
+      fog.addColorStop(1, pal.fog);
+      ctx.fillStyle = fog;
+      ctx.fillRect(0, Math.max(0, hy - H * 0.32), W, H * 0.38);
+    }
+
+    if (pal.embers) this.drawEmbers(ctx, inp, camX, W, H);
+  }
+
+  private loadLandscape(style: BgStyle): void {
+    if (typeof Image === "undefined") return;
+    if (this.landscapes.has(style)) return;
+    const image = new Image();
+    const asset = { image, ready: false };
+    this.landscapes.set(style, asset);
+    image.decoding = "async";
+    image.onload = () => { asset.ready = true; };
+    // Keep the failed entry; the procedural fallback remains available without
+    // retrying an image request on every animation frame.
+    image.src = LANDSCAPE_ASSETS[style];
+  }
+
+  /**
+   * One compressed plate per theme, fetched only when selected. The subtle pan
+   * is bounded by coverPlacement and costs one drawImage per frame.
+   */
+  private drawLandscape(ctx: CanvasRenderingContext2D, inp: BackgroundInput): boolean {
+    const style = inp.palette.bgStyle;
+    this.loadLandscape(style);
+    const asset = this.landscapes.get(style);
+    const image = asset?.image;
+    if (!asset?.ready || !image?.naturalWidth || !image.naturalHeight) return false;
+
+    const { width: W, height: H, camera, palette: pal } = inp;
+    const view = camera.viewRect();
+    const camX = view.x + view.w / 2;
+    const camY = view.y + view.h / 2;
+    const nx = Math.max(-1, Math.min(1, (camX - WORLD_WIDTH / 2) / (WORLD_WIDTH / 2)));
+    const ny = Math.max(-1, Math.min(1, (camY - WORLD_HEIGHT / 2) / (WORLD_HEIGHT / 2)));
+
+    const back = coverPlacement(image.naturalWidth, image.naturalHeight, W, H, nx * 0.28, ny * 0.18);
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "medium";
+    ctx.drawImage(image, back.x, back.y, back.width, back.height);
+
+    // Terrain and worms need legibility against the detailed lower half.
+    const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
+    depth.addColorStop(0, "rgba(4,12,24,0)");
+    depth.addColorStop(0.72, "rgba(4,12,24,0.08)");
+    depth.addColorStop(1, "rgba(2,8,17,0.27)");
+    ctx.fillStyle = depth;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+
+    if (pal.embers) this.drawEmbers(ctx, inp, camX, W, H);
+    return true;
+  }
+
+  private drawClouds(
+    ctx: CanvasRenderingContext2D,
+    inp: BackgroundInput,
+    camX: number,
+    camY: number,
+    refY: number,
+    z: number,
+    W: number,
+    H: number,
+  ): void {
+    const pal = inp.palette;
     const span = WORLD_WIDTH * 1.6;
     ctx.fillStyle = pal.cloud;
     for (const c of this.clouds) {
