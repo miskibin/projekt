@@ -31,7 +31,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
-      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Install Android platform
+        run: |
+          sdk_manager=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          test -n "$sdk_manager"
+          "$sdk_manager" "platforms;android-35" "build-tools;35.0.0"
       - run: npm ci
       - run: npm run typecheck && npm test
       - run: VITE_TRANSPORT=ws npm run build
