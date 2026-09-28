@@ -45,7 +45,7 @@ import type { Game, TeamSetup } from "./index";
 import { Rng } from "./rng";
 import { Terrain, generateTerrain } from "./terrain";
 import { circleHits, clamp, groundBelow, pushOut, reflect, terrainNormal, walkStep } from "./physics";
-import { WEAPONS, WEAPON_LABELS, matchArsenal, startingAmmo, type WeaponDef } from "./weapons";
+import { WEAPONS, matchArsenal, startingAmmo, type WeaponDef } from "./weapons";
 import { makeProjectile, detonateProjectile, stepProjectiles } from "./projectiles";
 import { placeMine, spawnCrate, spawnInitialMines, stepCrates, stepMines, MINE_RADIUS } from "./crates";
 import { WORM_NAMES } from "./names";
@@ -93,6 +93,9 @@ interface Burst {
   interval: number;
 }
 
+/** Jedna wariacja znanych zasad na cały mecz; brak dodatkowych akcji gracza. */
+type MatchFeature = "regular" | "barrels" | "supplies";
+
 export class GameImpl implements Game, EngineCtx {
   readonly config: GameConfig;
   readonly terrain: Terrain;
@@ -104,6 +107,7 @@ export class GameImpl implements Game, EngineCtx {
   readonly barrels: BarrelSnapshot[] = [];
   readonly teams: TeamState[] = [];
   private readonly spawnSites: Array<{ x: number; y: number }>;
+  private readonly matchFeature: MatchFeature;
 
   wind = 0;
   waterLevel = WATER_LEVEL_START;
@@ -152,6 +156,7 @@ export class GameImpl implements Game, EngineCtx {
     this.rng = new Rng((Math.imul(config.seed >>> 0, 747796405) + 2891336453) >>> 0);
     this.spawnSites = this.findSpawnSites(setups.length * config.wormsPerTeam > 8);
     const draft = config.mode === "arsenal" ? matchArsenal(this.rng) : null;
+    this.matchFeature = draft ? this.rng.pick<MatchFeature>(["regular", "barrels", "supplies"]) : "regular";
 
     for (const s of setups) {
       this.teams.push({
@@ -166,7 +171,6 @@ export class GameImpl implements Game, EngineCtx {
       this.wormPointer[s.team] = -1;
     }
     this.teamOrder = this.teams.map((t) => t.team).sort((a, b) => a - b);
-    if (draft) this.emit({ t: "message", text: `Arsenał meczu: ${draft.selected.map((id) => WEAPON_LABELS[id] ?? id).join(", ")}. Skrzynki mogą dać inne bronie.` });
 
     // Imiona: losowa permutacja listy (bez powtórzeń dopóki starczy imion).
     const pool = [...WORM_NAMES];
@@ -186,16 +190,22 @@ export class GameImpl implements Game, EngineCtx {
     }
 
     spawnInitialMines(this);
-    this.spawnBarrels();
+    this.spawnBarrels(this.matchFeature === "barrels" ? 5 : 3);
     if (draft) {
       spawnCrate(this, "weapon", true);
       spawnCrate(this, "utility", true);
+      if (this.matchFeature === "supplies") spawnCrate(this, "weapon", true);
     }
     this.beginNextTurn();
+    if (draft) {
+      const setting = this.matchFeature === "barrels" ? "Więcej wybuchowych beczek!" :
+        this.matchFeature === "supplies" ? "Więcej skrzynek z bronią!" : "Losowany arsenał!";
+      this.emit({ t: "message", text: setting });
+    }
   }
 
-  private spawnBarrels(): void {
-    for (let n = 0; n < 3; n++) {
+  private spawnBarrels(count: number): void {
+    for (let n = 0; n < count; n++) {
       for (let attempt = 0; attempt < 80; attempt++) {
         const x = this.rng.int(100, WORLD_WIDTH - 100);
         const surface = this.terrain.surfaceY(x);
@@ -702,7 +712,9 @@ export class GameImpl implements Game, EngineCtx {
 
     this.emit({ t: "turnStart", team, wormId: worm.id, wind: this.wind });
 
-    if (this.rng.chance(this.config.mode === "arsenal" ? 0.6 : CRATE_DROP_CHANCE)) spawnCrate(this, undefined, this.config.mode === "arsenal");
+    const crateChance = this.config.mode === "arsenal"
+      ? this.matchFeature === "supplies" ? 0.8 : 0.6 : CRATE_DROP_CHANCE;
+    if (this.rng.chance(crateChance)) spawnCrate(this, undefined, this.config.mode === "arsenal");
   }
 
   /** Koniec tury bez strzału (czas minął / skip / śmierć robaka). */

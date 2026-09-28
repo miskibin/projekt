@@ -17,6 +17,7 @@ import { TARGETED } from "./weapons";
 import {
   darken,
   drawWormCharacter,
+  hatForWorm,
   lighten,
   roundRect,
   WormAnimator,
@@ -68,6 +69,7 @@ export class Renderer {
   /** bufor zagrożeń (pociski + tykające miny) – bez alokacji co klatkę */
   private readonly threats: AnimThreat[] = [];
   private theme: ThemeId = "grass";
+  private cosmeticSeed = 1;
   /** ostatnio użyta moc – do długości celownika zanim gracz zacznie ładować */
   private lastPower = DEFAULT_PREVIEW_POWER;
   /** Emisja smug zależna od czasu, a nie liczby klatek (120 Hz nie dubluje cząstek). */
@@ -76,10 +78,12 @@ export class Renderer {
 
   constructor(seed = 1) {
     this.background = new Background(seed);
+    this.cosmeticSeed = seed;
   }
 
   regen(seed: number): void {
     this.background.regen(seed);
+    this.cosmeticSeed = seed;
     this.animator.reset();
     this.lastTime = -1;
     this.postProcess.clear();
@@ -89,6 +93,10 @@ export class Renderer {
   // --- zdarzenia gry -> reakcje postaci (wołane z client.ts) ---
   onDamage(wormId: number, amount: number): void {
     this.animator.onDamage(wormId, amount);
+  }
+
+  onWormsStartled(x: number, y: number, radius: number): void {
+    this.animator.onExplosion(x, y, radius);
   }
 
   onShot(wormId: number): void {
@@ -318,6 +326,7 @@ export class Renderer {
       time: inp.time,
       jetpack: jet,
       bat: w.anim === "bat",
+      hat: hatForWorm(this.cosmeticSeed, w.id),
     });
     ctx.restore();
 

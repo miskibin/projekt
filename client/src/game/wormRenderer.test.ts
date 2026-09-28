@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOW_HP, PRUNE_AFTER, SCARE_RADIUS, WALK_VX, WormAnimator, type AnimWorld, type AnimWorm } from "./wormRenderer";
+import { LOW_HP, PRUNE_AFTER, SCARE_RADIUS, WALK_VX, WormAnimator, hatForWorm, type AnimWorld, type AnimWorm } from "./wormRenderer";
 
 function worm(over: Partial<AnimWorm> = {}): AnimWorm {
   return {
@@ -37,6 +37,29 @@ function run(a: WormAnimator, seconds: number, w: AnimWorld, dt = 1 / 60): void 
 }
 
 describe("WormAnimator – stany", () => {
+  it("pobliskie wybuchy wywołują krótkie zaskoczenie bez zmiany odległych robaków", () => {
+    const a = new WormAnimator();
+    const scene = world([worm(), worm({ id: 2, x: 500 })]);
+    run(a, 0.1, scene);
+    a.onExplosion(120, 100, 40);
+    run(a, 0.1, scene);
+    expect(a.pose(1)!.mouth).toBe("open");
+    expect(a.pose(1)!.eyeL).toBeGreaterThan(a.pose(1)!.eyeR);
+    expect(a.pose(2)!.mouth).toBe("smile");
+    run(a, 1, scene);
+    expect(a.pose(1)!.mouth).toBe("smile");
+  });
+
+  it("czapki są rzadkim detalem zależnym od seeda meczu, bez losowania co klatkę", () => {
+    const first = Array.from({ length: 30 }, (_, id) => hatForWorm(1234, id + 1));
+    const again = Array.from({ length: 30 }, (_, id) => hatForWorm(1234, id + 1));
+    const other = Array.from({ length: 30 }, (_, id) => hatForWorm(7654, id + 1));
+    expect(first).toEqual(again);
+    expect(first).not.toEqual(other);
+    expect(first).toContain("none");
+    expect(first.some((hat) => hat !== "none")).toBe(true);
+  });
+
   it("stoi bezczynnie i oddycha", () => {
     const a = new WormAnimator();
     run(a, 0.5, world([worm()]));

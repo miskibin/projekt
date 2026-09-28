@@ -16,7 +16,8 @@ Ten wariant zależy od połączenia i działania telefonu hosta. Przełączenie 
 po stworzeniu pokoju wymaga założenia nowego pokoju.
 
 Domyślny **Losowany arsenał** daje obu drużynom ten sam zestaw specjalnych broni
-na czas jednego meczu; skrzynki pod walką dodają nowe opcje. W lobby możesz wybrać
+na czas jednego meczu; skrzynki pod walką dodają nowe opcje. Niektóre mecze mają
+więcej wybuchowych beczek albo zrzutów, bez nowych przycisków i zasad. W lobby możesz wybrać
 **Klasyk**, żeby cały arsenał był dostępny od początku. Wyniki i bronie nie przechodzą
 między meczami.
 

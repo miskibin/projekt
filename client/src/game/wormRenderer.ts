@@ -156,6 +156,7 @@ interface Entry {
   onGround: boolean;
   /** ostatnia pozycja – chodzenie zmienia x bez vx (patrz `walkStep`) */
   lastX: number;
+  lastY: number;
   /** wygładzona prędkość pozioma (px/s) */
   speed: number;
   /** największa prędkość opadania od ostatniego lądowania */
@@ -176,6 +177,8 @@ interface Entry {
   nextLook: number;
   lookDir: number;
   scare: number;
+  startle: number;
+  startleDir: number;
   pose: WormPose;
 }
 
@@ -277,6 +280,15 @@ export class WormAnimator {
     if (e) e.celebrate = CELEBRATE_TIME;
   }
 
+  /** Krótkie, lokalne zaskoczenie wybuchem. Nie zmienia fizyki ani sieci. */
+  onExplosion(x: number, y: number, radius: number): void {
+    for (const e of this.entries.values()) {
+      if (!e.alive || Math.hypot(e.lastX - x, e.lastY - y) > radius + 90) continue;
+      e.startle = 0.85;
+      e.startleDir = Math.sign(x - e.lastX);
+    }
+  }
+
   /** Nowa tura – kasujemy świętowanie z poprzedniej. */
   onTurnStart(team: number): void {
     this.teamCheer.clear();
@@ -328,6 +340,7 @@ export class WormAnimator {
       alive: w.alive,
       onGround: w.onGround !== false,
       lastX: w.x,
+      lastY: w.y,
       speed: 0,
       fallSpeed: 0,
       airTime: 0,
@@ -346,6 +359,8 @@ export class WormAnimator {
       nextLook: 3 + rnd() * 3,
       lookDir: 0,
       scare: 0,
+      startle: 0,
+      startleDir: 0,
       pose: blankPose(),
     };
     this.entries.set(w.id, e);
@@ -362,6 +377,7 @@ export class WormAnimator {
     // chodzenie przesuwa `x` bez zmiany `vx`, więc prędkość liczymy też z pozycji
     const inst = dt > 0.0001 ? Math.min(400, Math.abs(w.x - e.lastX) / dt) : 0;
     e.lastX = w.x;
+    e.lastY = w.y;
     e.speed = approach(e.speed, Math.max(Math.abs(vx), inst), dt, 18);
 
     // --- wykrywanie zdarzeń ze snapshotu -------------------------------
@@ -391,6 +407,7 @@ export class WormAnimator {
     e.land = Math.max(0, e.land - dt);
     e.celebrate = Math.max(0, e.celebrate - dt);
     e.death = Math.max(0, e.death - dt);
+    e.startle = Math.max(0, e.startle - dt);
     e.breath += dt;
     if (e.speed > WALK_VX && onGround) e.walk = (e.walk + dt * 1.9) % 1;
 
@@ -443,7 +460,7 @@ export class WormAnimator {
     else if (charging) st = "charge";
     else if (cheer) st = "celebrate";
     else if (aiming) st = "aim";
-    else if (e.scare > 0.4) st = "scared";
+    else if (e.scare > 0.4 || e.startle > 0) st = "scared";
     else if (lowHp) st = "tired";
     else st = "idle";
 
@@ -666,7 +683,15 @@ export class WormAnimator {
           pupX = e.lookDir;
           pupY = -0.15;
         }
-        p.mouthOpen = 0.1;
+        // Krótkie ziewnięcie podczas czekania na swoją turę; faza zależy od robaka.
+        const yawn = (t + ph * 2) % 17;
+        if (yawn < 0.75 && e.scare < 0.1 && !o.lowHp) {
+          eye = 0.5;
+          p.mouth = "open";
+          p.mouthOpen = 0.85;
+          p.armsUp = 0.55;
+          p.oy = -0.8 * Math.sin(yawn / 0.75 * Math.PI);
+        } else p.mouthOpen = 0.1;
       }
     }
 
@@ -686,6 +711,16 @@ export class WormAnimator {
     }
     if (st !== "hurt") p.flash = e.flash / FLASH_TIME;
 
+    if (e.startle > 0 && st !== "hurt" && st !== "dead" && st !== "charge") {
+      // Nawet robak, który akurat idzie, przez moment ogląda wybuch z niedowierzaniem.
+      p.mouth = "open";
+      p.mouthOpen = 0.75;
+      p.brow = 1;
+      p.sweat = e.startle > 0.35 ? 1 : 0;
+      eye = Math.max(eye, 1.3);
+      pupX = e.startleDir;
+    }
+
     // mruganie – tylko gdy oczy „normalne”
     let blinkK = 0;
     if (e.blink > 0) {
@@ -699,6 +734,10 @@ export class WormAnimator {
     if (st === "aim" || st === "charge") {
       if (w.facing > 0) p.eyeR = open * 0.72;
       else p.eyeL = open * 0.72;
+    }
+    if (e.startle > 0 && st !== "hurt" && st !== "dead" && st !== "charge") {
+      p.eyeL = open;
+      p.eyeR = open * 0.74;
     }
 
     p.pupilX = clamp(pupX, -1, 1);
@@ -723,6 +762,17 @@ export const WORM_RX = 13.5;
 export const WORM_RY = 15.9;
 /** Dolna krawędź postaci względem środka fizycznego — utrzymuje stopy na starej linii gruntu. */
 export const WORM_GROUND_OFFSET = 12.8;
+
+export type WormHat = "none" | "cap" | "bucket" | "party" | "crown";
+
+/** Ten sam robak ma ten sam wygląd u obu graczy, ale nowy seed zmienia obsadę. */
+export function hatForWorm(seed: number, id: number): WormHat {
+  let h = (seed ^ Math.imul(id, 0x9e3779b9)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  const slot = (h ^ (h >>> 16)) >>> 0;
+  return (["none", "none", "cap", "none", "bucket", "none", "party", "none", "crown", "none", "none"] as const)[slot % 11];
+}
 
 const EYE_RX = 3.7;
 const EYE_RY = 4.15;
@@ -781,6 +831,8 @@ export interface WormDrawOpts {
   jetpack: boolean;
   /** rysuj kij baseballowy w zamachu */
   bat: boolean;
+  /** Detal losowany z seeda meczu; nie daje żadnej przewagi. */
+  hat?: WormHat;
 }
 
 /**
@@ -859,19 +911,22 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // czułek
-  const wig = p.tuft;
-  ctx.strokeStyle = skin.line;
-  ctx.lineWidth = 1.5;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(-facing * 0.4, -ry + 0.6);
-  ctx.quadraticCurveTo(-facing * 1.4, -ry - 3.6, -facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25);
-  ctx.stroke();
-  ctx.fillStyle = skin.line;
-  ctx.beginPath();
-  ctx.arc(-facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25, 1.35, 0, Math.PI * 2);
-  ctx.fill();
+  if (o.hat && o.hat !== "none") drawHat(ctx, o.hat, o);
+  else {
+    // czułek dla robaków bez czapki
+    const wig = p.tuft;
+    ctx.strokeStyle = skin.line;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-facing * 0.4, -ry + 0.6);
+    ctx.quadraticCurveTo(-facing * 1.4, -ry - 3.6, -facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25);
+    ctx.stroke();
+    ctx.fillStyle = skin.line;
+    ctx.beginPath();
+    ctx.arc(-facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25, 1.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   drawFace(ctx, p, o, rx, ry);
   ctx.restore(); // skala ciała
@@ -889,6 +944,58 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   if (o.bat) drawBat(ctx, facing, o.time);
   if (p.sweat > 0.5) drawSweat(ctx, facing, rx, ry, o.time);
 
+  ctx.restore();
+}
+
+/** Lekkie kształty Canvas, tylko dla części robaków; mieszczą się nad oczami i pod etykietą. */
+function drawHat(ctx: CanvasRenderingContext2D, hat: Exclude<WormHat, "none">, o: WormDrawOpts): void {
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = "#29313d";
+  switch (hat) {
+    case "cap": {
+      ctx.fillStyle = "#334c83";
+      ctx.beginPath();
+      ctx.moveTo(-10, -15); ctx.quadraticCurveTo(-8, -23, 1, -23);
+      ctx.quadraticCurveTo(10, -22, 11, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#f5b459";
+      ctx.fillRect(-6, -17, 12, 2);
+      ctx.fillStyle = "#263c69";
+      ctx.beginPath(); ctx.ellipse(o.facing * 9, -14.5, 7, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case "bucket": {
+      ctx.fillStyle = "#a79368";
+      ctx.beginPath(); ctx.moveTo(-9, -21); ctx.lineTo(9, -21);
+      ctx.lineTo(11, -15); ctx.lineTo(-11, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#596d5c";
+      ctx.fillRect(-10, -18, 20, 2);
+      ctx.fillStyle = "#a79368";
+      ctx.beginPath(); ctx.ellipse(0, -14, 13, 2.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      break;
+    }
+    case "party": {
+      ctx.fillStyle = "#ad638d";
+      ctx.beginPath(); ctx.moveTo(-9, -15); ctx.lineTo(1, -26);
+      ctx.lineTo(9, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = "#ffdf9a";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(-5, -17); ctx.lineTo(4, -20); ctx.stroke();
+      ctx.fillStyle = "#ffdf9a";
+      ctx.beginPath(); ctx.arc(1, -26, 2.1, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+    case "crown": {
+      ctx.fillStyle = "#e4ae47";
+      ctx.beginPath(); ctx.moveTo(-10, -15); ctx.lineTo(-11, -23);
+      ctx.lineTo(-5, -19); ctx.lineTo(0, -26); ctx.lineTo(5, -19);
+      ctx.lineTo(11, -23); ctx.lineTo(10, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#f8da80"; ctx.fillRect(-10, -17, 20, 2);
+      ctx.fillStyle = "#bf5265";
+      ctx.beginPath(); ctx.arc(0, -19, 1.5, 0, Math.PI * 2); ctx.fill();
+      break;
+    }
+  }
   ctx.restore();
 }
 

@@ -165,6 +165,20 @@ function countSolid(t: Terrain, x0: number, y0: number, x1: number, y1: number):
 // ---------------------------------------------------------------- determinizm
 
 describe("determinizm", () => {
+  it("warianty meczu zmieniają tylko istniejące beczki i skrzynki, bez zmian w Klasyku", () => {
+    const seeds = [8, 16, 21, 35, 42, 55, 66, 72, 83, 91, 104, 150];
+    const variants = new Set<string>();
+    for (const seed of seeds) {
+      const a = createGame(cfg({ mode: "arsenal", seed }), setups(2));
+      const b = createGame(cfg({ mode: "arsenal", seed }), setups(2));
+      const layout = (g: Game) => ({ barrels: g.snapshot().barrels, crates: g.snapshot().crates });
+      expect(layout(a)).toEqual(layout(b));
+      variants.add(`${a.snapshot().barrels?.length}:${a.snapshot().crates.length}`);
+    }
+    expect(variants.size).toBeGreaterThan(1);
+    expect(createGame(cfg({ mode: "classic", seed: 42 }), setups(2)).snapshot().barrels?.length).toBeLessThanOrEqual(3);
+  });
+
   it("losuje wspólny arsenał na jeden mecz i nie dziedziczy go między grami", () => {
     const a = createGame(cfg({ mode: "arsenal", seed: 72 }), setups(2));
     const b = createGame(cfg({ mode: "arsenal", seed: 72 }), setups(2));

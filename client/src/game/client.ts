@@ -575,6 +575,7 @@ export class GameClient {
         }
         this.particles.explosion(ev.x, ev.y, ev.r, pal?.debris ?? "#8a5f38", ev.style);
         this.renderer.onExplosion(ev.r, ev.power);
+        this.renderer.onWormsStartled(ev.x, ev.y, ev.r);
         this.camera.shake(Math.min(22, 2 + ev.r * 0.24 + ev.power * 0.006));
         if (ev.style === "homing") {
           this.homingImpact = { x: ev.x, y: ev.y };
