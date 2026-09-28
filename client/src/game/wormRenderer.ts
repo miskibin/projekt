@@ -756,12 +756,11 @@ export function isLowHp(hp: number): boolean {
 //                              R Y S O W A N I E
 // ============================================================================
 
-/** Pół-szerokość / pół-wysokość ciała (świat). Stopy na y ≈ +RY. */
-/** Większa, czytelna sylwetka inspirowana proporcjami klasycznych Wormsów. Hitbox pozostaje w silniku bez zmian. */
-export const WORM_RX = 13.5;
-export const WORM_RY = 15.9;
-/** Dolna krawędź postaci względem środka fizycznego — utrzymuje stopy na starej linii gruntu. */
-export const WORM_GROUND_OFFSET = 12.8;
+/** Sylwetka jest większa od hitboxu; środek fizyczny pozostaje w tym samym miejscu. */
+export const WORM_RX = 17;
+export const WORM_RY = 20;
+/** Stopy kończą się na dolnej granicy fizycznego hitboxu, czyli na gruncie. */
+export const WORM_GROUND_OFFSET = 8;
 
 export type WormHat = "none" | "cap" | "bucket" | "party" | "crown";
 
@@ -774,8 +773,8 @@ export function hatForWorm(seed: number, id: number): WormHat {
   return (["none", "none", "cap", "none", "bucket", "none", "party", "none", "crown", "none", "none"] as const)[slot % 11];
 }
 
-const EYE_RX = 3.7;
-const EYE_RY = 4.15;
+const EYE_RX = 4.4;
+const EYE_RY = 5;
 
 export interface WormSkin {
   base: string;
@@ -950,6 +949,9 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
 /** Lekkie kształty Canvas, tylko dla części robaków; mieszczą się nad oczami i pod etykietą. */
 function drawHat(ctx: CanvasRenderingContext2D, hat: Exclude<WormHat, "none">, o: WormDrawOpts): void {
   ctx.save();
+  // Czapki są narysowane w pierwotnych lokalnych współrzędnych: skalowanie
+  // trzyma ich rondo tuż nad większą głową.
+  ctx.scale(WORM_RY / 15.9, WORM_RY / 15.9);
   ctx.lineWidth = 1.2;
   ctx.strokeStyle = "#29313d";
   switch (hat) {
@@ -1028,9 +1030,19 @@ function drawFeet(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, r
 /** Twarz: oczy, brwi, usta, policzki. Rysowane w układzie przeskalowanego ciała. */
 function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, rx: number, ry: number): void {
   const facing = o.facing;
-  const eyeY = -ry * 0.26;
-  const cx = facing * 1.4;
-  const gap = 3.4;
+  const eyeY = -ry * 0.28;
+  const cx = facing * 1.7;
+  const gap = 4.1;
+
+  // Krótki pyszczek przed oczami nadaje postaci czytelny profil również
+  // przy małym powiększeniu telefonu.
+  ctx.fillStyle = o.skin.light;
+  ctx.strokeStyle = o.skin.line;
+  ctx.lineWidth = 0.95;
+  ctx.beginPath();
+  ctx.ellipse(facing * rx * 0.77, eyeY + 6.1, 3.4, 2.3, facing * -0.16, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
 
   // oczy
   drawEye(ctx, cx - gap, eyeY, p.eyeL, p, o);
@@ -1070,7 +1082,7 @@ function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, r
     ctx.globalAlpha = 1;
   }
 
-  drawMouth(ctx, p, o, cx, eyeY + 4.9);
+  drawMouth(ctx, p, o, cx, eyeY + 6.5);
 }
 
 function drawEye(
@@ -1510,13 +1522,14 @@ function drawSweat(ctx: CanvasRenderingContext2D, facing: number, rx: number, ry
   ctx.globalAlpha = 1;
 }
 
-/** Pękata kropla/jajko: węższa u góry, szeroka u dołu. */
+/** Duża głowa, zwężona szyja i cięższy dół – rozpoznawalna sylwetka robaka. */
 export function bodyPath(ctx: CanvasRenderingContext2D, rx: number, ry: number): void {
   ctx.beginPath();
   ctx.moveTo(0, -ry);
-  ctx.bezierCurveTo(rx * 0.95, -ry * 0.96, rx * 1.06, ry * 0.34, rx * 0.66, ry * 0.88);
-  ctx.bezierCurveTo(rx * 0.34, ry * 1.14, -rx * 0.34, ry * 1.14, -rx * 0.66, ry * 0.88);
-  ctx.bezierCurveTo(-rx * 1.06, ry * 0.34, -rx * 0.95, -ry * 0.96, 0, -ry);
+  ctx.bezierCurveTo(rx * 0.92, -ry * 1.04, rx * 1.16, -ry * 0.22, rx * 0.68, ry * 0.18);
+  ctx.bezierCurveTo(rx * 0.99, ry * 0.43, rx * 0.87, ry * 1.06, 0, ry * 1.06);
+  ctx.bezierCurveTo(-rx * 0.87, ry * 1.06, -rx * 0.99, ry * 0.43, -rx * 0.68, ry * 0.18);
+  ctx.bezierCurveTo(-rx * 1.16, -ry * 0.22, -rx * 0.92, -ry * 1.04, 0, -ry);
   ctx.closePath();
 }
 

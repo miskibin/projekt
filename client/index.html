@@ -126,16 +126,9 @@
         <button id="btn-menu" class="game-tool" aria-label="Menu gry" aria-expanded="false" title="Menu (Esc)">☰</button>
       </nav>
       <div id="spectator-tools" class="spectator-tools" aria-label="Podczas tury drugiego gracza" hidden>
-        <span id="defense-status">Wybierz robaka do obrony</span>
+        <span id="defense-status">Wybierz robaka. Po strzale: ◀ ▶ lub SKOK.</span>
         <div id="defense-worms" class="defense-worms" role="group" aria-label="Wybierz swojego robaka"></div>
-        <div class="defense-actions" role="group" aria-label="Jedna obrona na atak">
-          <button type="button" id="defense-dodge" aria-label="Unik wybranym robakiem" title="Skok od nadlatującego ataku">↗ UNIK</button>
-          <button type="button" id="defense-brace" aria-label="Osłoń wybranego robaka" title="Przez 1,6 s mniej obrażeń i odrzutu">◈ OSŁONA</button>
-        </div>
         <div class="spectator-actions">
-          <button type="button" data-reaction="cheer" aria-label="Pokaż oklaski" title="Brawo!">👏</button>
-          <button type="button" data-reaction="laugh" aria-label="Pokaż śmiech" title="Ale numer!">😂</button>
-          <button type="button" data-reaction="gasp" aria-label="Pokaż zdziwienie" title="O nie!">😱</button>
           <button type="button" id="spectator-map" aria-label="Pokaż lub ukryj mapę" aria-pressed="false" title="Mapa">▧</button>
         </div>
       </div>
@@ -208,6 +201,11 @@
         <div class="dialog dialog-wide">
           <h2 id="go-title">Koniec gry</h2>
           <div id="go-stats" class="go-stats"></div>
+          <div id="solo-routes" class="solo-routes" hidden>
+            <p>Wybierz zasady następnej areny:</p>
+            <button id="btn-solo-supplies" class="btn btn-go" type="button">Dostawy · losowy arsenał i więcej skrzynek</button>
+            <button id="btn-solo-armory" class="btn btn-go" type="button">Zbrojownia · pełny arsenał od początku</button>
+          </div>
           <div class="dlg-actions">
             <button id="btn-back-lobby" class="btn btn-primary">Wróć do lobby</button>
             <button id="btn-solo-next" class="btn btn-go" hidden>Następna arena</button>

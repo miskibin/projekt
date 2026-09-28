@@ -1,12 +1,67 @@
 import { FIXED_DT, MAX_SHOT_POWER, TEAM_NAMES, WORM_RADIUS } from "@shared/constants";
 import { createGame, type Game } from "@shared/engine";
 import type { Terrain } from "@shared/engine/terrain";
-import type { GameConfig, InputAction, InputState, PlayerInfo, RoomState } from "@shared/protocol";
+import type { GameConfig, InputAction, InputState, PlayerInfo, RoomState, WeaponId, WormSnapshot } from "@shared/protocol";
 import { simulateTrajectory } from "./trajectory";
+import { soloStageInfo } from "./solo";
 
 export type LocalMode = "twoPlayers" | "computer" | "gauntlet";
 
 export const SOLO_OPPONENTS = ["Zwiadowca", "Piroman", "Snajper", "Saper", "Burza", "Weteran", "Boss"] as const;
+
+/** Cele charakterystyczne dla poszczególnych przeciwników, bez tajnej wiedzy o ruchu gracza. */
+export function selectComputerTarget(self: WormSnapshot, enemies: WormSnapshot[], allies: WormSnapshot[], stage: number): WormSnapshot {
+  const role = (Math.max(1, stage) - 1) % SOLO_OPPONENTS.length;
+  return enemies.reduce((best, candidate) => {
+    const score = (target: WormSnapshot): number => {
+      const distance = Math.hypot(target.x - self.x, target.y - self.y);
+      if (role === 2) return Math.abs(target.x - self.x) * 0.12 + nearby(target, enemies, 110) * 45 + distance * 0.28;
+      if (role === 3 || role === 4) return distance * 0.55 - nearby(target, enemies, 105) * 105;
+      if (role >= 5) return distance * 0.65 + target.hp * 3 - nearby(target, allies, 95) * 120;
+      return distance;
+    };
+    return score(candidate) < score(best) ? candidate : best;
+  });
+}
+
+function nearby(worm: WormSnapshot, others: WormSnapshot[], radius: number): number {
+  return others.filter((other) => other.id !== worm.id && Math.hypot(other.x - worm.x, other.y - worm.y) < radius).length;
+}
+
+/** Selekcja broni korzysta z amunicji dostępnej w konkretnej rozgrywce. */
+export function chooseComputerWeapon(stage: number, round: number, distance: number, miss: number,
+  ammo: Partial<Record<WeaponId, number>>, enemyCluster = 0, allyClose = false): WeaponId {
+  const role = (Math.max(1, stage) - 1) % SOLO_OPPONENTS.length;
+  const available = (id: WeaponId) => ammo[id] !== undefined && ammo[id] !== 0;
+  if (role === 0) return distance < 130 && available("shotgun") ? "shotgun" : "bazooka";
+  if (role === 1) {
+    if (distance > 110 && distance < 350 && available("banana") && round % 3 === 0) return "banana";
+    return "grenade";
+  }
+  if (role === 2) {
+    if (miss > 65 && distance > 210 && available("homing")) return "homing";
+    return distance < 170 && available("shotgun") ? "shotgun" : "bazooka";
+  }
+  if (role === 3) {
+    if (distance < 90 && !allyClose && available("mine")) return "mine";
+    if (enemyCluster && available("cluster") && distance > 100) return "cluster";
+    return "grenade";
+  }
+  if (role === 4) {
+    if (enemyCluster && !allyClose && available("airstrike") && round % 2 === 0) return "airstrike";
+    if (distance < 210 && available("uzi")) return "uzi";
+    return "bazooka";
+  }
+  if (role === 5) {
+    if (distance < 85 && !allyClose && available("bat")) return "bat";
+    if (miss > 70 && available("homing")) return "homing";
+    return distance < 200 ? "shotgun" : "bazooka";
+  }
+  if (enemyCluster && !allyClose && available("airstrike") && round % 3 === 0) return "airstrike";
+  if (enemyCluster && available("cluster")) return "cluster";
+  if (miss > 75 && available("homing")) return "homing";
+  return distance < 190 ? "shotgun" : "bazooka";
+}
 
 interface ShotPlan { aim: number; power: number; missDistance: number }
 
@@ -25,7 +80,7 @@ export class DemoDriver {
     this.game = createGame(config, [
       { team: 0, playerId: "demo-0", name: mode === "twoPlayers" ? "Gracz 1" : "Ty" },
       { team: 1, playerId: "demo-1", name: mode === "twoPlayers" ? "Gracz 2" :
-        mode === "computer" ? "Komputer" : SOLO_OPPONENTS[(stage - 1) % SOLO_OPPONENTS.length]! },
+        mode === "computer" ? "Komputer" : soloStageInfo(stage).name },
     ]);
     this.terrain = (this.game as Game & { readonly terrain: Terrain }).terrain;
   }
@@ -73,8 +128,14 @@ export class DemoDriver {
     const danger = worms.flatMap((w) => state.projectiles.map((p) => ({
       worm: w, distance: Math.hypot(w.x - p.x, w.y - p.y),
     }))).sort((a, b) => a.distance - b.distance)[0];
-    if (!danger || danger.distance > 130 + this.stage * 17 || this.defenseDelay < Math.max(0.18, 0.6 - this.stage * 0.05)) return;
-    this.game.applyAction(1, { kind: "defend", style: this.stage % 3 === 0 ? "brace" : "dodge", wormId: danger.worm.id });
+    if (!danger || danger.distance > Math.min(170, 105 + this.stage * 8) ||
+      this.defenseDelay < Math.max(0.22, 0.56 - this.stage * 0.035)) return;
+    const projectile = state.projectiles.reduce((best, item) =>
+      Math.hypot(item.x - danger.worm.x, item.y - danger.worm.y) <
+      Math.hypot(best.x - danger.worm.x, best.y - danger.worm.y) ? item : best);
+    const direction = danger.worm.x >= projectile.x ? 1 : -1;
+    this.game.applyAction(1, { kind: "defend", style: danger.distance < 85 && danger.worm.onGround ? "jump" : "step",
+      direction, wormId: danger.worm.id });
   }
 
   private updateComputer(dt: number): void {
@@ -99,12 +160,21 @@ export class DemoDriver {
       this.botSearch = null;
     }
     this.botTime += dt;
-    const target = enemies.reduce((best, item) =>
-      Math.abs(item.x - worm.x) < Math.abs(best.x - worm.x) ? item : best,
-    );
+    const allies = state.worms.filter((item) => item.team === 1 && item.alive);
+    const target = this.mode === "gauntlet" ? selectComputerTarget(worm, enemies, allies, this.stage) :
+      enemies.reduce((best, item) => Math.abs(item.x - worm.x) < Math.abs(best.x - worm.x) ? item : best);
     const faceRight = target.x >= worm.x;
     if (this.botTime < 0.45) {
-      this.game.applyInput(1, { left: !faceRight, right: faceRight, aim: worm.aim, charge: false });
+      const role = (Math.max(1, this.stage) - 1) % SOLO_OPPONENTS.length;
+      const distance = Math.abs(target.x - worm.x);
+      const retreat = this.mode === "gauntlet" && role === 2 && distance < 190;
+      const advance = distance > (role === 3 ? 160 : 250);
+      const direction = retreat ? (faceRight ? -1 : 1) : advance ? (faceRight ? 1 : -1) : 0;
+      const nextX = worm.x + direction * 24;
+      const walkable = nextX > 32 && nextX < this.terrain.width - 32 &&
+        Math.abs(this.terrain.surfaceY(nextX) - this.terrain.surfaceY(worm.x)) < 27;
+      this.game.applyInput(1, { left: direction < 0 && walkable, right: direction > 0 && walkable,
+        aim: worm.aim, charge: false });
       return;
     }
     if (!this.botPlan) {
@@ -115,7 +185,7 @@ export class DemoDriver {
       // Przeszukuj trajektorie po kawałku: pojedyncza długa kalkulacja na głównym
       // wątku potrafiła zatrzymać animację na telefonie podczas tury komputera.
       if (!this.botSearch.step(36)) return;
-      this.botPlan = this.botSearch.result();
+      this.botPlan = this.botSearch.result(this.mode === "gauntlet" ? Math.max(0.4, 1.9 - this.stage * 0.13) : 1);
       this.botSearch = null;
     }
     this.game.applyInput(1, { left: false, right: false, aim: this.botPlan.aim, charge: false });
@@ -123,29 +193,20 @@ export class DemoDriver {
       this.botShot = true;
       const ammo = state.teams.find((team) => team.team === 1)?.ammo;
       const close = Math.hypot(target.x - worm.x, target.y - worm.y);
-      const style = this.stage % 4;
-      if ((this.botPlan.missDistance > 80 || style === 3 && turn.round % 3 === 0) && ammo?.airstrike !== 0) {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "airstrike" });
+      const cluster = nearby(target, enemies, 105);
+      const allyClose = allies.some((ally) => Math.hypot(target.x - ally.x, target.y - ally.y) < 115);
+      const weapon = this.mode === "gauntlet" ? chooseComputerWeapon(this.stage, turn.round, close,
+        this.botPlan.missDistance, ammo ?? {}, cluster, allyClose) :
+        this.botPlan.missDistance > 80 && ammo?.homing ? "homing" : "bazooka";
+      this.game.applyAction(1, { kind: "selectWeapon", weapon });
+      if (weapon === "airstrike" || weapon === "homing")
         this.game.applyAction(1, { kind: "target", x: target.x, y: target.y });
-      } else if ((this.botPlan.missDistance > 80 || style === 3) && ammo?.homing !== 0) {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "homing" });
-        this.game.applyAction(1, { kind: "target", x: target.x, y: target.y });
-        this.game.applyAction(1, { kind: "fire", power: Math.max(0.6, this.botPlan.power) });
-      } else if (style === 1 && close < 390 && ammo?.banana !== 0 && turn.round % 3 === 0) {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "banana" });
-        this.game.applyAction(1, { kind: "setTimer", seconds: 2 });
-        this.game.applyAction(1, { kind: "fire", power: Math.max(0.5, this.botPlan.power) });
-      } else if (style === 1 && close < 340 && ammo?.cluster !== 0) {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "cluster" });
-        this.game.applyAction(1, { kind: "setTimer", seconds: 2 });
-        this.game.applyAction(1, { kind: "fire", power: Math.max(0.5, this.botPlan.power) });
-      } else if (style === 2 && close < 160 && ammo?.shotgun !== 0) {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "shotgun" });
-        this.game.applyAction(1, { kind: "fire", power: 1 });
-        this.game.applyAction(1, { kind: "fire", power: 1 });
-      } else {
-        this.game.applyAction(1, { kind: "selectWeapon", weapon: "bazooka" });
-        this.game.applyAction(1, { kind: "fire", power: this.botPlan.power });
+      if (weapon === "banana" || weapon === "cluster" || weapon === "grenade")
+        this.game.applyAction(1, { kind: "setTimer", seconds: close < 210 ? 2 : 3 });
+      if (weapon !== "airstrike") {
+        this.game.applyAction(1, { kind: "fire", power: weapon === "homing" ?
+          Math.max(0.6, this.botPlan.power) : this.botPlan.power });
+        if (weapon === "shotgun") this.game.applyAction(1, { kind: "fire", power: 1 });
       }
     }
   }
@@ -199,11 +260,11 @@ export class ComputerShotSearch {
     return this.index === 37 * 16;
   }
 
-  result(): ShotPlan {
+  result(noiseScale = 1): ShotPlan {
     const noise = pseudoRandom(this.round * 97 + this.wormId * 17) - 0.5;
     return {
-      aim: clamp(this.best.aim + noise * 0.09, -Math.PI / 2, Math.PI / 2),
-      power: clamp(this.best.power - noise * 0.08, 0.2, 1),
+      aim: clamp(this.best.aim + noise * 0.09 * noiseScale, -Math.PI / 2, Math.PI / 2),
+      power: clamp(this.best.power - noise * 0.08 * noiseScale, 0.2, 1),
       missDistance: this.best.missDistance,
     };
   }

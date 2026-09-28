@@ -34,19 +34,19 @@ export interface ThemePalette {
   waterFoam: string;
   fog: string;
 
-  // --- wygląd terenu (kostka brukowa + czapa) ---
+  // --- wygląd terenu (warstwy skały i czapa) ---
   /** rozjaśnienie tuż przy samej górze czapy */
   topHi: RGB;
   /** ciemniejsza linia na dolnej krawędzi czapy */
   topEdge: RGB;
   /** ciemny kontur dookoła całego terenu */
   outline: RGB;
-  /** jaśniejszy i ciemniejszy odcień „kamyka” (Worley) */
+  /** jaśniejszy i ciemniejszy odcień drobnoziarnistej skały */
   stoneA: RGB;
   stoneB: RGB;
-  /** ciemna „zaprawa” między kamykami – zarazem kolor cienia w kraterach */
+  /** kolor pęknięć i cienia w kraterach */
   mortar: RGB;
-  /** rozmiar oczka siatki kamyków w pikselach */
+  /** skala ziarna i pęknięć skały w pikselach świata */
   pebble: number;
   /** mineralna żyła widoczna między warstwami ziemi */
   mineral: RGB;
@@ -244,9 +244,9 @@ const SHADOW_REACH = 11;
  * Pełna przebudowa tylko przy zmianie terenu (nowa gra / terrainSync),
  * a po eksplozjach – wyłącznie prostokąt wokół dziury.
  *
- * Wygląd: ziemia z proceduralnego szumu komórkowego (Worley) daje „bruk” z kamyków
- * z zaprawą i światłem od góry-lewej, na wierzchu gruba czapa (trawa/piasek/śnieg/lawa)
- * oplatająca też strome boki, dookoła ciemny kontur + antyaliasing 1-bitowej bitmapy.
+ * Wygląd: drobnoziarniste warstwy skały z rzadkimi pęknięciami i czapą
+ * (trawa/piasek/śnieg/lawa) na powierzchni. Tekstura pozostaje zakotwiczona
+ * w świecie, więc po wybuchu ukazuje te same warstwy w odsłoniętym kraterze.
  */
 export class TerrainRenderer {
   readonly canvas: HTMLCanvasElement;
@@ -254,9 +254,11 @@ export class TerrainRenderer {
   private img: ImageData;
   /** gładki szum niskiej częstotliwości – faluje dolną krawędź czapy */
   private smooth: Uint8Array;
-  /** oświetlenie/zaprawa kamyków (128 = neutralnie) */
+  /** drobny relief skały; wartości < 48 oznaczają nieregularne pęknięcia */
   private stone: Uint8Array;
-  /** odcień pojedynczego kamyka (stały w obrębie komórki Worleya) */
+  /** Rozproszone, kanciaste głazy zatopione w ziemi; zero oznacza zwykły grunt. */
+  private rocks: Uint8Array;
+  /** płynnie zmieniający się odcień skały */
   private tint: Uint8Array;
   /** Powolne fale warstw skały, wspólne dla wszystkich motywów. */
   private strataX: Float32Array;
@@ -294,6 +296,7 @@ export class TerrainRenderer {
     const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
     this.stone = st.stone;
     this.tint = st.tint;
+    this.rocks = st.rocks;
     this.kind = new Uint8Array(n);
     this.vdx = new Int8Array(n);
     this.vdy = new Int8Array(n);
@@ -308,6 +311,7 @@ export class TerrainRenderer {
       const st = makeStone(this.terrain.width, this.terrain.height, this.seed, next.pebble);
       this.stone = st.stone;
       this.tint = st.tint;
+      this.rocks = st.rocks;
     }
     this.pal = next;
     this.tuft = makeTufts(this.terrain.width, this.seed, next.tufts);
@@ -332,6 +336,7 @@ export class TerrainRenderer {
       const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
       this.stone = st.stone;
       this.tint = st.tint;
+      this.rocks = st.rocks;
       this.kind = new Uint8Array(n);
       this.vdx = new Int8Array(n);
       this.vdy = new Int8Array(n);
@@ -682,6 +687,7 @@ export class TerrainRenderer {
     const vy = this.vdy;
     const stone = this.stone;
     const tint = this.tint;
+    const rocks = this.rocks;
     const sm = this.smooth;
     const strataX = this.strataX;
     const tuft = this.tuft;
@@ -839,12 +845,11 @@ export class TerrainRenderer {
           g = sbG + (saG - sbG) * tn;
           b = sbB + (saB - sbB) * tn;
           const directional = 1 + sideLight * 0.25 * clamp01((17 - dist) / 17);
-          const mul = (0.5 + (stone[i] / 255) * 1.0) * depthShade * directional * (0.86 + (sm[i] / 255) * 0.28);
+          const mul = (0.68 + (stone[i] / 255) * 0.64) * depthShade * directional * (0.86 + (sm[i] / 255) * 0.28);
           r *= mul;
           g *= mul;
           b *= mul;
-          // Szerokie, pofalowane warstwy łamią regularną siatkę kamyków. Są
-          // zakotwiczone w świecie, więc krater odsłania te same pokłady.
+          // Szerokie, pofalowane warstwy są zakotwiczone w świecie.
           const layerY = y + strataX[x] + (sm[i] - 128) * 0.055;
           const layer = Math.floor(layerY / pal.stratum);
           const seam = layerY - layer * pal.stratum;
@@ -886,6 +891,27 @@ export class TerrainRenderer {
           r += gr;
           g += gr;
           b += gr;
+          // Oddzielne, ostrokrawędziste bloki jak w przekroju ziemi. Pomiędzy
+          // nimi widać drobny grunt; nie tworzą powtarzalnego bruku na całej mapie.
+          const rock = rocks[i];
+          if (rock) {
+            const fill = rock < 22 ? 0.22 : rock / 255;
+            const strength = rock < 22 ? 0.78 : 0.4;
+            r += ((sbR + (saR - sbR) * fill) * depthShade - r) * strength;
+            g += ((sbG + (saG - sbG) * fill) * depthShade - g) * strength;
+            b += ((sbB + (saB - sbB) * fill) * depthShade - b) * strength;
+          }
+          // Ostro zarysowane spękania i pojedyncze mineralne drobiny. Znajdują
+          // się pod czapą, więc nie zaburzają czytelnej krawędzi chodzenia.
+          if (stone[i] < 48) {
+            r = r * 0.5 + moR * 0.5;
+            g = g * 0.5 + moG * 0.5;
+            b = b * 0.5 + moB * 0.5;
+          } else if (fine(x + this.seed, y - this.seed) > 249) {
+            r += 24;
+            g += 23;
+            b += 22;
+          }
           if (dist < SHADOW_REACH) {
             // miękki cień wewnątrz krateru (mocniejszy tam, gdzie powietrze jest poniżej)
             const down = clamp01((uy + 0.35) / 0.8);
@@ -951,10 +977,9 @@ function makeStrataOffsets(width: number, seed: number): Float32Array {
   return result;
 }
 
-/** Gładki szum (komórki ~18 px, interpolacja smoothstep). */
-function makeSmooth(w: number, h: number, seed: number): Uint8Array {
+/** Gładki szum o zadanej skali; interpolacja smoothstep. */
+function makeSmooth(w: number, h: number, seed: number, cs = 18): Uint8Array {
   const rng = new Rng((seed ^ 0x9e3779b9) >>> 0);
-  const cs = 18;
   const bw = Math.ceil(w / cs) + 2;
   const bh = Math.ceil(h / cs) + 2;
   const blob = new Float32Array(bw * bh);
@@ -982,80 +1007,97 @@ function makeSmooth(w: number, h: number, seed: number): Uint8Array {
 }
 
 /**
- * Szum komórkowy (Worley) z jitterowanej siatki – „bruk” z zaokrąglonych kamyków.
- * `stone` = oświetlenie (128 neutralnie, jasno w górnym-lewym rancie kamyka,
- * ciemno w prawym-dolnym i w zaprawie), `tint` = stały odcień danego kamyka.
+ * Dwie skale płynnego szumu tworzą ziarnistą skałę bez widocznej siatki
+ * kamyków. Krótkie, nieregularne rysy są rysowane raz w światowych współrzędnych;
+ * przy niszczeniu terenu ich bitmapa nie wymaga ponownego generowania.
  */
-function makeStone(w: number, h: number, seed: number, cell: number): { stone: Uint8Array; tint: Uint8Array } {
-  const rng = new Rng((seed ^ 0x51ed270b) >>> 0);
-  const gw = Math.ceil(w / cell) + 2;
-  const gh = Math.ceil(h / cell) + 2;
-  const fx = new Float32Array(gw * gh);
-  const fy = new Float32Array(gw * gh);
-  const ft = new Uint8Array(gw * gh);
-  const fr = new Float32Array(gw * gh);
-  for (let gy = 0; gy < gh; gy++) {
-    for (let gx = 0; gx < gw; gx++) {
-      const j = gy * gw + gx;
-      fx[j] = (gx - 1 + 0.18 + rng.next() * 0.64) * cell;
-      fy[j] = (gy - 1 + 0.18 + rng.next() * 0.64) * cell;
-      ft[j] = (rng.next() * 255) | 0;
-      fr[j] = cell * (0.4 + rng.next() * 0.28);
-    }
-  }
+function makeStone(w: number, h: number, seed: number, cell: number): { stone: Uint8Array; tint: Uint8Array; rocks: Uint8Array } {
+  const broad = makeSmooth(w, h, seed ^ 0x73ccae8d, Math.round(cell * 1.9));
+  const small = makeSmooth(w, h, seed ^ 0x51ed270b, Math.max(5, Math.round(cell * 0.31)));
   const stone = new Uint8Array(w * h);
   const tint = new Uint8Array(w * h);
-  const lx = -0.7071;
-  const ly = -0.7071;
-  const mortarW = Math.max(1.7, cell * 0.17);
+  const rocks = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
-    const gy = ((y / cell) | 0) + 1;
     const row = y * w;
-    const g0 = gy > 0 ? gy - 1 : 0;
-    const g1 = gy + 1 < gh ? gy + 1 : gh - 1;
     for (let x = 0; x < w; x++) {
-      const gx = ((x / cell) | 0) + 1;
-      const h0 = gx > 0 ? gx - 1 : 0;
-      const h1 = gx + 1 < gw ? gx + 1 : gw - 1;
-      let b1 = 1e9;
-      let b2 = 1e9;
-      let bj = 0;
-      for (let gyy = g0; gyy <= g1; gyy++) {
-        const base = gyy * gw;
-        for (let gxx = h0; gxx <= h1; gxx++) {
-          const j = base + gxx;
-          const ddx = fx[j] - x;
-          const ddy = fy[j] - y;
-          const dd = ddx * ddx + ddy * ddy;
-          if (dd < b1) {
-            b2 = b1;
-            b1 = dd;
-            bj = j;
-          } else if (dd < b2) {
-            b2 = dd;
+      const i = row + x;
+      const fleck = fine(x + seed, y - seed) - 128;
+      stone[i] = 143 + (broad[i] - 128) * 0.28 + (small[i] - 128) * 0.57 + fleck * 0.12;
+      tint[i] = 127 + (broad[i] - 128) * 0.62 + (small[i] - 128) * 0.15;
+    }
+  }
+  const rng = new Rng((seed ^ 0x6d2b79f5) >>> 0);
+  const patch = Math.max(39, Math.round(cell * 2.25));
+  for (let by = 0; by < h; by += patch) {
+    for (let bx = 0; bx < w; bx += patch) {
+      if (rng.next() > 0.57) continue;
+      let x = bx + 7 + rng.next() * (patch - 14);
+      let y = by + 7 + rng.next() * (patch - 14);
+      let angle = (rng.next() - 0.5) * 2.7;
+      const segments = 2 + (rng.next() * 4 | 0);
+      for (let j = 0; j < segments; j++) {
+        const length = 5 + rng.next() * 11;
+        const nx = x + Math.cos(angle) * length;
+        const ny = y + Math.sin(angle) * length;
+        const steps = Math.ceil(length * 1.8);
+        for (let k = 0; k <= steps; k++) {
+          const xx = Math.round(x + (nx - x) * k / steps);
+          const yy = Math.round(y + (ny - y) * k / steps);
+          if (xx >= 0 && yy >= 0 && xx < w && yy < h) stone[yy * w + xx] = 26;
+        }
+        x = nx;
+        y = ny;
+        angle += (rng.next() - 0.5) * 1.3;
+      }
+    }
+  }
+  // Nieregularne 5–8-kątne głazy; skanliniowy raster jest generowany tylko
+  // przy wczytaniu mapy. Rozmiary i odstępy są różne, więc skała nie przypomina
+  // siatki zaokrąglonych komórek, która na telefonie wyglądała jak bruk.
+  const spacing = Math.max(76, Math.round(cell * 3.6));
+  for (let gy = 0; gy < h; gy += spacing) {
+    for (let gx = 0; gx < w; gx += spacing) {
+      if (rng.next() > 0.82) continue;
+      const count = rng.next() > 0.68 ? 2 : 1;
+      for (let b = 0; b < count; b++) {
+        const cx = gx + 8 + rng.next() * (spacing - 16);
+        const cy = gy + 8 + rng.next() * (spacing - 16);
+        const rx = 11 + rng.next() * 25;
+        const ry = 9 + rng.next() * 20;
+        const points = 6 + (rng.next() * 3 | 0);
+        const angles: { x: number; y: number }[] = [];
+        for (let j = 0; j < points; j++) {
+          const a = j * Math.PI * 2 / points + 0.11;
+          const jitter = 0.78 + rng.next() * 0.36;
+          angles.push({ x: cx + Math.cos(a) * rx * jitter, y: cy + Math.sin(a) * ry * jitter });
+        }
+        const base = 120 + rng.next() * 75;
+        const yStart = Math.max(0, Math.floor(cy - ry - 2));
+        const yEnd = Math.min(h - 1, Math.ceil(cy + ry + 2));
+        for (let y = yStart; y <= yEnd; y++) {
+          const intersections: number[] = [];
+          for (let j = 0; j < points; j++) {
+            const from = angles[j]!;
+            const to = angles[(j + 1) % points]!;
+            if ((from.y <= y && to.y > y) || (to.y <= y && from.y > y))
+              intersections.push(from.x + (y - from.y) * (to.x - from.x) / (to.y - from.y));
+          }
+          if (intersections.length < 2) continue;
+          intersections.sort((a, b) => a - b);
+          for (let j = 0; j + 1 < intersections.length; j += 2) {
+            const lo = Math.max(0, Math.ceil(intersections[j]!));
+            const hi = Math.min(w - 1, Math.floor(intersections[j + 1]!));
+            for (let x = lo; x <= hi; x++) {
+              const edge = Math.min(x - intersections[j]!, intersections[j + 1]! - x, y - (cy - ry), cy + ry - y);
+              const facet = (x - cx) * -0.55 + (y - cy) * -0.85;
+              rocks[y * w + x] = edge < 1.6 ? 12 : Math.max(50, Math.min(250, base + facet));
+            }
           }
         }
       }
-      const d1 = Math.sqrt(b1);
-      const d2 = Math.sqrt(b2);
-      const edge = d2 - d1;
-      const seam = edge < mortarW ? 1 - edge / mortarW : 0;
-      const R = fr[bj];
-      // zaokrąglenie kamyka: poza promieniem R robi się „zaprawa”
-      let round = (d1 - (R - 2.4)) / 2.4;
-      if (round < 0) round = 0;
-      else if (round > 1) round = 1;
-      const dark = Math.max(seam * seam, round * round);
-      let rr = d1 / R;
-      if (rr > 1) rr = 1;
-      const inv = d1 > 0.001 ? 1 / d1 : 0;
-      const lam = (x - fx[bj]) * inv * lx + (y - fy[bj]) * inv * ly;
-      const v = 128 + lam * rr * 52 - rr * rr * 10 - dark * 80;
-      stone[row + x] = v < 0 ? 0 : v > 255 ? 255 : v | 0;
-      tint[row + x] = ft[bj];
     }
   }
-  return { stone, tint };
+  return { stone, tint, rocks };
 }
 
 /** Czy powierzchnia w (x, yy) – pierwszy stały piksel pod powietrzem – jest lokalnie prawie pozioma. */

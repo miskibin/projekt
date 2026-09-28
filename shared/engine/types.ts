@@ -23,7 +23,6 @@ export interface Worm {
   aim: number;
   onGround: boolean;
   /** Czas silnika, do którego osłona zmniejsza obrażenia oraz odrzut. */
-  guardUntil?: number;
   anim?: string;
   /** licznik czasu animacji jednorazowej (bat) */
   animTimer: number;
@@ -71,6 +70,8 @@ export interface Projectile {
   /** Ostatni punkt wycięty przez wiertło; pozwala ograniczyć zdarzenia sieciowe. */
   lastCarveX?: number;
   lastCarveY?: number;
+  /** Łączna długość tunelu wywierconego w gruncie. */
+  drillDistance?: number;
 }
 
 export interface Crate {

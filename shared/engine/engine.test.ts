@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FIXED_DT, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH, WORM_RADIUS } from "../constants";
+import { FIXED_DT, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH, WORM_RADIUS, WORM_SEPARATION } from "../constants";
 import type { GameConfig, GameEvent, InputState, WeaponId } from "../protocol";
 import { createGame, type Game, type TeamSetup } from "./index";
 import { GameImpl } from "./game";
@@ -172,21 +172,21 @@ describe("obrona podczas cudzego ataku", () => {
     const own = game.worms.find((w) => w.team === defender)!;
     const enemy = game.worms.find((w) => w.team === attacker)!;
     const hp = own.hp;
-    game.applyAction(defender, { kind: "defend", style: "brace", wormId: own.id });
+    game.applyAction(defender, { kind: "defend", style: "jump", wormId: own.id });
     expect(game.snapshot().turn.defenseWindow).toBe(false);
-    expect(own.guardUntil).toBeUndefined();
+    expect(own.vy).toBe(0);
     game.applyAction(attacker, { kind: "fire", power: 0.3 });
     expect(game.snapshot().turn.defenseReady).toContain(defender);
-    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: enemy.id });
+    game.applyAction(defender, { kind: "defend", style: "step", direction: -1, wormId: enemy.id });
     expect(game.snapshot().turn.defenseReady).toContain(defender);
-    game.applyAction(defender, { kind: "defend", style: "brace", wormId: own.id });
+    game.applyAction(defender, { kind: "defend", style: "step", direction: -1, wormId: own.id });
     expect(game.snapshot().turn.defenseReady).not.toContain(defender);
-    expect(game.snapshot().worms.find((w) => w.id === own.id)?.guard).toBeGreaterThan(1);
-    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: own.id });
-    expect(own.vx).toBe(0);
+    expect(own.vx).toBeLessThan(-200);
+    game.applyAction(defender, { kind: "defend", style: "jump", wormId: own.id });
+    expect(own.vx).toBeLessThan(-200);
     game.damageWorm(own, 40, "explosion");
-    expect(own.hp).toBe(hp - 18);
-    expect(game.drainEvents().some((e) => e.t === "defense" && e.wormId === own.id && e.style === "brace")).toBe(true);
+    expect(own.hp).toBe(hp - 40);
+    expect(game.drainEvents().some((e) => e.t === "defense" && e.wormId === own.id && e.style === "step")).toBe(true);
   });
 
   it("unik naprawdę przenosi robaka po strzale, nie zmieniając tury atakującego", () => {
@@ -198,9 +198,9 @@ describe("obrona podczas cudzego ataku", () => {
     const worm = game.worms.find((w) => w.team === defender)!;
     game.applyAction(turn.activeTeam, { kind: "fire", power: 0.4 });
     const x = worm.x;
-    game.applyAction(defender, { kind: "defend", style: "dodge", wormId: worm.id });
+    game.applyAction(defender, { kind: "defend", style: "step", direction: 1, wormId: worm.id });
     expect(worm.onGround).toBe(false);
-    expect(worm.vy).toBeLessThan(-200);
+    expect(worm.vy).toBeLessThan(-90);
     expect(game.snapshot().turn.activeTeam).toBe(turn.activeTeam);
     stepN(game, 8);
     expect(Math.abs(worm.x - x)).toBeGreaterThan(5);
@@ -312,8 +312,48 @@ describe("rozstawienie robaków", () => {
       for (let i = 0; i < s.worms.length; i++)
         for (let j = i + 1; j < s.worms.length; j++)
           minDist = Math.min(minDist, Math.hypot(s.worms[i].x - s.worms[j].x, s.worms[i].y - s.worms[j].y));
-      expect(minDist).toBeGreaterThan(15);
+      expect(minDist).toBeGreaterThanOrEqual(WORM_SEPARATION);
     }
+  });
+
+  it("nie pozwala robakowi przejść przez drugiego robaka", () => {
+    const g = createGame(cfg(), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    for (let y = 450; y < gi.terrain.height; y++)
+      gi.terrain.data.fill(1, y * gi.terrain.width, (y + 1) * gi.terrain.width);
+    const active = gi.worms.find((w) => w.id === g.snapshot().turn.activeWormId)!;
+    const other = gi.worms.find((w) => w.id !== active.id)!;
+    for (const w of gi.worms) { w.x = 900 + 100 * w.id; w.y = 440; w.onGround = true; w.vx = 0; w.vy = 0; }
+    active.x = 500;
+    other.x = 560;
+    active.y = other.y = 440;
+    for (let i = 0; i < 80; i++) {
+      g.applyInput(active.team, { ...NEUTRAL, right: true });
+      g.step(FIXED_DT);
+    }
+    expect(active.x).toBeGreaterThan(500);
+    expect(other.x - active.x).toBeGreaterThanOrEqual(WORM_SEPARATION - 0.01);
+  });
+
+  it("odbija robaka w locie bez przenikania przez sąsiada", () => {
+    const g = createGame(cfg(), setups(2));
+    const gi = g as GameImpl;
+    toActive(g);
+    clearMines(g);
+    gi.terrain.data.fill(0);
+    const flying = gi.worms[0]!;
+    const other = gi.worms[1]!;
+    for (const w of gi.worms) { w.x = 900 + 100 * w.id; w.y = 440; w.onGround = false; w.vx = 0; w.vy = 0; }
+    flying.x = 500; flying.y = 440; flying.vx = 240;
+    other.x = 560; other.y = 440;
+    for (let i = 0; i < 14; i++) {
+      g.step(FIXED_DT);
+      expect(Math.hypot(flying.x - other.x, flying.y - other.y)).toBeGreaterThanOrEqual(WORM_SEPARATION - 0.01);
+    }
+    expect(flying.x).toBeLessThan(other.x);
   });
 
   it("robaki nie wpadają pod teren po 300 krokach spokoju", () => {

@@ -6,6 +6,8 @@ import { NO_CHARGE, TARGETED } from "./weapons";
 export interface InputCallbacks {
   sendInput(state: InputState): void;
   sendAction(action: InputAction): void;
+  /** Te same klawisze podczas ataku przeciwnika; jeden krótki ruch obronny. */
+  sendDefense(control: "left" | "right" | "jump"): void;
   toggleWeaponPanel(): void;
   closeWeaponPanel(): void;
   toggleEscMenu(): void;
@@ -18,6 +20,7 @@ export type TouchControl = "left" | "right" | "aimUp" | "aimDown" | "jump" | "fi
 
 export interface InputContext {
   myTurn: boolean;
+  defenseReady?: boolean;
   worm: WormSnapshot | null;
   weapon: WeaponId;
   /** blokada wejścia gdy otwarty jest panel/menu */
@@ -99,7 +102,12 @@ export class InputController {
   }
 
   pressControl(control: TouchControl): void {
-    if (this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    if (this.ctxInfo.blocked) return;
+    if (!this.ctxInfo.myTurn) {
+      if (this.ctxInfo.defenseReady && (control === "left" || control === "right" || control === "jump"))
+        this.cb.sendDefense(control);
+      return;
+    }
     this.touchKeys.add(control);
     if (control === "fire") this.beginFire();
     if (control === "jump") this.cb.sendAction({ kind: "jump" });
@@ -242,7 +250,15 @@ export class InputController {
       return;
     }
     this.keys.add(e.code);
-    if (this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    if (this.ctxInfo.blocked) return;
+    if (!this.ctxInfo.myTurn) {
+      if (this.ctxInfo.defenseReady) {
+        if (e.code === "ArrowLeft" || e.code === "KeyA") this.cb.sendDefense("left");
+        if (e.code === "ArrowRight" || e.code === "KeyD") this.cb.sendDefense("right");
+        if (e.code === "Enter") this.cb.sendDefense("jump");
+      }
+      return;
+    }
 
     switch (e.code) {
       case "Enter":

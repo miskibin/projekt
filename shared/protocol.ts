@@ -70,13 +70,8 @@ export type InputAction =
   | { kind: "target"; x: number; y: number } // airstrike / teleport / girder / homing
   | { kind: "girderRotate" }
   | { kind: "skipTurn" }
-  | { kind: "defend"; style: "dodge" | "brace"; wormId: number }
+  | { kind: "defend"; style: "step" | "jump"; wormId: number; direction?: -1 | 1 }
   | { kind: "surrender" };
-
-/** Wyłącznie ozdobna reakcja w cudzej turze; nie trafia do silnika fizyki. */
-export type SpectatorReaction = "cheer" | "laugh" | "gasp";
-/** Jedna reakcja co 3 s na gracza; chroni animację przed spamem i sieć MQTT przed lawiną paczek. */
-export const REACTION_COOLDOWN_MS = 3_000;
 
 export type ClientMessage =
   | { t: "hello"; name: string; reconnectToken?: string }
@@ -88,7 +83,6 @@ export type ClientMessage =
   | { t: "startGame" } // tylko host
   | { t: "input"; state: InputState; seq?: number; turn?: TurnKey }
   | { t: "action"; action: InputAction; seq?: number; turn?: TurnKey }
-  | { t: "reaction"; kind: SpectatorReaction }
   | { t: "ping"; ts: number }
   | { t: "requestTerrainSync" };
 
@@ -107,7 +101,6 @@ export interface WormSnapshot {
   aim: number;
   onGround: boolean;
   /** Pozostały czas aktywnej osłony obrońcy. */
-  guard?: number;
   /** np. "jetpack" gdy używa plecaka, "bat" gdy macha kijem */
   anim?: string;
 }
@@ -234,7 +227,7 @@ export type GameEvent =
   | { t: "suddenDeath" }
   | { t: "message"; text: string } // komunikaty na ekranie ("Sudden death!", "Robak X utonął")
   | { t: "sound"; name: string; x?: number; y?: number }
-  | { t: "defense"; wormId: number; style: "dodge" | "brace"; x: number; y: number };
+  | { t: "defense"; wormId: number; style: "step" | "jump"; x: number; y: number };
 
 export interface TerrainSync {
   width: number;
@@ -254,7 +247,6 @@ export type ServerMessage =
   | { t: "gameStart"; config: GameConfig; players: PlayerInfo[]; yourTeam: number }
   | { t: "snapshot"; snapshot: GameSnapshot }
   | { t: "actionAck"; seq: number }
-  | { t: "reaction"; team: number; wormId: number; kind: SpectatorReaction }
   | { t: "events"; events: GameEvent[]; seq?: number }
   | { t: "terrainSync"; terrain: TerrainSync }
   | { t: "gameOver"; winnerTeam: number | null; winnerName: string | null; stats: Record<string, unknown> };

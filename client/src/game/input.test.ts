@@ -19,7 +19,7 @@ describe("game controls", () => {
     vi.spyOn(performance, "now").mockImplementation(() => now);
     vi.stubGlobal("window", new EventTarget());
     callbacks = {
-      sendInput: vi.fn(), sendAction: vi.fn(), toggleWeaponPanel: vi.fn(),
+      sendInput: vi.fn(), sendAction: vi.fn(), sendDefense: vi.fn(), toggleWeaponPanel: vi.fn(),
       closeWeaponPanel: vi.fn(), toggleEscMenu: vi.fn(), gesture: vi.fn(),
       toggleMap: vi.fn(), fullscreen: vi.fn(),
     };
@@ -104,5 +104,16 @@ describe("game controls", () => {
     expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
     expect(callbacks.sendAction).toHaveBeenCalledWith({ kind: "fire", power: 1 });
     expect(input.isCharging).toBe(false);
+  });
+
+  it("uses the ordinary movement and jump controls for one defensive response without firing", () => {
+    input.setContext({ myTurn: false, defenseReady: true, worm: null, weapon: "bazooka", blocked: false });
+    input.pressControl("left");
+    input.pressControl("jump");
+    input.pressControl("fire");
+    expect(callbacks.sendDefense).toHaveBeenNthCalledWith(1, "left");
+    expect(callbacks.sendDefense).toHaveBeenNthCalledWith(2, "jump");
+    expect(callbacks.sendDefense).toHaveBeenCalledTimes(2);
+    expect(callbacks.sendAction).not.toHaveBeenCalled();
   });
 });

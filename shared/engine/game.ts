@@ -21,6 +21,7 @@ import {
   WORM_MAX_HP,
   WORM_MAX_STEP_UP,
   WORM_RADIUS,
+  WORM_SEPARATION,
   WORM_WALK_SPEED,
 } from "../constants";
 import type {
@@ -72,9 +73,9 @@ const BAT_RANGE = 25 + WORM_RADIUS;
 const HITSCAN_RANGE = 800;
 /** Klient podtrzymuje wejście co 0.5 s; po zaniku transmisji nie trzymaj ruchu ani ładowania w nieskończoność. */
 const INPUT_TIMEOUT = 0.9;
-const GUARD_SECONDS = 1.6;
-const DODGE_HORIZONTAL_SPEED = 205;
-const DODGE_VERTICAL_SPEED = -260;
+const DEFENSE_STEP_SPEED = 245;
+const DEFENSE_STEP_LIFT = -105;
+const DEFENSE_JUMP_SPEED = -360;
 
 const NEUTRAL_INPUT: InputState = { left: false, right: false, aim: 0, charge: false };
 
@@ -272,7 +273,7 @@ export class GameImpl implements Game, EngineCtx {
     const altitudeOrder = [0.08, 0.91, 0.54, 0.3, 0.75, 0.43, 0.97, 0.16];
     const rank = altitudeOrder[this.worms.length % altitudeOrder.length]!;
     const targetY = this.spawnSites[Math.round(rank * (this.spawnSites.length - 1))]?.y;
-    const dists = [110, 90, 70, 50, 35, 20];
+    const dists = [110, 90, 70, 55, 46, WORM_SEPARATION];
     for (const minDist of dists) {
       const available = this.spawnSites.filter((site) => this.worms.every(
         (other) => Math.hypot(other.x - site.x, other.y - site.y) >= minDist,
@@ -286,9 +287,16 @@ export class GameImpl implements Game, EngineCtx {
       if (px >= 0) break;
     }
     if (px < 0) {
-      // awaryjnie: gdziekolwiek na powierzchni
-      px = this.rng.int(30, WORLD_WIDTH - 30);
-      py = Math.max(12, Math.min(this.waterLevel - WORM_RADIUS - 2, this.terrain.surfaceY(px) - WORM_RADIUS - 1));
+      // Awaryjnie wybierz najluźniejsze sprawdzone stanowisko, zamiast
+      // losowego punktu wewnątrz terenu lub na stojącym już robaku.
+      const best = this.spawnSites.reduce<{ site: { x: number; y: number } | null; distance: number }>(
+        (acc, site) => {
+          const distance = Math.min(Infinity, ...this.worms.map((other) => Math.hypot(other.x - site.x, other.y - site.y)));
+          return distance > acc.distance ? { site, distance } : acc;
+        }, { site: null, distance: -1 },
+      ).site;
+      px = best?.x ?? this.rng.int(30, WORLD_WIDTH - 30);
+      py = best?.y ?? Math.max(12, Math.min(this.waterLevel - WORM_RADIUS - 2, this.terrain.surfaceY(px) - WORM_RADIUS - 1));
     }
     const worm: Worm = {
       id: this.nextId(),
@@ -342,6 +350,12 @@ export class GameImpl implements Game, EngineCtx {
     return this.worms.find((w) => w.id === this.activeWormId);
   }
 
+  /** Grafika postaci jest większa niż jej hitbox terenu. */
+  private blockingWorm(w: Worm, x: number, y: number): Worm | undefined {
+    return this.worms.find((other) => other.alive && other.id !== w.id &&
+      (other.x - x) ** 2 + (other.y - y) ** 2 < WORM_SEPARATION ** 2);
+  }
+
   private teamAlive(team: number): boolean {
     const ts = this.teamState(team);
     if (!ts || ts.removed) return false;
@@ -361,6 +375,8 @@ export class GameImpl implements Game, EngineCtx {
     const dir = inp.left && !inp.right ? -1 : inp.right && !inp.left ? 1 : 0;
     if (!w.jetpackActive && dir !== 0) {
       if (w.onGround) {
+        const oldX = w.x;
+        const oldY = w.y;
         const res = walkStep(
           this.terrain,
           w,
@@ -369,7 +385,10 @@ export class GameImpl implements Game, EngineCtx {
           WORM_MAX_STEP_UP,
           WORM_STEP_DOWN,
         );
-        if (res === "fell") w.onGround = false;
+        if (this.blockingWorm(w, w.x, w.y)) {
+          w.x = oldX;
+          w.y = oldY;
+        } else if (res === "fell") w.onGround = false;
       } else {
         // Gentle air steering helps clear crater lips and narrow terrain gaps.
         w.vx = clamp(w.vx + dir * WORM_AIR_CONTROL * dt, -120, 120);
@@ -470,6 +489,18 @@ export class GameImpl implements Game, EngineCtx {
         w.y = ny;
         return;
       }
+      const other = this.blockingWorm(w, nx, ny);
+      if (other) {
+        // Wąski krok fizyki (maksymalnie 2 px) zatrzymuje wejście w ciało.
+        // Zderzenie w locie oddaje część pędu i pozwala opaść obok robaka.
+        const ox = w.x - other.x;
+        const oy = w.y - other.y;
+        const dist = Math.hypot(ox, oy) || 1;
+        const bounce = reflect(w.vx, w.vy, ox / dist, oy / dist, 0.28, 0.55);
+        w.vx = bounce.vx;
+        w.vy = bounce.vy;
+        return;
+      }
       if (circleHits(this.terrain, nx, ny, WORM_RADIUS)) {
         const impact = Math.hypot(w.vx, w.vy);
         const n = terrainNormal(this.terrain, nx, ny, WORM_RADIUS);
@@ -511,8 +542,7 @@ export class GameImpl implements Game, EngineCtx {
 
   damageWorm(w: Worm, amount: number, reason: DeathReason): void {
     if (!w.alive) return;
-    const guarding = reason === "explosion" && (w.guardUntil ?? 0) > this.time;
-    const amt = Math.max(0, Math.round(amount * (guarding ? 0.45 : 1)));
+    const amt = Math.max(0, Math.round(amount));
     if (amt <= 0) return;
     w.hp -= amt;
     this.emit({ t: "damage", wormId: w.id, amount: amt, x: Math.round(w.x), y: Math.round(w.y) });
@@ -579,7 +609,7 @@ export class GameImpl implements Game, EngineCtx {
       const d = Math.hypot(dx, dy);
       if (d > reach) continue;
       const falloff = 1 - d / reach;
-      const kp = power * falloff * ((w.guardUntil ?? 0) > this.time ? 0.5 : 1);
+      const kp = power * falloff;
       let ux = 0;
       let uy = -1;
       if (d > 0.001) {
@@ -938,23 +968,22 @@ export class GameImpl implements Game, EngineCtx {
   private defend(team: number, action: Extract<InputAction, { kind: "defend" }>): void {
     if (!this.attackStarted || !this.teamAlive(team) || team === this.activeTeam ||
         this.defendedTeams.has(team) || !["active", "retreat", "settling"].includes(this.phase)) return;
-    if (action.style !== "dodge" && action.style !== "brace") return;
+    if (action.style !== "step" && action.style !== "jump") return;
+    if (action.style === "step" && action.direction !== -1 && action.direction !== 1) return;
     if (!Number.isSafeInteger(action.wormId)) return;
     const worm = this.worms.find((w) => w.id === action.wormId && w.team === team && w.alive);
     if (!worm) return;
     this.defendedTeams.add(team);
-    if (action.style === "brace") {
-      worm.guardUntil = this.time + GUARD_SECONDS;
+    if (action.style === "step") {
+      worm.vx = action.direction! * DEFENSE_STEP_SPEED;
+      worm.vy = Math.min(worm.vy, DEFENSE_STEP_LIFT);
+      worm.facing = action.direction!;
     } else {
-      const closest = this.projectiles.filter((p) => !p.dead && p.ownerTeam !== team)
-        .sort((a, b) => Math.hypot(a.x - worm.x, a.y - worm.y) - Math.hypot(b.x - worm.x, b.y - worm.y))[0];
-      const sourceX = closest?.x ?? this.activeWorm()?.x ?? worm.x - worm.facing;
-      const direction = sourceX === worm.x ? (closest?.vx ?? 1) < 0 ? 1 : -1 : worm.x > sourceX ? 1 : -1;
-      worm.vx = direction * DODGE_HORIZONTAL_SPEED;
-      worm.vy = Math.min(worm.vy, DODGE_VERTICAL_SPEED);
-      worm.onGround = false;
-      this.lastGroundedAt.delete(worm.id);
+      worm.vx *= 0.25;
+      worm.vy = Math.min(worm.vy, DEFENSE_JUMP_SPEED);
     }
+    worm.onGround = false;
+    this.lastGroundedAt.delete(worm.id);
     this.emit({ t: "defense", wormId: worm.id, style: action.style, x: Math.round(worm.x), y: Math.round(worm.y) });
   }
 
@@ -1256,7 +1285,12 @@ export class GameImpl implements Game, EngineCtx {
   private emitShot(id: WeaponId, w: Worm): void {
     if (!WEAPONS[id].utility) this.attackStarted = true;
     this.emit({ t: "shot", weapon: id, x: Math.round(w.x), y: Math.round(w.y) });
-    this.emit({ t: "sound", name: id === "shotgun" ? "shotgun" : id === "holy" ? "hallelujah" : "shot", x: w.x, y: w.y });
+    const name = id === "shotgun" ? "shotgun" : id === "holy" ? "hallelujah" :
+      id === "bazooka" || id === "homing" ? "rocket" :
+      id === "grenade" || id === "cluster" || id === "banana" ? "throw" :
+      id === "drill" ? "drill" : id === "airstrike" ? "airstrike" :
+      id === "dynamite" || id === "mine" ? "place" : "shot";
+    this.emit({ t: "sound", name, x: w.x, y: w.y });
   }
 
   private traceBullet(w: Worm, dirX: number, dirY: number, style: "shotgun" | "uzi", carveTerrain: boolean): Worm | null {
@@ -1321,7 +1355,7 @@ export class GameImpl implements Game, EngineCtx {
     const tx = clamp(x, WORM_RADIUS, WORLD_WIDTH - 1 - WORM_RADIUS);
     const ty = clamp(y, WORM_RADIUS, WORLD_HEIGHT + 100);
     if (ty + WORM_RADIUS >= this.waterLevel || circleHits(this.terrain, tx, ty, WORM_RADIUS) ||
-      this.worms.some((other) => other.alive && other.id !== w.id && Math.hypot(other.x - tx, other.y - ty) < WORM_RADIUS * 2)) {
+      this.blockingWorm(w, tx, ty)) {
       this.emit({ t: "message", text: "Tam się nie da teleportować!" });
       return false;
     }
@@ -1419,7 +1453,6 @@ export class GameImpl implements Game, EngineCtx {
         onGround: w.onGround,
       };
       if (w.anim) s.anim = w.anim;
-      if ((w.guardUntil ?? 0) > this.time) s.guard = r2(w.guardUntil! - this.time);
       worms[i] = s;
     }
 

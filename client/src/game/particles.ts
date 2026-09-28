@@ -189,6 +189,19 @@ export class Particles {
     this.pushRing({ x, y, r0: 7, r1: banana ? 66 : 56, life: 0,
       max: 0.32, color, width: 3, flat: false, additive: true });
     this.sparks(x, y, banana ? 28 : 22, color);
+    // Short spokes reveal the number and direction of live child projectiles
+    // immediately, before their network snapshot reaches the renderer.
+    const count = banana ? 8 : 10;
+    for (let i = 0; i < count; i++) {
+      if (this.tracers.length >= MAX_TRACERS) this.tracers.shift();
+      const angle = banana ? -Math.PI + (i + 0.5) / count * Math.PI * 2 :
+        -Math.PI * 0.96 + (i + 0.5) / count * Math.PI * 0.92;
+      const length = banana ? 30 : 24;
+      this.tracers.push({ x0: x, y0: y,
+        x: x + Math.cos(angle) * length,
+        y: y + Math.sin(angle) * length,
+        life: 0, max: 0.17, color });
+    }
   }
 
   /** Ślad śruciny albo pocisku UZI nie modyfikuje terenu. */
@@ -275,7 +288,8 @@ export class Particles {
     // bryły ziemi
     const dark = shade(debrisColor, -0.28);
     const light = shade(debrisColor, 0.16);
-    const nd = Math.min(64, Math.round(10 + r * 1.15));
+    const isShard = style === "clusterlet" || (style === "banana" && r <= 29);
+    const nd = Math.min(64, Math.round((10 + r * 1.15) * (isShard ? 0.65 : 1)));
     for (let i = 0; i < nd; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (0.35 + Math.random()) * r * 5.2;
@@ -324,7 +338,7 @@ export class Particles {
     }
 
     // miękkie kłęby dymu
-    const ns = Math.min(22, Math.round(5 + r * 0.42));
+    const ns = Math.min(22, Math.round((5 + r * 0.42) * (isShard ? 0.72 : 1)));
     for (let i = 0; i < ns; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = Math.random() * r * 1.6;

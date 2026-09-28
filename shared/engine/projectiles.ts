@@ -8,6 +8,7 @@ import type { ExplosionStyle } from "../protocol";
 const HOMING_TURN_RATE = 4.2; // rad/s
 const HOMING_ACCEL = 320;
 const HOMING_MAX_SPEED = 620;
+const DRILL_TUNNEL_LENGTH = 145;
 
 export function makeProjectile(ctx: EngineCtx, init: Partial<Projectile> & { kind: ProjectileKind }): Projectile {
   const p: Projectile = {
@@ -59,14 +60,18 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
       const ang = banana
         ? -Math.PI + fan * Math.PI * 2 + ctx.rng.range(-0.04, 0.04)
         : -Math.PI * 0.96 + fan * Math.PI * 0.92 + ctx.rng.range(-0.025, 0.025);
-      const speed = banana ? ctx.rng.range(360, 570) : ctx.rng.range(260, 350);
+      const speed = banana ? ctx.rng.range(390, 560) : ctx.rng.range(310, 410);
+      // The parent has just carved a crater. Start outside its lip: shards
+      // spawned near the center hit the crater wall immediately and all blast
+      // in one spot, leaving the scatter weapon indistinguishable from a bomb.
+      const offset = p.radius + 5;
       makeProjectile(ctx, {
         kind: p.shardKind,
-        x: p.x + Math.cos(ang) * 7,
-        y: p.y + Math.sin(ang) * 7,
+        x: p.x + Math.cos(ang) * offset,
+        y: p.y + Math.sin(ang) * offset,
         vx: Math.cos(ang) * speed + p.vx * (banana ? 0.08 : 0.15),
         vy: Math.sin(ang) * speed,
-        fuse: banana ? ctx.rng.range(1.1, 1.7) : ctx.rng.range(1.2, 1.55),
+        fuse: banana ? ctx.rng.range(1.25, 1.8) : ctx.rng.range(1.05, 1.5),
         radius: spec.radius,
         damage: spec.damage,
         power: spec.power,
@@ -154,10 +159,22 @@ export function stepProjectiles(ctx: EngineCtx, dt: number): void {
         break;
       }
 
+      // The marker may be slightly above a worm or hidden behind a tiny lip.
+      // Detonate when the guided missile reaches it instead of flying past.
+      if (p.kind === "homing" && p.homingTarget && p.age >= p.homingDelay &&
+          Math.hypot(nx - p.homingTarget.x, ny - p.homingTarget.y) <= 16) {
+        p.x = nx;
+        p.y = ny;
+        detonateProjectile(ctx, p);
+        break;
+      }
+
       const terrainHit = circleHits(ctx.terrain, nx, ny, p.hitRadius);
       const wormHit = !terrainHit && hitWorm(ctx, p, nx, ny);
 
-      if (p.kind === "drill" && terrainHit) {
+      if (p.kind === "drill" && (terrainHit || p.drillDistance !== undefined)) {
+        // A drilled tunnel is briefly empty before the tip reaches its next
+        // solid pixel. Continue advancing through that gap as one penetration.
         // Tylko punkty wycinania trafiają do sieci; obie strony odtwarzają ten sam tunel.
         if (p.lastCarveX === undefined || Math.hypot(nx - p.lastCarveX, ny - p.lastCarveY!) >= 8) {
           const x = Math.round(nx), y = Math.round(ny), r = 10;
@@ -168,6 +185,11 @@ export function stepProjectiles(ctx: EngineCtx, dt: number): void {
         }
         p.x = nx;
         p.y = ny;
+        p.drillDistance = (p.drillDistance ?? 0) + Math.hypot(p.vx, p.vy) * sdt;
+        if (p.drillDistance >= DRILL_TUNNEL_LENGTH) {
+          detonateProjectile(ctx, p);
+          break;
+        }
         continue;
       }
 

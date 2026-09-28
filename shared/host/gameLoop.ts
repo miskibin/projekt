@@ -65,8 +65,10 @@ export function validateAction(raw: unknown): InputAction | null {
       return { kind: "fire", power: Math.min(1, Math.max(0, v.power)) };
     }
     case "defend": {
-      if ((v.style !== "dodge" && v.style !== "brace") || !Number.isSafeInteger(v.wormId) || (v.wormId as number) < 0) return null;
-      return { kind: "defend", style: v.style, wormId: v.wormId as number };
+      if ((v.style !== "step" && v.style !== "jump") || !Number.isSafeInteger(v.wormId) || (v.wormId as number) < 0 ||
+          (v.style === "step" && v.direction !== -1 && v.direction !== 1)) return null;
+      return { kind: "defend", style: v.style, wormId: v.wormId as number,
+        direction: v.style === "step" ? v.direction as -1 | 1 : undefined };
     }
     case "selectWeapon": {
       if (typeof v.weapon !== "string" || !WEAPON_SET.has(v.weapon)) return null;

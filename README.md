@@ -70,11 +70,10 @@ Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesu
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
 
 Gdy gra druga osoba, panel pozwala wskazać własnego robaka. Gdy przeciwnik zacznie
-atak, masz **jedną odpowiedź na turę**: **Unik** przesuwa wybranego robaka albo
-**Osłona** zmniejsza obrażenia i odrzut przez krótki czas. Taktyczną odpowiedź
-mogą wykonywać także gracze łączący się przez internet. W panelu są również
-reakcje **👏 / 😂 / 😱** i **▧** do mapy. Unik i osłona wymagają szybkiej reakcji
-po strzale, więc strzałów natychmiastowych nie da się zawsze przechwycić.
+atak, masz **jedną odpowiedź na turę** przy użyciu zwykłych przycisków: lewo/prawo
+robią krok w wybraną stronę, a skok wykonuje odskok. Możesz wcześniej wskazać
+własnego robaka w panelu. Działa to także przez internet; okno reakcji pojawia się
+po strzale przeciwnika. W panelu pozostaje przycisk mapy **▧**.
 
 ## Gra z komputerem
 
@@ -84,9 +83,11 @@ z nalotu i rakiety naprowadzanej, gdy zwykły strzał nie ma dobrej drogi. Celow
 więc może chybić.
 
 **Wyprawa solo** (`?gauntlet=1`) to seria kolejnych, losowanych pojedynków bez
-zapisu postępów między sesjami. Po zwycięstwie przycisk **Następna arena** zmienia
-teren, motyw, arsenał i przeciwnika; późniejsze areny mają więcej robaków i
-krótsze tury. Komputer używa różnych stylów broni, próbuje uników i osłon.
+zapisu postępów między sesjami. Po zwycięstwie wybierz **Dostawy** (więcej skrzynek,
+losowy arsenał) albo **Zbrojownię** (pełny arsenał od początku), z tymi samymi
+zasadami dla obu drużyn. Kolejne areny zmieniają teren, motyw i przeciwnika;
+późniejsze mają więcej robaków i krótsze tury. Komputer ma siedem stylów gry
+i reaguje krokiem lub skokiem na atak.
 Po porażce **Nowa wyprawa** startuje od początku. Cała symulacja działa offline
 na telefonie, więc nie zależy od połączenia z serwerem.
 

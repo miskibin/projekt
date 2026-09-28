@@ -260,26 +260,6 @@ describe("start gry", () => {
     return { a, b, code };
   }
 
-  it("obserwator może wysłać rzadką reakcję, ale serwer odrzuca spam i fałszywą drużynę", () => {
-    const { a, b } = lobbyOfTwo();
-    b.send({ t: "setReady", ready: true });
-    a.send({ t: "startGame" });
-    host.tick(10_000);
-
-    a.send({ t: "reaction", kind: "cheer" }); // własna tura
-    expect(a.last("reaction")).toBeUndefined();
-
-    b.raw(JSON.stringify({ t: "reaction", kind: "laugh", team: 0, wormId: 999 }));
-    expect(a.last("reaction")).toMatchObject({ kind: "laugh", team: 1, wormId: 2 });
-    expect(b.last("reaction")).toMatchObject({ kind: "laugh", team: 1, wormId: 2 });
-    b.send({ t: "reaction", kind: "gasp" });
-    b.raw(JSON.stringify({ t: "reaction", kind: "<script>" }));
-    expect(b.received.filter((m) => m.t === "reaction")).toHaveLength(1);
-    host.tick(13_001);
-    b.send({ t: "reaction", kind: "gasp" });
-    expect(b.received.filter((m) => m.t === "reaction")).toHaveLength(2);
-  });
-
   it("odmawia startu gdy sam / gdy niegotowi / gdy nie host", () => {
     const a = client("A");
     a.send({ t: "createRoom" });

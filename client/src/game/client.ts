@@ -1,5 +1,4 @@
 import { FIXED_DT, TEAM_NAMES, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
-import { REACTION_COOLDOWN_MS } from "@shared/protocol";
 import { generateTerrain, Terrain } from "@shared/engine/terrain";
 import type {
   ClientMessage,
@@ -8,13 +7,12 @@ import type {
   GameSnapshot,
   InputAction,
   PlayerInfo,
-  SpectatorReaction,
   TerrainSync,
   WeaponId,
 } from "@shared/protocol";
 import { Camera } from "./camera";
 import { DemoDriver, type LocalMode } from "./demo";
-import { soloArena } from "./solo";
+import { soloArena, soloStageInfo, type SoloRoute } from "./solo";
 import { Hud } from "./hud";
 import { InputController } from "./input";
 import { Particles } from "./particles";
@@ -56,8 +54,6 @@ interface Els {
   spectatorMap: HTMLButtonElement;
   defenseWorms: HTMLElement;
   defenseStatus: HTMLElement;
-  defenseDodge: HTMLButtonElement;
-  defenseBrace: HTMLButtonElement;
 }
 
 /** Spina render, wejście, dźwięk i sieć w jedną pętlę gry. */
@@ -93,7 +89,7 @@ export class GameClient {
   private time = 0;
   private running = false;
   private demo: DemoDriver | null = null;
-  private soloRun: { stage: number; seed: number; base: GameConfig } | null = null;
+  private soloRun: { stage: number; seed: number; base: GameConfig; route: SoloRoute } | null = null;
   private demoAcc = 0;
   private waterShown = WATER_LEVEL_START;
   private selectedWeapon: WeaponId = "bazooka";
@@ -104,14 +100,11 @@ export class GameClient {
   private autoFullscreenAttempted = false;
   private pixelRatio = 1;
   private shownCharge = -1;
-  private lastSpectatorReaction = Number.NEGATIVE_INFINITY;
   private spectatorMapOpen = false;
   private selectedDefenseWormId: number | null = null;
   private defenseManual = false;
   private defenseTurnKey = "";
   private defensePendingAt = 0;
-  private reactions: { team: number; wormId: number; kind: SpectatorReaction; at: number }[] = [];
-  private readonly reactionButtons: HTMLButtonElement[];
   private touchEnabled = matchMedia("(any-pointer: coarse)").matches;
   private touchResetters: Array<() => void> = [];
   private readonly resizeObserver = new ResizeObserver(() => this.resize());
@@ -143,10 +136,7 @@ export class GameClient {
       spectatorMap: byId<HTMLButtonElement>("spectator-map"),
       defenseWorms: byId("defense-worms"),
       defenseStatus: byId("defense-status"),
-      defenseDodge: byId<HTMLButtonElement>("defense-dodge"),
-      defenseBrace: byId<HTMLButtonElement>("defense-brace"),
     };
-    this.reactionButtons = Array.from(this.els.spectatorTools.querySelectorAll<HTMLButtonElement>("[data-reaction]"));
     const ctx = this.els.canvas.getContext("2d");
     if (!ctx) throw new Error("Brak kontekstu 2D");
     this.ctx = ctx;
@@ -172,6 +162,7 @@ export class GameClient {
         if (action.kind === "fire" && (this.demo || this.cb.connected())) this.sound.play("shot");
         if (action.kind === "jump" || action.kind === "backflip") this.sound.play("jump");
       },
+      sendDefense: (control) => this.sendDefense(control),
       toggleWeaponPanel: () => this.toggleWeapons(),
       closeWeaponPanel: () => this.setWeapons(false),
       toggleEscMenu: () => this.toggleEsc(),
@@ -218,8 +209,8 @@ export class GameClient {
 
   start(config: GameConfig, players: PlayerInfo[], myTeam: number, localMode: LocalMode | false = false): void {
     if (localMode === "gauntlet") {
-      this.soloRun ??= { stage: 1, seed: config.seed, base: config };
-      config = soloArena(this.soloRun.base, this.soloRun.seed, this.soloRun.stage);
+      this.soloRun ??= { stage: 1, seed: config.seed, base: config, route: "supplies" };
+      config = soloArena(this.soloRun.base, this.soloRun.seed, this.soloRun.stage, this.soloRun.route);
     } else this.soloRun = null;
     this.config = config;
     this.players = players;
@@ -238,13 +229,11 @@ export class GameClient {
     this.buffer.clear();
     this.prediction.reset();
     this.inputSeq = 0;
-    this.lastSpectatorReaction = Number.NEGATIVE_INFINITY;
     this.selectedDefenseWormId = null;
     this.defenseManual = false;
     this.defenseTurnKey = "";
     this.defensePendingAt = 0;
     this.els.defenseWorms.replaceChildren();
-    this.reactions = [];
     this.defenseTurnKey = "";
     this.spectatorMapOpen = false;
     this.els.spectatorTools.hidden = true;
@@ -277,6 +266,10 @@ export class GameClient {
       // Oddzielny teren renderera: zdarzenia wizualne nie mogą zmieniać fizyki.
       this.onTerrainSync(this.demo.terrainSync());
       this.onSnapshot(this.demo.snapshot);
+      if (this.soloRun) {
+        const stage = soloStageInfo(this.soloRun.stage);
+        this.hud.banner(`Arena ${this.soloRun.stage} · ${stage.name}: ${stage.description}`, 3.6);
+      }
     }
 
     window.addEventListener("resize", this.onResize);
@@ -298,7 +291,6 @@ export class GameClient {
     this.resizeObserver.disconnect();
     this.demo = null;
     this.soloRun = null;
-    this.reactions = [];
     this.els.spectatorTools.hidden = true;
     this.prediction.reset();
     this.els.demoControls.hidden = true;
@@ -353,13 +345,6 @@ export class GameClient {
     for (const ev of events) this.pending.push({ at, ev, seq: seq ?? 0 });
   }
 
-  onReaction(team: number, wormId: number, kind: SpectatorReaction): void {
-    if (!this.running || this.demo || team < 0 || !Number.isInteger(wormId)) return;
-    if (kind !== "cheer" && kind !== "laugh" && kind !== "gasp") return;
-    this.reactions.push({ team, wormId, kind, at: this.time });
-    if (this.reactions.length > 4) this.reactions.shift();
-  }
-
   onTerrainSync(sync: TerrainSync): void {
     if (sync.eventSeq !== undefined && sync.eventSeq < this.appliedTerrainSeq) {
       this.requestTerrainRepair();
@@ -387,7 +372,9 @@ export class GameClient {
     this.els.spectatorTools.hidden = true;
     const next = byId<HTMLButtonElement>("btn-solo-next");
     next.hidden = !this.soloRun;
-    if (this.soloRun) next.textContent = winnerTeam === 0 ? "Następna arena →" : "Nowa wyprawa";
+    next.hidden = !this.soloRun || winnerTeam === 0;
+    if (this.soloRun) next.textContent = "Nowa wyprawa";
+    byId("solo-routes").hidden = !this.soloRun || winnerTeam !== 0;
     this.syncControls();
     const title = this.els.goTitle;
     if (winnerTeam === null) {
@@ -399,7 +386,7 @@ export class GameClient {
     }
     const st = this.buffer.latest;
     const rows: string[] = [];
-    if (this.soloRun) rows.push(`<div class="go-row"><span class="grow">Wyprawa solo</span><b>Arena ${this.soloRun.stage}</b></div>`);
+    if (this.soloRun) rows.push(`<div class="go-row"><span class="grow">Wyprawa solo · ${escapeHtml(soloStageInfo(this.soloRun.stage).name)}</span><b>Arena ${this.soloRun.stage}</b></div>`);
     if (st) {
       for (const t of st.teams) {
         rows.push(
@@ -465,10 +452,14 @@ export class GameClient {
     let state = !this.demo && this.buffer.latest?.turn.activeTeam === this.myTeam
       ? this.buffer.latest : this.buffer.sample(now);
     if (state) {
+      // Obrona trwa tylko ułamek sekundy; opóźnienie obrazu widza nie może opóźnić sterowania.
+      const controlTurn = this.buffer.latest?.turn ?? state.turn;
       const activeId = state.turn.activeWormId;
       const active = state.worms.find((w) => w.id === activeId && w.alive);
       this.input.setContext({
         myTurn: this.isMyTurn(state.turn.activeTeam, state.turn.phase),
+        defenseReady: !!controlTurn.defenseWindow && !!controlTurn.defenseReady?.includes(this.myTeam) &&
+          (!this.demo || this.demo.computerTurn) && (!this.defensePendingAt || now - this.defensePendingAt > 950),
         worm: active ?? null,
         weapon: this.selectedWeapon,
         blocked: this.panelOpen || this.escOpen || this.overOpen,
@@ -481,7 +472,6 @@ export class GameClient {
         this.myTeam, dt, now, this.cb.rtt());
     }
     this.particles.update(dt);
-    if (this.reactions.length) this.reactions = this.reactions.filter((r) => this.time - r.at < 2.7);
     this.hud.update(dt);
 
     if (state) {
@@ -554,7 +544,6 @@ export class GameClient {
         camera: this.camera,
         particles: this.particles,
         time: this.time,
-        reactions: this.reactions.map((r) => ({ wormId: r.wormId, kind: r.kind, age: this.time - r.at })),
         selectedDefenseWormId: !myTurn && state.turn.defenseReady?.includes(this.myTeam) ? this.selectedDefenseWormId : null,
         myTeam: this.myTeam,
         myTurn,
@@ -736,11 +725,9 @@ export class GameClient {
         break;
       }
       case "defense": {
-        this.particles.sparks(ev.x, ev.y, ev.style === "brace" ? 19 : 12,
-          ev.style === "brace" ? "#ffe6a9" : "#9debff");
-        this.particles.floatText(ev.x, ev.y - 32, ev.style === "brace" ? "OSŁONA!" : "UNIK!",
-          ev.style === "brace" ? "#ffdf91" : "#aff0ff", 17);
-        this.sound.play(ev.style === "brace" ? "pickup" : "jump");
+        this.particles.sparks(ev.x, ev.y, ev.style === "jump" ? 17 : 10, "#9debff");
+        this.particles.floatText(ev.x, ev.y - 32, ev.style === "jump" ? "SKOK!" : "ODSKOK!", "#aff0ff", 17);
+        this.sound.play("jump");
         break;
       }
       case "suddenDeath": {
@@ -888,16 +875,7 @@ export class GameClient {
       this.selectedDefenseWormId = Number(button.dataset.worm);
       this.defenseManual = true;
       this.updateSpectatorTools(this.buffer.latest);
-    });
-    this.els.defenseDodge.addEventListener("click", () => this.sendDefense("dodge"));
-    this.els.defenseBrace.addEventListener("click", () => this.sendDefense("brace"));
-    for (const button of this.reactionButtons) button.addEventListener("click", () => {
-      if (this.els.spectatorTools.hidden || button.disabled || !this.cb.connected()) return;
-      const kind = button.dataset.reaction as SpectatorReaction;
-      if (kind !== "cheer" && kind !== "laugh" && kind !== "gasp") return;
-      this.lastSpectatorReaction = performance.now();
-      this.cb.send({ t: "reaction", kind });
-      this.updateSpectatorTools(this.buffer.latest);
+      this.els.canvas.focus({ preventScroll: true });
     });
     this.els.demoSkip.addEventListener("click", () => {
       this.demo?.applyAction({ kind: "skipTurn" });
@@ -926,11 +904,20 @@ export class GameClient {
     byId("btn-solo-next").addEventListener("click", () => {
       const run = this.soloRun;
       if (!run) return;
-      if (this.demo?.winner.team === 0) run.stage++;
-      else { run.stage = 1; run.seed = Math.floor(Math.random() * 0x7fffffff); }
+      run.stage = 1;
+      run.seed = Math.floor(Math.random() * 0x7fffffff);
+      run.route = "supplies";
       this.start(run.base, [], 0, "gauntlet");
-      this.hud.banner(`Arena ${run.stage} · nowy przeciwnik`, 2.2);
     });
+    for (const route of ["supplies", "armory"] as const) {
+      byId(`btn-solo-${route}`).addEventListener("click", () => {
+        const run = this.soloRun;
+        if (!run || this.demo?.winner.team !== 0) return;
+        run.stage++;
+        run.route = route;
+        this.start(run.base, [], 0, "gauntlet");
+      });
+    }
     this.els.volume.addEventListener("input", () => {
       this.sound.volume = Number(this.els.volume.value) / 100;
     });
@@ -1007,23 +994,22 @@ export class GameClient {
       const online = !!this.demo || this.cb.connected();
       const ready = online && !!turn.defenseWindow && !!turn.defenseReady?.includes(this.myTeam) &&
         this.selectedDefenseWormId !== null && (!this.defensePendingAt || performance.now() - this.defensePendingAt > 950);
-      this.els.defenseDodge.disabled = !ready;
-      this.els.defenseBrace.disabled = !ready;
       const status = !online ? "Brak połączenia" : !turn.defenseWindow
-        ? "Wybierz robaka. Gdy padnie strzał, możesz raz zareagować." :
-          ready ? "Atak! Wybierz: unik albo osłona" : "Obrona wykorzystana w tej turze";
+        ? "Wybierz robaka. Po strzale: ◀ ▶ lub SKOK." :
+          ready ? "Atak! ◀ ▶ — krok, SKOK — odskok" : "Ruch obronny wykorzystany";
       if (this.els.defenseStatus.textContent !== status) this.els.defenseStatus.textContent = status;
-      const disabled = !online || performance.now() - this.lastSpectatorReaction < REACTION_COOLDOWN_MS;
-      for (const button of this.reactionButtons) button.disabled = disabled;
     }
   }
 
-  private sendDefense(style: "dodge" | "brace"): void {
+  private sendDefense(control: "left" | "right" | "jump"): void {
     const snap = this.buffer.latest;
     if (!snap?.turn.defenseWindow || !snap.turn.defenseReady?.includes(this.myTeam) ||
-      this.selectedDefenseWormId === null || (this.demo ? !this.demo.computerTurn : !this.cb.connected())) return;
+      this.selectedDefenseWormId === null || (this.demo ? !this.demo.computerTurn : !this.cb.connected()) ||
+      (this.defensePendingAt && performance.now() - this.defensePendingAt < 950)) return;
     this.defensePendingAt = performance.now();
-    this.sendAction({ kind: "defend", style, wormId: this.selectedDefenseWormId });
+    this.sendAction(control === "jump"
+      ? { kind: "defend", style: "jump", wormId: this.selectedDefenseWormId }
+      : { kind: "defend", style: "step", wormId: this.selectedDefenseWormId, direction: control === "left" ? -1 : 1 });
     this.updateSpectatorTools(snap);
   }
 

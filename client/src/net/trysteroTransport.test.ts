@@ -62,9 +62,9 @@ describe("MQTT: dostarczanie gry", () => {
     transport.send({ t: "action", seq: 6, action: { kind: "jump" } });
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
       expect.stringContaining('"kind":"jump"'), expect.objectContaining({ qos: 1 }));
-    transport.send({ t: "reaction", kind: "laugh" });
+    transport.send({ t: "action", seq: 7, action: { kind: "defend", style: "step", direction: -1, wormId: 4 } });
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/c2s/"),
-      expect.stringContaining('"kind":"laugh"'), expect.objectContaining({ qos: 1 }));
+      expect.stringContaining('"kind":"defend"'), expect.objectContaining({ qos: 1 }));
     // Po wznowieniu subskrypcja musi przyjmować pakiety z QoS 1, inaczej publikacja nie wystarczy.
     transport.restoreRoomSubscriptions();
     expect(subscribe).toHaveBeenCalledWith(expect.any(Array), { qos: 1 }, expect.any(Function));
@@ -76,7 +76,7 @@ describe("MQTT: dostarczanie gry", () => {
     transport.flushHost();
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
       expect.any(String), expect.objectContaining({ qos: 1 }));
-    transport.hostOut = new Map([["guest", [{ t: "reaction", kind: "cheer", team: 0, wormId: 4 }]]]);
+    transport.hostOut = new Map([["guest", [{ t: "events", events: [{ t: "defense", style: "step", x: 20, y: 20, wormId: 4 }] }]]]);
     transport.flushHost();
     expect(publish).toHaveBeenLastCalledWith(expect.stringContaining("/s2c/guest"),
       expect.stringContaining('"wormId":4'), expect.objectContaining({ qos: 1 }));

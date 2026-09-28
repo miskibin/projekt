@@ -317,10 +317,6 @@ function handle(msg: ServerMessage): void {
       game.onEvents(msg.events, msg.seq);
       break;
 
-    case "reaction":
-      game.onReaction(msg.team, msg.wormId, msg.kind);
-      break;
-
     case "terrainSync":
       game.onTerrainSync(msg.terrain);
       break;

@@ -111,6 +111,25 @@ export class Sound {
         this.noise(t, 0.16, 2600, 0.45, "highpass");
         this.tone(t, "sawtooth", 320, 90, 0.22, 0.18);
         break;
+      case "rocket":
+        this.noise(t, 0.3, 1350, 0.36, "bandpass", 180);
+        this.tone(t, "sawtooth", 110, 360, 0.26, 0.32);
+        break;
+      case "throw":
+        this.noise(t, 0.13, 1250, 0.18, "bandpass", 530);
+        this.tone(t, "sine", 330, 160, 0.17, 0.15);
+        break;
+      case "drill":
+        this.noise(t, 0.44, 850, 0.26, "bandpass", 220);
+        this.tone(t, "sawtooth", 130, 215, 0.42, 0.21);
+        break;
+      case "airstrike":
+        this.noise(t, 0.55, 1200, 0.17, "lowpass", 280);
+        this.tone(t, "sawtooth", 340, 145, 0.44, 0.22);
+        break;
+      case "place":
+        this.tone(t, "triangle", 190, 95, 0.17, 0.17);
+        break;
       case "uzi":
         this.noise(t, 0.065, 4300, 0.23, "highpass");
         this.tone(t, "square", 460, 170, 0.12, 0.06);

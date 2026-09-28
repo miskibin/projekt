@@ -10,6 +10,8 @@ export const WATER_LEVEL_START = WORLD_HEIGHT - 40; // y powierzchni wody (rośn
 export const WATER_RISE_PER_ROUND = 40;
 
 export const WORM_RADIUS = 8;
+/** Minimalny odstęp środków postaci: duża grafika robaka wystaje poza hitbox terenu. */
+export const WORM_SEPARATION = 40;
 export const WORM_MAX_HP = 100;
 export const WORM_WALK_SPEED = 80; // px/s
 export const WORM_JUMP_VX = 90;
