@@ -578,6 +578,8 @@ export class GameClient {
         touch: this.touchEnabled,
         stale: !this.demo && this.prediction.ageMs > 1_500,
         topInset: this.hudTop,
+        turnTime: this.config.turnTime,
+        suddenDeathRounds: this.config.suddenDeathAfterRounds,
       });
     } else {
       this.ctx.fillStyle = "#0a0e15";
