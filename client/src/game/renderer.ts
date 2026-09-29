@@ -7,19 +7,19 @@ import {
   WORM_MUZZLE_OFFSET,
   WORM_MUZZLE_LIFT,
 } from "@shared/constants";
-import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, SpringSnapshot, TreeSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
+import type { BarrelSnapshot, CrateSnapshot, MineSnapshot, ProjectileSnapshot, SpringSnapshot, WeaponId, WormSnapshot } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { Particles } from "./particles";
 import type { RenderState } from "./state";
 import type { ThemeId, ThemePalette } from "./terrainRenderer";
 import { THEMES } from "./terrainRenderer";
+import { Scenery } from "./scenery";
 import { Background } from "./background";
 import { PostProcess } from "./postprocess";
 import { TARGETED } from "./weapons";
 import {
   darken,
   drawWormCharacter,
-  hatForWorm,
   lighten,
   roundRect,
   WormAnimator,
@@ -39,6 +39,7 @@ export interface Grave {
 export interface RenderInput {
   state: RenderState;
   terrainTex: HTMLCanvasElement;
+  terrainBackTex?: HTMLCanvasElement;
   theme: ThemeId;
   camera: Camera;
   particles: Particles;
@@ -62,6 +63,7 @@ const DEFAULT_PREVIEW_POWER = 0.6;
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
 export class Renderer {
   private background: Background;
+  private scenery = new Scenery();
   private readonly postProcess = new PostProcess();
   /** stan animacji postaci (per robak) */
   private readonly animator = new WormAnimator();
@@ -72,7 +74,6 @@ export class Renderer {
   /** bufor zagrożeń (pociski + tykające miny) – bez alokacji co klatkę */
   private readonly threats: AnimThreat[] = [];
   private theme: ThemeId = "grass";
-  private cosmeticSeed = 1;
   /** ostatnio użyta moc – do długości celownika zanim gracz zacznie ładować */
   private lastPower = DEFAULT_PREVIEW_POWER;
   /** Emisja smug zależna od czasu, a nie liczby klatek (120 Hz nie dubluje cząstek). */
@@ -81,12 +82,10 @@ export class Renderer {
 
   constructor(seed = 1) {
     this.background = new Background(seed);
-    this.cosmeticSeed = seed;
   }
 
   regen(seed: number): void {
     this.background.regen(seed);
-    this.cosmeticSeed = seed;
     this.animator.reset();
     this.lastTime = -1;
     this.postProcess.clear();
@@ -147,12 +146,13 @@ export class Renderer {
 
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = this.lowPower ? "medium" : "high";
+    if (inp.terrainBackTex) ctx.drawImage(inp.terrainBackTex, 0, 0);
     ctx.drawImage(inp.terrainTex, 0, 0);
 
     this.updateAnimator(inp, dt);
     this.drawGraves(ctx, inp);
     this.drawBarrels(ctx, inp.state.barrels ?? []);
-    this.drawTrees(ctx, inp.state.trees ?? [], inp.theme);
+    this.scenery.drawTrees(ctx, inp.state.trees ?? [], inp.theme);
     this.drawSprings(ctx, inp.state.springs ?? [], inp.myTeam);
     this.drawMines(ctx, inp.state.mines, inp.time);
     this.drawCrates(ctx, inp.state.crates, inp.time);
@@ -168,67 +168,6 @@ export class Renderer {
   }
 
   // ---------------- woda ----------------
-  private drawTrees(ctx: CanvasRenderingContext2D, trees: readonly TreeSnapshot[], theme: ThemeId): void {
-    const crown = theme === "snow" ? "#285969" : theme === "desert" ? "#779653" :
-      theme === "hell" ? "#9c3924" : "#4a9b43";
-    const highlight = theme === "snow" ? "#d3e8e8" : theme === "desert" ? "#a9b86c" :
-      theme === "hell" ? "#d67738" : "#96cc58";
-    const wood = theme === "hell" ? "#312c33" : "#705039";
-    for (const tree of trees) {
-      ctx.save();
-      ctx.globalAlpha = tree.opacity;
-      ctx.translate(tree.x, tree.y);
-      ctx.rotate(tree.angle);
-      const h = tree.height;
-      ctx.fillStyle = "rgba(9,20,21,.28)";
-      ctx.beginPath();
-      ctx.ellipse(0, 2, 14, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineCap = "round";
-      ctx.lineWidth = 10;
-      ctx.strokeStyle = "#352f31";
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-2, -h * .76);
-      ctx.stroke();
-      ctx.lineWidth = 7;
-      ctx.strokeStyle = wood;
-      ctx.stroke();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = wood;
-      ctx.beginPath();
-      ctx.moveTo(-2, -h * .57);
-      ctx.lineTo(-15, -h * .73);
-      ctx.moveTo(-2, -h * .64);
-      ctx.lineTo(14, -h * .82);
-      ctx.stroke();
-      // Proste wielokąty z kilkoma płatami – czytelne w zbliżeniu i tanie na GPU.
-      const lobes = theme === "desert" ? 3 : 5;
-      for (let i = 0; i < lobes; i++) {
-        const px = (i - (lobes - 1) / 2) * 10;
-        const py = -h + (i % 2) * 5;
-        const radius = theme === "desert" ? 12 : 15;
-        ctx.fillStyle = crown;
-        ctx.beginPath();
-        for (let j = 0; j < 7; j++) {
-          const a = j * Math.PI * 2 / 7;
-          const rr = radius * (j % 2 ? 0.83 : 1.07);
-          const xx = px + Math.cos(a) * rr;
-          const yy = py + Math.sin(a) * rr;
-          if (j === 0) ctx.moveTo(xx, yy);
-          else ctx.lineTo(xx, yy);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = highlight;
-        ctx.beginPath();
-        ctx.ellipse(px - 3, py - 7, radius * .48, radius * .19, -0.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-  }
-
   private drawSprings(ctx: CanvasRenderingContext2D, springs: readonly SpringSnapshot[], team: number): void {
     for (const spring of springs) {
       // Serwer filtruje ukryte pułapki; ta kontrola chroni też lokalny podgląd.
@@ -279,7 +218,10 @@ export class Renderer {
       ctx.fillStyle = "#ffe3ac";
       ctx.font = "bold 13px system-ui";
       ctx.textAlign = "center";
-      ctx.fillText("!", x, y + 5);
+      ctx.fillRect(x - 5, y - 4, 10, 11);
+      ctx.fillStyle = "#67302a";
+      ctx.beginPath(); ctx.moveTo(x - 3, y + 5); ctx.quadraticCurveTo(x - 5, y + 1, x, y - 3);
+      ctx.quadraticCurveTo(x - 1, y + 1, x + 3, y); ctx.quadraticCurveTo(x + 5, y + 5, x - 3, y + 5); ctx.fill();
       ctx.restore();
     }
   }
@@ -422,7 +364,6 @@ export class Renderer {
       time: inp.time,
       jetpack: jet,
       bat: w.anim === "bat",
-      hat: hatForWorm(this.cosmeticSeed, w.id),
     });
     ctx.restore();
 
@@ -473,7 +414,7 @@ export class Renderer {
     roundRect(ctx, -barW / 2, -11, barW, 11, 5.5);
     ctx.stroke();
 
-    ctx.font = "800 9px ui-sans-serif, system-ui, sans-serif";
+    ctx.font = "800 10px ui-sans-serif, system-ui, sans-serif";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 2.4;
     ctx.strokeStyle = "rgba(6,10,16,0.55)";
@@ -485,19 +426,15 @@ export class Renderer {
 
     // ------- strzałka nad aktywnym robakiem -------
     if (isActive) {
-      const bounce = Math.abs(Math.sin(t * 3.2)) * 4;
+      const bounce = Math.abs(Math.sin(t * 3.2)) * 2;
       // pozycja w skali ekranu, żeby strzałka trzymała się etykiety przy każdym zoomie
       ctx.save();
       ctx.translate(w.x, w.y - ry - visualLift - 12 - (30 + bounce) * s);
       ctx.scale(s, s);
       ctx.beginPath();
-      ctx.moveTo(0, 11);
-      ctx.lineTo(-8.5, -1.5);
-      ctx.lineTo(-3.4, -1.5);
-      ctx.lineTo(-3.4, -11);
-      ctx.lineTo(3.4, -11);
-      ctx.lineTo(3.4, -1.5);
-      ctx.lineTo(8.5, -1.5);
+      ctx.moveTo(0, 4);
+      ctx.lineTo(-5, -3);
+      ctx.lineTo(5, -3);
       ctx.closePath();
       const ag = ctx.createLinearGradient(0, -11, 0, 11);
       ag.addColorStop(0, lighten(col, 0.5));
@@ -616,8 +553,8 @@ export class Renderer {
     ctx.strokeStyle = "rgba(10,16,26,0.4)";
     ctx.lineWidth = 5;
     ctx.stroke();
-    ctx.strokeStyle = "#ff3b30";
-    ctx.lineWidth = 2.6;
+    ctx.strokeStyle = "#f4f5ef";
+    ctx.lineWidth = 2.2;
     ctx.stroke();
     ctx.beginPath();
     ctx.arc(0, 0, 1.6, 0, Math.PI * 2);
@@ -1038,116 +975,31 @@ export class Renderer {
         ctx.globalAlpha = 1;
       }
 
-      if (c.kind === "weapon") this.drawBarrel(ctx);
-      else this.drawBoxCrate(ctx, c.kind === "health");
+      this.drawBoxCrate(ctx, c.kind === "health", c.kind === "weapon");
 
-      // delikatna poświata (2 okręgi zamiast gradientu)
-      const pulse = 0.06 + 0.04 * Math.sin(time * 3 + c.id);
-      ctx.save();
-      ctx.globalCompositeOperation = "lighter";
-      ctx.fillStyle = `rgba(255,246,214,${pulse.toFixed(3)})`;
-      ctx.beginPath();
-      ctx.arc(0, 0, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
       ctx.restore();
     }
-  }
-
-  /** Żółta beczka z symbolem ostrzegawczym (skrzynka z bronią). */
-  private drawBarrel(ctx: CanvasRenderingContext2D): void {
-    const g = ctx.createLinearGradient(-9, 0, 9, 0);
-    g.addColorStop(0, "#b9790a");
-    g.addColorStop(0.35, "#f2c032");
-    g.addColorStop(0.62, "#ffdd6a");
-    g.addColorStop(1, "#a86c07");
-    ctx.fillStyle = g;
-    roundRect(ctx, -9, -11, 18, 22, 3);
-    ctx.fill();
-    // obręcze
-    ctx.fillStyle = "rgba(90,58,6,0.55)";
-    ctx.fillRect(-9, -6.5, 18, 2.2);
-    ctx.fillRect(-9, 4.4, 18, 2.2);
-    // pokrywa
-    ctx.fillStyle = "#ffe58a";
-    ctx.beginPath();
-    ctx.ellipse(0, -11, 9, 2.8, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(70,45,4,0.7)";
-    ctx.lineWidth = 1.1;
-    ctx.beginPath();
-    ctx.ellipse(0, -11, 9, 2.8, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    roundRect(ctx, -9, -11, 18, 22, 3);
-    ctx.stroke();
-    // symbol: ciemny romb z trójłopatkowym znakiem
-    ctx.save();
-    ctx.translate(0, 0.2);
-    ctx.fillStyle = "rgba(30,22,6,0.85)";
-    ctx.beginPath();
-    ctx.moveTo(0, -5.4);
-    ctx.lineTo(5.4, 0);
-    ctx.lineTo(0, 5.4);
-    ctx.lineTo(-5.4, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#ffd964";
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.arc(0, 0, 3.3, a - 0.42, a + 0.42);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(30,22,6,0.85)";
-    ctx.beginPath();
-    ctx.arc(0, 0, 1.1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
   }
 
   /** Skrzynka: czerwona z krzyżem (apteczka) lub niebieska z narzędziem. */
-  private drawBoxCrate(ctx: CanvasRenderingContext2D, health: boolean): void {
-    const base = health ? "#d1352c" : "#3767c8";
-    const g = ctx.createLinearGradient(0, -10, 0, 10);
-    g.addColorStop(0, lighten(base, 0.32));
-    g.addColorStop(0.55, base);
-    g.addColorStop(1, darken(base, 0.34));
-    ctx.fillStyle = g;
-    roundRect(ctx, -10, -10, 20, 20, 3.5);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    roundRect(ctx, -10, -10, 20, 6, 3);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(6,10,16,0.55)";
-    ctx.lineWidth = 1.3;
-    roundRect(ctx, -10, -10, 20, 20, 3.5);
-    ctx.stroke();
-
+  private drawBoxCrate(ctx: CanvasRenderingContext2D, health: boolean, weapon = false): void {
+    ctx.rotate(-.07);
+    ctx.lineJoin = "round"; ctx.lineWidth = 1.7; ctx.strokeStyle = "#443329";
+    ctx.fillStyle = "#8f673e";
+    roundRect(ctx, -12, -12, 24, 24, 1.5); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "#624b34"; ctx.lineWidth = 1;
+    for (let x = -6; x <= 6; x += 6) { ctx.beginPath(); ctx.moveTo(x, -10); ctx.lineTo(x + 1, 10); ctx.stroke(); }
+    ctx.fillStyle = "#b39060";
+    ctx.fillRect(-11, -11, 22, 3); ctx.fillRect(-11, 8, 22, 3);
+    ctx.save(); ctx.rotate(-.74); ctx.fillStyle = "#b39060"; ctx.fillRect(-2, -15, 4, 30); ctx.restore();
+    ctx.strokeStyle = "#4b3829"; ctx.lineWidth = 1.1; ctx.strokeRect(-10.5, -10.5, 21, 21);
+    ctx.fillStyle = "#4e4437";
+    for (const x of [-9, 9]) for (const y of [-9, 9]) { ctx.beginPath(); ctx.arc(x, y, .85, 0, Math.PI * 2); ctx.fill(); }
     if (health) {
-      ctx.fillStyle = "#ffffff";
-      roundRect(ctx, -2, -6.5, 4, 13, 1.2);
-      ctx.fill();
-      roundRect(ctx, -6.5, -2, 13, 4, 1.2);
-      ctx.fill();
-    } else {
-      // klucz płaski
-      ctx.strokeStyle = "#eef3ff";
-      ctx.lineWidth = 2.6;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(-4.2, 4.6);
-      ctx.lineTo(2.6, -2.2);
-      ctx.stroke();
-      ctx.fillStyle = "#eef3ff";
-      ctx.beginPath();
-      ctx.arc(4, -3.6, 3.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = base;
-      ctx.beginPath();
-      ctx.arc(5.1, -4.8, 1.6, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.fillStyle = "#dfded0"; roundRect(ctx, -6, -6, 12, 12, 2); ctx.fill();
+      ctx.fillStyle = "#b74439"; ctx.fillRect(-1.5, -4.5, 3, 9); ctx.fillRect(-4.5, -1.5, 9, 3);
+    } else if (!weapon) {
+      ctx.fillStyle = "#344d5e"; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
     }
   }
 
@@ -1192,62 +1044,23 @@ export class Renderer {
 
   // ---------------- miny ----------------
   private drawMines(ctx: CanvasRenderingContext2D, mines: MineSnapshot[], time: number): void {
-    for (const m of mines) {
-      ctx.save();
-      ctx.translate(m.x, m.y);
-      ctx.scale(1.3, 1.3);
-
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.ellipse(0, 6, 7, 2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-
-      // nóżki
-      ctx.strokeStyle = "#454b56";
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(-3.5, 3.5); ctx.lineTo(-5.5, 6.4);
-      ctx.moveTo(3.5, 3.5); ctx.lineTo(5.5, 6.4);
-      ctx.stroke();
-
-      // korpus
-      const g = ctx.createLinearGradient(0, -6, 0, 5);
-      g.addColorStop(0, "#a9b1bd");
-      g.addColorStop(0.5, "#787f8b");
-      g.addColorStop(1, "#4d545f");
-      ctx.fillStyle = g;
-      roundRect(ctx, -6.5, -5.5, 13, 10.5, 3.4);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(20,24,30,0.6)";
-      ctx.lineWidth = 1;
-      roundRect(ctx, -6.5, -5.5, 13, 10.5, 3.4);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(24,28,34,0.45)";
-      ctx.fillRect(-6.5, -0.6, 13, 1.6);
-
-      const fast = m.fuse !== undefined && m.fuse > 0;
-      const blink = fast ? Math.sin(time * 26) > -0.2 : m.armed ? Math.sin(time * 5) > 0.2 : false;
-      // dioda
-      ctx.fillStyle = blink ? "#ff3b30" : "#5a1e1c";
-      ctx.beginPath();
-      ctx.arc(0, -3.2, 1.9, 0, Math.PI * 2);
-      ctx.fill();
-      if (blink) {
-        ctx.save();
-        ctx.globalCompositeOperation = "lighter";
-        ctx.fillStyle = "rgba(255,60,50,0.28)";
-        ctx.beginPath();
-        ctx.arc(0, -3.2, 8, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,150,140,0.35)";
-        ctx.beginPath();
-        ctx.arc(0, -3.2, 3.4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
+    for (const mine of mines) {
+      ctx.save(); ctx.translate(mine.x, mine.y);
+      ctx.fillStyle = "rgba(30,28,23,.25)";
+      ctx.beginPath(); ctx.ellipse(0, 6, 14, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#303634"; ctx.lineWidth = 1.7;
+      ctx.fillStyle = "#676d63";
+      ctx.beginPath(); ctx.moveTo(-12, 4); ctx.lineTo(-10, -3); ctx.quadraticCurveTo(0, -8, 10, -3);
+      ctx.lineTo(12, 4); ctx.quadraticCurveTo(0, 8, -12, 4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = "#969b83"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-8, -2); ctx.quadraticCurveTo(0, -5, 8, -2); ctx.stroke();
+      ctx.fillStyle = "#c4c5b1";
+      for (const x of [-7, 7]) { ctx.beginPath(); ctx.arc(x, 2, 1.2, 0, Math.PI * 2); ctx.fill(); }
+      const hot = mine.fuse !== undefined && mine.fuse > 0;
+      const blink = hot ? Math.sin(time * 26) > 0 : mine.armed && Math.sin(time * 4) > 0;
+      ctx.fillStyle = blink ? "#ee6656" : "#a83c38";
+      roundRect(ctx, -4, -9, 8, 5, 2); ctx.fill();
+      ctx.strokeStyle = "#552f2b"; ctx.stroke();
       ctx.restore();
     }
   }

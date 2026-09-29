@@ -773,7 +773,10 @@ export class Particles {
         ctx.rotate(p.rot);
         ctx.globalAlpha = Math.min(1, (1 - t) * 2.6);
         ctx.fillStyle = p.color;
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.8);
+        ctx.beginPath();
+        ctx.moveTo(-p.size * .5, -p.size * .2); ctx.lineTo(-p.size * .12, -p.size * .5);
+        ctx.lineTo(p.size * .5, -p.size * .23); ctx.lineTo(p.size * .35, p.size * .4);
+        ctx.lineTo(-p.size * .3, p.size * .35); ctx.closePath(); ctx.fill();
         ctx.restore();
       } else if (p.kind === "water") {
         ctx.globalAlpha = Math.min(1, (1 - t) * 1.8);
@@ -860,12 +863,16 @@ export class Particles {
       cv.height = 64;
       const c = cv.getContext("2d");
       if (c) {
-        const g = c.createRadialGradient(32, 32, 0, 32, 32, 32);
-        g.addColorStop(0, withAlpha(color, 1));
-        g.addColorStop(0.45, withAlpha(color, 0.62));
-        g.addColorStop(1, withAlpha(color, 0));
-        c.fillStyle = g;
-        c.fillRect(0, 0, 64, 64);
+        c.fillStyle = withAlpha(color, .85);
+        c.beginPath();
+        for (let i = 0; i < 7; i++) {
+          const angle = i / 7 * Math.PI * 2;
+          const x = 32 + Math.cos(angle) * 14, y = 32 + Math.sin(angle) * 13;
+          c.moveTo(x + 15, y); c.arc(x, y, 15, 0, Math.PI * 2);
+        }
+        c.fill();
+        c.fillStyle = withAlpha(shade(color, .14), .42);
+        c.beginPath(); c.ellipse(26, 24, 18, 13, -.25, 0, Math.PI * 2); c.fill();
       } else cv = null;
     }
     if (this.soft.size > 24) this.soft.clear();

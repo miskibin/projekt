@@ -85,16 +85,16 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
   switch (id) {
     case "bazooka": {
       ctx.rotate(-0.5);
-      ctx.fillStyle = "#4a5568";
+      ctx.fillStyle = "#626e3f";
       rrect(ctx, -13 * u, -4 * u, 22 * u, 8 * u, 3 * u);
-      ctx.fillStyle = "#e05a3a";
+      ctx.fillStyle = "#899256";
       ctx.beginPath();
       ctx.moveTo(9 * u, -5 * u);
       ctx.lineTo(15 * u, 0);
       ctx.lineTo(9 * u, 5 * u);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "#8fa0b8";
+      ctx.fillStyle = "#bac28b";
       rrect(ctx, -13 * u, -7 * u, 6 * u, 14 * u, 2 * u);
       break;
     }
@@ -141,7 +141,7 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       rrect(ctx, -14 * u, -1 * u, 12 * u, 7 * u, 2 * u);
       ctx.fillStyle = "#3f4652";
       rrect(ctx, -4 * u, -3 * u, 18 * u, 4 * u, 1.5 * u);
-      ctx.fillStyle = "#8fa0b8";
+      ctx.fillStyle = "#bac28b";
       rrect(ctx, 8 * u, -3.5 * u, 6 * u, 5 * u, 1 * u);
       break;
     }
@@ -149,7 +149,7 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       ctx.fillStyle = "#3f4652";
       rrect(ctx, -10 * u, -6 * u, 18 * u, 7 * u, 2 * u);
       rrect(ctx, -7 * u, 1 * u, 6 * u, 10 * u, 2 * u);
-      ctx.fillStyle = "#8fa0b8";
+      ctx.fillStyle = "#bac28b";
       rrect(ctx, 6 * u, -5 * u, 9 * u, 4 * u, 1.5 * u);
       break;
     }
@@ -228,7 +228,7 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       break;
     }
     case "airstrike": {
-      ctx.fillStyle = "#8fa0b8";
+      ctx.fillStyle = "#bac28b";
       ctx.beginPath();
       ctx.moveTo(-14 * u, -6 * u);
       ctx.lineTo(10 * u, -8 * u);
@@ -243,7 +243,7 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
       ctx.lineTo(2 * u, -6 * u);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "#e05a3a";
+      ctx.fillStyle = "#899256";
       for (const dx of [-6, 0, 6]) {
         ctx.beginPath();
         ctx.ellipse(dx * u, 7 * u, 2 * u, 4 * u, 0, 0, Math.PI * 2);

@@ -186,12 +186,15 @@ export function generateTerrain(seed: number, width: number, height: number, den
     const cy = rng.int(Math.round(height * 0.16), Math.max(Math.round(height * 0.2), base - 120));
     const rw = rng.int(50, 140);
     const rh = rng.int(18, 45);
-    for (let y = cy - rh; y <= cy + rh; y++)
-      for (let x = cx - rw; x <= cx + rw; x++) {
-        const dx = (x - cx) / rw;
-        const dy = (y - cy) / rh;
-        if (dx * dx + dy * dy <= 1) t.set(x, y, 1);
-      }
+    // A grass shelf and a tapered crag, rather than an oval floating puck.
+    const phase = rng.range(0, Math.PI * 2);
+    for (let x = cx - rw; x <= cx + rw; x++) {
+      const nx = (x - cx) / rw;
+      const edge = Math.abs(nx);
+      const top = cy - rh * .45 + Math.sin(nx * 3 + phase) * rh * .12 + edge ** 4 * rh * .45;
+      const bottom = cy + rh * (.9 - edge * .8) + Math.sin(nx * 12 + phase) * rh * .1;
+      for (let y = Math.ceil(top); y <= Math.floor(bottom); y++) t.set(x, y, 1);
+    }
   }
 
   // 3) jaskinie
@@ -219,12 +222,15 @@ export function generateTerrain(seed: number, width: number, height: number, den
     for (const fraction of [rng.range(0.29, 0.39), rng.range(0.62, 0.72)]) {
       const cx = Math.round(width * fraction);
       const half = Math.round(rng.range(37, 53) * Math.min(1, width / 1920));
-      for (let x = cx - half; x <= cx + half; x++) {
-        if (x < 0 || x >= width) continue;
-        // Pod powierzchnią wyspy zostawiamy ją nietkniętą. Wycinamy tylko
-        // główny grunt od jego lokalnej powierzchni aż do wody.
-        const top = Math.max(0, Math.round(surface[x] - 5));
-        for (let y = top; y < height - 30; y++) t.data[y * width + x] = 0;
+      const topAtCenter = surface[Math.max(0, Math.min(width - 1, cx))]!;
+      const phase = rng.range(0, Math.PI * 2);
+      for (let y = Math.max(0, topAtCenter - 80); y < height - 30; y++) {
+        const depth = Math.max(0, y - topAtCenter);
+        const middle = cx + Math.sin(depth * .012) * 19;
+        const opening = half * (1 + Math.min(.65, depth / 600)) + Math.sin(depth * .037 + phase) * 5;
+        for (let x = Math.floor(middle - opening); x <= Math.ceil(middle + opening); x++) {
+          if (x >= 0 && x < width && y >= surface[x] - 5) t.data[y * width + x] = 0;
+        }
       }
     }
   }

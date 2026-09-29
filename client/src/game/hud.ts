@@ -1,7 +1,8 @@
-import { MAX_WIND, TEAM_COLORS, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
+import { MAX_WIND, TEAM_COLORS, WORLD_HEIGHT, WORLD_WIDTH, WORM_MAX_HP } from "@shared/constants";
 import type { WeaponId } from "@shared/protocol";
 import type { Camera } from "./camera";
 import type { RenderState } from "./state";
+import { blankPose, drawWormCharacter, WormSkins } from "./wormRenderer";
 import { roundRect, teamColor } from "./renderer";
 
 export interface HudInput {
@@ -22,8 +23,8 @@ export interface HudInput {
 const FONT = "ui-sans-serif, system-ui, sans-serif";
 
 /* Wspólny język wizualny HUD-u: ciemne, półprzezroczyste granatowe karty. */
-const PANEL_FILL = "rgba(20,35,55,.72)";
-const PANEL_LINE = "rgba(190,215,255,.16)";
+const PANEL_FILL = "rgba(29,47,68,.92)";
+const PANEL_LINE = "rgba(206,224,237,.24)";
 const TEXT = "#f4f8ff";
 const MUTED = "#9db3cc";
 const ALERT = "#ff6b5e";
@@ -33,6 +34,8 @@ const WIND = "#8fd3ff";
 const NARROW = 500;
 
 export class Hud {
+  private readonly skins = new WormSkins();
+  private readonly portraitPose = blankPose();
   private notice: { text: string; life: number; max: number } | null = null;
   private feed: { text: string; color: string; life: number }[] = [];
 
@@ -60,7 +63,8 @@ export class Hud {
     const narrow = W < NARROW;
     ctx.save();
     ctx.textBaseline = "middle";
-    const clockBottom = this.drawClock(ctx, inp, W, narrow);
+    this.drawTeams(ctx, inp, W);
+    const clockBottom = this.drawClock(ctx, inp, W);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
     const feedBottom = this.feed.length
       ? clockBottom + 12 + (this.feed.length - 1) * (narrow ? 25 : 27) + 22
@@ -97,57 +101,77 @@ export class Hud {
     ctx.restore();
   }
 
-  /** Niski pasek: tura, czas i wiatr w jednym wierszu. */
-  private drawClock(ctx: CanvasRenderingContext2D, inp: HudInput, width: number, narrow: boolean): number {
+  /** Team cards show a living worm; its HP matches the label on the battlefield. */
+  private drawTeams(ctx: CanvasRenderingContext2D, inp: HudInput, width: number): void {
+    const compact = width < 600;
+    const cardWidth = compact ? Math.max(84, Math.min(122, (width - 126) / 2)) : Math.min(230, (width - 260) / 2);
+    const h = compact ? 39 : 56;
+    const gap = compact ? 6 : 12;
+    const rightGap = compact ? gap : 68; // room for settings
+    const teams = inp.state.teams;
+    teams.forEach((team, index) => {
+      const right = index % 2 === 1;
+      const x = right ? width - cardWidth - rightGap : gap;
+      const y = inp.topInset + Math.floor(index / 2) * (h + 5);
+      panel(ctx, x, y, cardWidth, h, compact ? 9 : 12);
+      const worms = inp.state.worms.filter((worm) => worm.team === team.team && worm.alive);
+      const shown = worms.find((worm) => worm.id === inp.state.turn.activeWormId) ?? worms[0];
+      const color = teamColor(team.team);
+      const portrait = compact ? 26 : 40;
+      ctx.fillStyle = color;
+      roundRect(ctx, x + 4, y + 4, portrait, h - 8, compact ? 6 : 8); ctx.fill();
+      ctx.save();
+      roundRect(ctx, x + 4, y + 4, portrait, h - 8, 6); ctx.clip();
+      ctx.translate(x + 4 + portrait / 2, y + h * .59);
+      ctx.scale(compact ? .7 : 1.08, compact ? .7 : 1.08);
+      drawWormCharacter(ctx, this.portraitPose, { skin: this.skins.get(ctx, color), facing: 1,
+        weapon: null, hp: shown?.hp ?? 0, time: 0, jetpack: false, bat: false });
+      ctx.restore();
+      const tx = x + portrait + (compact ? 10 : 14);
+      const available = cardWidth - portrait - (compact ? 18 : 24);
+      ctx.font = `750 ${compact ? 11 : 15}px ${FONT}`;
+      ctx.textAlign = "left"; ctx.fillStyle = TEXT;
+      ctx.fillText(fitText(ctx, shown?.name ?? team.name, available), tx, y + (compact ? 13 : 18));
+      const hp = shown?.hp ?? 0;
+      const barY = y + h - (compact ? 13 : 20), barW = Math.max(10, available - (compact ? 23 : 34));
+      ctx.fillStyle = "#18293c"; roundRect(ctx, tx, barY, barW, compact ? 7 : 10, 5); ctx.fill();
+      if (hp > 0) {
+        ctx.fillStyle = color; roundRect(ctx, tx, barY, Math.max(3, barW * Math.min(1, hp / WORM_MAX_HP)), compact ? 7 : 10, 5); ctx.fill();
+      }
+      ctx.textAlign = "right"; ctx.font = `800 ${compact ? 10 : 12}px ${FONT}`; ctx.fillStyle = TEXT;
+      ctx.fillText(String(hp), x + cardWidth - 8, barY + (compact ? 3.5 : 5));
+    });
+  }
+
+  private drawClock(ctx: CanvasRenderingContext2D, inp: HudInput, width: number): number {
     const turn = inp.state.turn;
-    const pw = narrow ? Math.min(184, Math.max(128, width - 164)) : 236;
-    const ph = narrow ? 38 : 42;
-    const py = inp.topInset + (width < 280 ? 44 : 0);
+    const compact = width < 600;
+    const pw = compact ? 108 : 158;
+    const ph = compact ? 44 : 64;
+    const py = inp.topInset;
     const px = Math.round(width / 2 - pw / 2);
-    panel(ctx, px, py, pw, ph, narrow ? 10 : 12);
+    panel(ctx, px, py, pw, ph, compact ? 12 : 20);
     const seconds = Math.max(0, Math.ceil(turn.timeLeft));
     const hot = seconds <= 10 && turn.phase === "active";
-    const acting = turn.phase === "active" || turn.phase === "retreat";
-    const mine = turn.activeTeam === inp.myTeam;
-    const name = inp.state.teams.find((team) => team.team === turn.activeTeam)?.name
-      ?? `Drużyna ${turn.activeTeam + 1}`;
-    const action = turn.phase === "active"
-      ? (mine ? "TWOJA TURA" : `GRA ${name.toLocaleUpperCase("pl")}`)
-      : turn.phase === "retreat"
-        ? (mine ? "TWÓJ STRZAŁ" : `STRZAŁ: ${name.toLocaleUpperCase("pl")}`)
-        : turn.phase === "gameOver" ? "KONIEC GRY" : "TRWA AKCJA / ZMIANA TURY";
-    ctx.fillStyle = acting ? teamColor(turn.activeTeam) : WIND;
-    ctx.beginPath();
-    ctx.arc(px + 12, py + 16, 3.3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.font = `800 ${narrow ? 10 : 11}px ${FONT}`;
-    ctx.textAlign = "left";
-    ctx.fillStyle = TEXT;
-    ctx.fillText(fitText(ctx, action, pw - 76), px + 22, py + 16);
-    ctx.font = `850 ${narrow ? 22 : 25}px ${FONT}`;
-    ctx.textAlign = "right";
+    ctx.textAlign = "center";
+    ctx.font = `750 ${compact ? 9 : 11}px ${FONT}`;
+    ctx.fillStyle = MUTED;
+    const caption = turn.phase === "gameOver" ? "KONIEC GRY" : turn.phase === "settling" || turn.phase === "starting" ? "TRWA AKCJA" : `TURA ${turn.round}`;
+    ctx.fillText(caption, width / 2, py + (compact ? 10 : 15));
+    ctx.font = `850 ${compact ? 22 : 29}px ${FONT}`;
     ctx.fillStyle = hot ? ALERT : TEXT;
-    ctx.fillText(String(seconds).padStart(2, "0"), px + pw - 10, py + 17);
-
+    ctx.fillText(String(seconds).padStart(2, "0"), width / 2 + 8, py + (compact ? 28 : 39));
+    // A small clock, rather than an extra text label.
+    const cx = width / 2 - (compact ? 22 : 28), cy = py + (compact ? 28 : 39), rr = compact ? 6 : 9;
+    ctx.strokeStyle = TEXT; ctx.lineWidth = compact ? 1.6 : 2;
+    ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.moveTo(cx, cy - rr * .6); ctx.lineTo(cx, cy); ctx.lineTo(cx + rr * .48, cy + rr * .2); ctx.stroke();
     const wind = Math.max(-1, Math.min(1, turn.wind / MAX_WIND));
-    const center = px + (pw - 54) / 2 + 8;
-    const half = (pw - 80) / 2;
-    ctx.fillStyle = "rgba(255,255,255,.18)";
-    roundRect(ctx, center - half, py + ph - 8, half * 2, 2, 1);
-    ctx.fill();
-    if (Math.abs(wind) > 0.03) {
-      ctx.fillStyle = WIND;
-      roundRect(ctx, wind < 0 ? center - half * -wind : center, py + ph - 8,
-        Math.max(1, Math.abs(wind) * half), 2, 1);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,.55)";
-    ctx.fillRect(center - .5, py + ph - 10, 1, 6);
-    ctx.font = `700 8px ${FONT}`;
-    ctx.textAlign = "right";
-    ctx.fillStyle = turn.suddenDeath ? ALERT : MUTED;
-    ctx.fillText(`R${turn.round}`, px + pw - 10, py + ph - 7);
-    return py + ph;
+    ctx.fillStyle = "rgba(255,255,255,.2)"; roundRect(ctx, px + 16, py + ph - 6, pw - 32, 2, 1); ctx.fill();
+    ctx.fillStyle = WIND;
+    const span = (pw - 32) / 2;
+    if (Math.abs(wind) > .03) { roundRect(ctx, wind < 0 ? width / 2 + span * wind : width / 2,
+      py + ph - 6, Math.abs(wind) * span, 2, 1); ctx.fill(); }
+    return py + ph + (inp.state.teams.length > 2 ? (compact ? 41 : 55) : 0);
   }
 
   private drawBanner(ctx: CanvasRenderingContext2D, text: string, width: number, cy: number, narrow: boolean): void {
