@@ -26,10 +26,10 @@ const imagePath = (name: string) => typeof document === "undefined"
   : new URL(`assets/${name}`, document.baseURI).href;
 
 export const LANDSCAPE_ASSETS: Record<BgStyle, string> = {
-  mountains: imagePath("meadow-hd.webp"),
-  dunes: imagePath("desert-hd.webp"),
-  peaks: imagePath("winter-hd.webp"),
-  spires: imagePath("volcano-hd.webp"),
+  mountains: imagePath("lake-painted.webp"),
+  dunes: imagePath("desert-painted.webp"),
+  peaks: imagePath("winter-painted.webp"),
+  spires: imagePath("volcano-painted.webp"),
 };
 
 /**
@@ -410,12 +410,19 @@ export class Background {
     ctx.imageSmoothingQuality = "medium";
     ctx.drawImage(image, back.x, back.y, back.width, back.height);
 
-    // Terrain and worms need legibility against the detailed lower half.
-    const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
-    depth.addColorStop(0, "rgba(4,12,24,0)");
-    depth.addColorStop(0.72, "rgba(4,12,24,0.08)");
-    depth.addColorStop(1, "rgba(2,8,17,0.27)");
-    ctx.fillStyle = depth;
+    // A cached silhouette adds an independent parallax plane over the painting.
+    if (this.builtFor !== pal) this.build(pal);
+    const near = this.layers[this.layers.length - 1];
+    if (near) {
+      const scale = Math.max(W / 1500, H / 820);
+      const dw = near.canvas.width * scale, dh = near.canvas.height * scale;
+      const y = H * .74 - dh - ny * H * .025;
+      let x = -dw * .1 - nx * W * .055;
+      ctx.globalAlpha = .22;
+      for (; x < W; x += dw) ctx.drawImage(near.canvas, x, y, dw + 1, dh);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = "rgba(164,192,214,.045)";
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 

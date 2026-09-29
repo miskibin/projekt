@@ -1,3 +1,4 @@
+import { loadSoilPaint, type SoilPaint } from "./material";
 import type { GameConfig } from "@shared/protocol";
 import { Terrain } from "@shared/engine/terrain";
 import { Rng } from "@shared/engine/rng";
@@ -71,30 +72,30 @@ export interface ThemePalette {
 
 export const THEMES: Record<ThemeId, ThemePalette> = {
   grass: {
-    skyTop: "#17457f",
-    skyMid: "#3877b3",
-    skyBottom: "#7fb3da",
+    skyTop: "#81b8e3",
+    skyMid: "#a0c5e5",
+    skyBottom: "#b6d3e9",
     glow: "rgba(255, 244, 214, 0.26)",
     cloud: "rgba(210, 230, 248, 0.5)",
     stars: false,
     embers: false,
-    topA: [142, 209, 58],
-    topB: [64, 132, 40],
+    topA: [154, 183, 70],
+    topB: [101, 139, 44],
     topDepth: 14,
-    soil: [150, 104, 62],
-    soilDark: [96, 64, 38],
+    soil: [128, 87, 56],
+    soilDark: [72, 49, 37],
     rim: [186, 140, 88],
     debris: "#8a5f38",
     water: "rgba(46, 122, 190, 0.55)",
     waterDeep: "rgba(14, 52, 96, 0.80)",
     waterFoam: "rgba(190, 232, 255, 0.9)",
     fog: "rgba(120, 170, 210, 0.05)",
-    topHi: [190, 235, 116],
-    topEdge: [42, 96, 30],
-    outline: [44, 27, 16],
-    stoneA: [158, 110, 65],
-    stoneB: [100, 67, 40],
-    mortar: [58, 37, 22],
+    topHi: [195, 213, 114],
+    topEdge: [62, 91, 34],
+    outline: [45, 35, 30],
+    stoneA: [101, 90, 79],
+    stoneB: [54, 49, 46],
+    mortar: [59, 42, 34],
     pebble: 24,
     mineral: [219, 180, 111],
     stratum: 42,
@@ -103,7 +104,7 @@ export const THEMES: Record<ThemeId, ThemePalette> = {
     bgFar: "#8fb0cd",
     bgPeak: "#d6e6f4",
     bgMid: "#5f8fbb",
-    bgNear: "#2f6f76",
+    bgNear: "#638eaf",
     horizon: 0.68,
     sun: "rgba(255, 249, 224, 0.55)",
   },
@@ -235,7 +236,9 @@ const FAR = 60;
 /** Ile pikseli poza przemalowywany prostokąt liczymy pola pomocnicze. */
 const MARGIN = 30;
 /** Maksymalna wysokość kępki trawy nad powierzchnią. */
-const TUFT_MAX = 4;
+const TUFT_MAX = 7;
+const BACK_X = 13;
+const BACK_Y = 17;
 /** Zasięg miękkiego cienia wewnątrz krateru. */
 const SHADOW_REACH = 11;
 
@@ -244,24 +247,26 @@ const SHADOW_REACH = 11;
  * Pełna przebudowa tylko przy zmianie terenu (nowa gra / terrainSync),
  * a po eksplozjach – wyłącznie prostokąt wokół dziury.
  *
- * Wygląd: drobnoziarniste warstwy skały z rzadkimi pęknięciami i czapą
- * (trawa/piasek/śnieg/lawa) na powierzchni. Tekstura pozostaje zakotwiczona
- * w świecie, więc po wybuchu ukazuje te same warstwy w odsłoniętym kraterze.
+ * Painted earth, embedded rock facets and a separate rear cut-away face, with
+ * grass/sand/snow/lava at the surface. The texture stays anchored in world
+ * coordinates, so explosions reveal the same material in the crater.
  */
 export class TerrainRenderer {
   readonly canvas: HTMLCanvasElement;
+  /** Dark cut-away face behind the playable silhouette; updated with the same dirty rectangles. */
+  readonly backCanvas: HTMLCanvasElement;
+  private backCtx: CanvasRenderingContext2D;
+  private backImg: ImageData;
   private ctx: CanvasRenderingContext2D;
   private img: ImageData;
   /** gładki szum niskiej częstotliwości – faluje dolną krawędź czapy */
   private smooth: Uint8Array;
-  /** drobny relief skały; wartości < 48 oznaczają nieregularne pęknięcia */
+  /** Fine, cached relief under the painted material. */
   private stone: Uint8Array;
   /** Rozproszone, kanciaste głazy zatopione w ziemi; zero oznacza zwykły grunt. */
   private rocks: Uint8Array;
   /** płynnie zmieniający się odcień skały */
   private tint: Uint8Array;
-  /** Powolne fale warstw skały, wspólne dla wszystkich motywów. */
-  private strataX: Float32Array;
   /** AIR / GRASS / SOIL, liczone w padded-rect przed malowaniem */
   private kind: Uint8Array;
   /** wektor do najbliższego powietrza (transformata odległości) */
@@ -276,6 +281,7 @@ export class TerrainRenderer {
   private terrain: Terrain;
   private pal: ThemePalette;
   private seed: number;
+  private paint: SoilPaint | null = null;
   private lastVersion = -1;
   private dirty: DirtyRect[] = [];
 
@@ -290,9 +296,13 @@ export class TerrainRenderer {
     if (!ctx) throw new Error("Brak kontekstu 2D dla tekstury terenu");
     this.ctx = ctx;
     this.img = this.ctx.createImageData(terrain.width, terrain.height);
+    this.backCanvas = document.createElement("canvas");
+    this.backCanvas.width = terrain.width;
+    this.backCanvas.height = terrain.height;
+    this.backCtx = this.backCanvas.getContext("2d")!;
+    this.backImg = this.backCtx.createImageData(terrain.width, terrain.height);
     const n = terrain.width * terrain.height;
     this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
-    this.strataX = makeStrataOffsets(terrain.width, this.seed);
     const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
     this.stone = st.stone;
     this.tint = st.tint;
@@ -303,6 +313,9 @@ export class TerrainRenderer {
     this.open = new Uint8Array(n);
     this.tuft = makeTufts(terrain.width, this.seed, this.pal.tufts);
     this.rebuildAll();
+    void loadSoilPaint().then((paint) => {
+      if (paint) { this.paint = paint; this.rebuildAll(); }
+    });
   }
 
   setTheme(theme: ThemeId): void {
@@ -330,9 +343,11 @@ export class TerrainRenderer {
       this.canvas.width = terrain.width;
       this.canvas.height = terrain.height;
       this.img = this.ctx.createImageData(terrain.width, terrain.height);
+      this.backCanvas.width = terrain.width;
+      this.backCanvas.height = terrain.height;
+      this.backImg = this.backCtx.createImageData(terrain.width, terrain.height);
       const n = terrain.width * terrain.height;
       this.smooth = makeSmooth(terrain.width, terrain.height, this.seed);
-      this.strataX = makeStrataOffsets(terrain.width, this.seed);
       const st = makeStone(terrain.width, terrain.height, this.seed, this.pal.pebble);
       this.stone = st.stone;
       this.tint = st.tint;
@@ -349,7 +364,7 @@ export class TerrainRenderer {
   /** Zgłoś obszar zmieniony przez eksplozję / belkę – przerysujemy tylko go. */
   markDirty(x: number, y: number, w: number, h: number): void {
     // czapa (do 1.2x grubości) + kępki + cień w kraterze sięgają dalej niż sama dziura
-    const pad = Math.ceil(this.pal.topDepth * 1.2) + TUFT_MAX + SHADOW_REACH + 2;
+    const pad = Math.max(BACK_X, BACK_Y) + Math.ceil(this.pal.topDepth * 1.2) + TUFT_MAX + SHADOW_REACH + 2;
     this.dirty.push({
       x0: Math.max(0, Math.floor(x - pad)),
       y0: Math.max(0, Math.floor(y - pad)),
@@ -412,6 +427,7 @@ export class TerrainRenderer {
     this.computeField(rx0, ry0, rx1, ry1);
     this.paintPixels(x0, y0, x1, y1);
     this.ctx.putImageData(this.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+    this.paintBack(x0, y0, x1, y1);
   }
 
   /**
@@ -502,6 +518,8 @@ export class TerrainRenderer {
       }
     }
 
+    // FAR is an invalid vector, not a seed: propagating it creates phantom
+    // diagonal edges in deep soil and different shadows after partial updates.
     // Danielsson 4SED: dwa przebiegi pionowe, w każdym dodatkowy przelot poziomy
     // w przeciwną stronę – bez niego odległości bywają zawyżone i wynik zależy od
     // odległych fragmentów mapy (czapa trawy „migałaby” po wybuchach gdzie indziej).
@@ -519,7 +537,7 @@ export class TerrainRenderer {
             const cx = vx[j];
             const cy = vy[j] - 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[j] === FAR && vy[j] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -530,7 +548,7 @@ export class TerrainRenderer {
             const cx = vx[k] - 1;
             const cy = vy[k] - 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[k] === FAR && vy[k] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -541,7 +559,7 @@ export class TerrainRenderer {
             const cx = vx[k] + 1;
             const cy = vy[k] - 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[k] === FAR && vy[k] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -553,7 +571,7 @@ export class TerrainRenderer {
           const cx = vx[j] - 1;
           const cy = vy[j];
           const cd = cx * cx + cy * cy;
-          if (cd < bd) {
+          if (cd < bd && !(vx[j] === FAR && vy[j] === FAR)) {
             bd = cd;
             bx = cx;
             by = cy;
@@ -570,7 +588,7 @@ export class TerrainRenderer {
         const j = i + 1;
         const cx = vx[j] + 1;
         const cy = vy[j];
-        if (cx * cx + cy * cy < bx * bx + by * by) {
+        if (!(vx[j] === FAR && vy[j] === FAR) && cx * cx + cy * cy < bx * bx + by * by) {
           vx[i] = cx;
           vy[i] = cy;
         }
@@ -591,7 +609,7 @@ export class TerrainRenderer {
             const cx = vx[j];
             const cy = vy[j] + 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[j] === FAR && vy[j] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -602,7 +620,7 @@ export class TerrainRenderer {
             const cx = vx[k] + 1;
             const cy = vy[k] + 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[k] === FAR && vy[k] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -613,7 +631,7 @@ export class TerrainRenderer {
             const cx = vx[k] - 1;
             const cy = vy[k] + 1;
             const cd = cx * cx + cy * cy;
-            if (cd < bd) {
+            if (cd < bd && !(vx[k] === FAR && vy[k] === FAR)) {
               bd = cd;
               bx = cx;
               by = cy;
@@ -625,7 +643,7 @@ export class TerrainRenderer {
           const cx = vx[j] + 1;
           const cy = vy[j];
           const cd = cx * cx + cy * cy;
-          if (cd < bd) {
+          if (cd < bd && !(vx[j] === FAR && vy[j] === FAR)) {
             bd = cd;
             bx = cx;
             by = cy;
@@ -642,7 +660,7 @@ export class TerrainRenderer {
         const j = i - 1;
         const cx = vx[j] - 1;
         const cy = vy[j];
-        if (cx * cx + cy * cy < bx * bx + by * by) {
+        if (!(vx[j] === FAR && vy[j] === FAR) && cx * cx + cy * cy < bx * bx + by * by) {
           vx[i] = cx;
           vy[i] = cy;
         }
@@ -676,6 +694,24 @@ export class TerrainRenderer {
     }
   }
 
+  private paintBack(x0: number, y0: number, x1: number, y1: number): void {
+    const { width: w, data } = this.terrain;
+    const out = this.backImg.data;
+    const pal = this.pal;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const o = (y * w + x) * 4;
+      const sx = x - BACK_X, sy = y - BACK_Y;
+      if (sx < 0 || sy < 0 || !data[sy * w + sx]) { out[o + 3] = 0; continue; }
+      const edge = sy === 0 || !data[(sy - 1) * w + sx];
+      const shade = .69 + (fine(sx >> 3, sy >> 3) / 255) * .1;
+      out[o] = edge ? pal.rim[0] * .64 : pal.soilDark[0] * shade;
+      out[o + 1] = edge ? pal.rim[1] * .64 : pal.soilDark[1] * shade;
+      out[o + 2] = edge ? pal.rim[2] * .64 : pal.soilDark[2] * shade;
+      out[o + 3] = 255;
+    }
+    this.backCtx.putImageData(this.backImg, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+  }
+
   private paintPixels(x0: number, y0: number, x1: number, y1: number): void {
     const t = this.terrain;
     const w = t.width;
@@ -689,9 +725,9 @@ export class TerrainRenderer {
     const tint = this.tint;
     const rocks = this.rocks;
     const sm = this.smooth;
-    const strataX = this.strataX;
     const tuft = this.tuft;
     const cap = pal.topDepth;
+    const material = this.paint;
 
     const taR = pal.topA[0];
     const taG = pal.topA[1];
@@ -708,12 +744,6 @@ export class TerrainRenderer {
     const olR = pal.outline[0];
     const olG = pal.outline[1];
     const olB = pal.outline[2];
-    const saR = pal.stoneA[0];
-    const saG = pal.stoneA[1];
-    const saB = pal.stoneA[2];
-    const sbR = pal.stoneB[0];
-    const sbG = pal.stoneB[1];
-    const sbB = pal.stoneB[2];
     const moR = pal.mortar[0];
     const moG = pal.mortar[1];
     const moB = pal.mortar[2];
@@ -723,7 +753,7 @@ export class TerrainRenderer {
 
     for (let y = y0; y <= y1; y++) {
       const row = y * w;
-      const depthShade = 1 - 0.24 * (y / h);
+      const depthShade = 1 - 0.18 * (y / h);
       for (let x = x0; x <= x1; x++) {
         const i = row + x;
         const o = i * 4;
@@ -772,14 +802,7 @@ export class TerrainRenderer {
             }
           }
           if (solid === 0) {
-            // Cienka tylna ścianka przesunięta względem frontu: stała tekstura,
-            // bez kosztownego filtra/cienia liczonego ponownie przy każdej klatce.
-            if (x >= 7 && y >= 11 && t.data[(y - 10) * w + x - 7]) {
-              p[o] = moR * 0.75;
-              p[o + 1] = moG * 0.75;
-              p[o + 2] = moB * 0.75;
-              p[o + 3] = 135;
-            } else p[o + 3] = 0;
+            p[o + 3] = 0;
             continue;
           }
           const a = solid * 0.15;
@@ -834,83 +857,53 @@ export class TerrainRenderer {
             g += (olG - g) * ow;
             b += (olB - b) * ow;
           }
-          const gr = (fine(x, y) - 128) * 0.1;
+          const gr = (fine(x >> 1, y >> 1) - 128) * 0.025;
           const light = 1 + sideLight * 0.18;
           r = r * light + gr;
           g = g * light + gr;
           b = b * light + gr;
         } else {
+          // Broad painted soil planes, with sparse pebbles rather than repeated
+          // geological stripes. The pattern stays fixed when craters expose it.
           const tn = tint[i] / 255;
-          r = sbR + (saR - sbR) * tn;
-          g = sbG + (saG - sbG) * tn;
-          b = sbB + (saB - sbB) * tn;
-          const directional = 1 + sideLight * 0.25 * clamp01((17 - dist) / 17);
-          const mul = (0.68 + (stone[i] / 255) * 0.64) * depthShade * directional * (0.86 + (sm[i] / 255) * 0.28);
-          r *= mul;
-          g *= mul;
-          b *= mul;
-          // Szerokie, pofalowane warstwy są zakotwiczone w świecie.
-          const layerY = y + strataX[x] + (sm[i] - 128) * 0.055;
-          const layer = Math.floor(layerY / pal.stratum);
-          const seam = layerY - layer * pal.stratum;
-          const layerHash = fine(layer * 11, 83);
-          const strataShade = (layerHash - 128) * 0.15 + (seam < 2 ? 19 : seam < 5 ? 7 : 0);
-          r += strataShade;
-          g += strataShade * 0.88;
-          b += strataShade * 0.75;
-          if (layerHash < 88) {
-            const earth = (88 - layerHash) / 190;
-            r += (pal.soil[0] - r) * earth;
-            g += (pal.soil[1] - g) * earth;
-            b += (pal.soil[2] - b) * earth;
-          } else if (layerHash > 184) {
-            const bedrock = (layerHash - 184) / 170;
-            r += (pal.soilDark[0] - r) * bedrock;
-            g += (pal.soilDark[1] - g) * bedrock;
-            b += (pal.soilDark[2] - b) * bedrock;
-          }
-          // Rzadkie skupiska minerałów: kwarc / sól / lód / rozgrzana ruda.
-          // Każde skupisko jest trwałe i ujawnia się także po wybuchu.
-          const cx = x >> 5;
-          const cy = y >> 5;
-          const cluster = fine(cx + (this.seed & 255), cy + ((this.seed >>> 8) & 255));
-          if (cluster > 244) {
-            const ox = (fine(cx, cy + 37) % 18) + 7;
-            const oy = (fine(cx + 19, cy) % 18) + 7;
-            const lx = x - (cx * 32 + ox);
-            const ly = y - (cy * 32 + oy);
-            const vein = Math.abs(lx + ly * 0.65);
-            if (Math.abs(ly) < 8 && vein < (ly < 0 ? 2 : 3)) {
-              const strength = ly < -5 ? 0.48 : 0.7;
-              r += (pal.mineral[0] - r) * strength;
-              g += (pal.mineral[1] - g) * strength;
-              b += (pal.mineral[2] - b) * strength;
+          const shade = (0.91 + tn * 0.19) * depthShade;
+          const plane = (sm[i] - 128) * 0.055 + (stone[i] - 128) * 0.018;
+          r = pal.soil[0] * shade + plane;
+          g = pal.soil[1] * shade + plane * 0.8;
+          b = pal.soil[2] * shade + plane * 0.6;
+          if (material) {
+            const tex = ((y % material.size) * material.size + x % material.size) * 4;
+            const ink = material.pixels;
+            const depth = depthShade * .93;
+            // Theme tints share the same painted material, so no extra files or
+            // decoded copies are needed for snow, sandstone or volcanic earth.
+            if (pal.bgStyle === "mountains") {
+              r = ink[tex] * depth;
+              g = ink[tex + 1] * depth;
+              b = ink[tex + 2] * depth;
+            } else {
+              // Tint luminance rather than channels: warm pigment must not
+              // turn snow into olive soil or sandstone into yellow-green.
+              const value = (ink[tex] * .3 + ink[tex + 1] * .59 + ink[tex + 2] * .11) / 82 * depth;
+              r = pal.soil[0] * value;
+              g = pal.soil[1] * value;
+              b = pal.soil[2] * value;
             }
           }
-          const gr = (fine(x, y) - 128) * 0.055;
-          r += gr;
-          g += gr;
-          b += gr;
-          // Oddzielne, ostrokrawędziste bloki jak w przekroju ziemi. Pomiędzy
-          // nimi widać drobny grunt; nie tworzą powtarzalnego bruku na całej mapie.
+          const directional = sideLight * 10 * clamp01((22 - dist) / 22);
+          r += directional; g += directional * .75; b += directional * .6;
           const rock = rocks[i];
           if (rock) {
-            const fill = rock < 22 ? 0.22 : rock / 255;
-            const strength = rock < 22 ? 0.78 : 0.4;
-            r += ((sbR + (saR - sbR) * fill) * depthShade - r) * strength;
-            g += ((sbG + (saG - sbG) * fill) * depthShade - g) * strength;
-            b += ((sbB + (saB - sbB) * fill) * depthShade - b) * strength;
-          }
-          // Ostro zarysowane spękania i pojedyncze mineralne drobiny. Znajdują
-          // się pod czapą, więc nie zaburzają czytelnej krawędzi chodzenia.
-          if (stone[i] < 48) {
-            r = r * 0.5 + moR * 0.5;
-            g = g * 0.5 + moG * 0.5;
-            b = b * 0.5 + moB * 0.5;
-          } else if (fine(x + this.seed, y - this.seed) > 249) {
-            r += 24;
-            g += 23;
-            b += 22;
+            const facet = rock / 255;
+            const edge = rock < 22;
+            // Large charcoal facets in front of warm earth create a second
+            // visual plane. No decorative shape extends the collision bitmap.
+            r = (edge ? pal.outline[0] : pal.stoneB[0] + (pal.stoneA[0] - pal.stoneB[0]) * facet) * depthShade;
+            g = (edge ? pal.outline[1] : pal.stoneB[1] + (pal.stoneA[1] - pal.stoneB[1]) * facet) * depthShade;
+            b = (edge ? pal.outline[2] : pal.stoneB[2] + (pal.stoneA[2] - pal.stoneB[2]) * facet) * depthShade;
+          } else {
+            const grain = (fine(x >> 1, y >> 1) - 128) * .018;
+            r += grain; g += grain; b += grain;
           }
           if (dist < SHADOW_REACH) {
             // miękki cień wewnątrz krateru (mocniejszy tam, gdzie powietrze jest poniżej)
@@ -949,7 +942,7 @@ export class TerrainRenderer {
  * cieńsza na stromych bokach, zerowa pod spodem. `sm` faluje dolną krawędź.
  */
 function capDepthAt(cap: number, uy: number, sm: number): number {
-  let f = (0.36 - uy) / 0.96;
+  let f = (-0.12 - uy) / 0.78;
   if (f <= 0) return 0;
   if (f > 1) f = 1;
   const s = f * f * (3 - 2 * f);
@@ -965,16 +958,6 @@ function fine(x: number, y: number): number {
   let n = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
   n = Math.imul(n ^ (n >>> 13), 1274126177);
   return (n ^ (n >>> 16)) & 255;
-}
-
-/** Wolna fala pasm skały; jedna próbka na kolumnę, więc bez trygonometrii przy wybuchach. */
-function makeStrataOffsets(width: number, seed: number): Float32Array {
-  const result = new Float32Array(width);
-  const phase = (seed % 1024) * 0.013;
-  for (let x = 0; x < width; x++) {
-    result[x] = Math.sin(x * 0.009 + phase) * 14 + Math.sin(x * 0.027 - phase * 1.8) * 5;
-  }
-  return result;
 }
 
 /** Gładki szum o zadanej skali; interpolacja smoothstep. */
@@ -1013,7 +996,7 @@ function makeSmooth(w: number, h: number, seed: number, cs = 18): Uint8Array {
  */
 function makeStone(w: number, h: number, seed: number, cell: number): { stone: Uint8Array; tint: Uint8Array; rocks: Uint8Array } {
   const broad = makeSmooth(w, h, seed ^ 0x73ccae8d, Math.round(cell * 1.9));
-  const small = makeSmooth(w, h, seed ^ 0x51ed270b, Math.max(5, Math.round(cell * 0.31)));
+  const small = makeSmooth(w, h, seed ^ 0x51ed270b, Math.max(9, Math.round(cell * 0.55)));
   const stone = new Uint8Array(w * h);
   const tint = new Uint8Array(w * h);
   const rocks = new Uint8Array(w * h);
@@ -1027,30 +1010,6 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
     }
   }
   const rng = new Rng((seed ^ 0x6d2b79f5) >>> 0);
-  const patch = Math.max(39, Math.round(cell * 2.25));
-  for (let by = 0; by < h; by += patch) {
-    for (let bx = 0; bx < w; bx += patch) {
-      if (rng.next() > 0.57) continue;
-      let x = bx + 7 + rng.next() * (patch - 14);
-      let y = by + 7 + rng.next() * (patch - 14);
-      let angle = (rng.next() - 0.5) * 2.7;
-      const segments = 2 + (rng.next() * 4 | 0);
-      for (let j = 0; j < segments; j++) {
-        const length = 5 + rng.next() * 11;
-        const nx = x + Math.cos(angle) * length;
-        const ny = y + Math.sin(angle) * length;
-        const steps = Math.ceil(length * 1.8);
-        for (let k = 0; k <= steps; k++) {
-          const xx = Math.round(x + (nx - x) * k / steps);
-          const yy = Math.round(y + (ny - y) * k / steps);
-          if (xx >= 0 && yy >= 0 && xx < w && yy < h) stone[yy * w + xx] = 26;
-        }
-        x = nx;
-        y = ny;
-        angle += (rng.next() - 0.5) * 1.3;
-      }
-    }
-  }
   // Nieregularne 5–8-kątne głazy; skanliniowy raster jest generowany tylko
   // przy wczytaniu mapy. Rozmiary i odstępy są różne, więc skała nie przypomina
   // siatki zaokrąglonych komórek, która na telefonie wyglądała jak bruk.
@@ -1062,8 +1021,9 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
       for (let b = 0; b < count; b++) {
         const cx = gx + 8 + rng.next() * (spacing - 16);
         const cy = gy + 8 + rng.next() * (spacing - 16);
-        const rx = 11 + rng.next() * 25;
-        const ry = 9 + rng.next() * 20;
+        const large = rng.next() < (cy / h > .78 ? .36 : .025);
+        const rx = large ? 32 + rng.next() * 50 : 4 + rng.next() * 15;
+        const ry = large ? 30 + rng.next() * 48 : 4 + rng.next() * 15;
         const points = 6 + (rng.next() * 3 | 0);
         const angles: { x: number; y: number }[] = [];
         for (let j = 0; j < points; j++) {
@@ -1089,8 +1049,10 @@ function makeStone(w: number, h: number, seed: number, cell: number): { stone: U
             const hi = Math.min(w - 1, Math.floor(intersections[j + 1]!));
             for (let x = lo; x <= hi; x++) {
               const edge = Math.min(x - intersections[j]!, intersections[j + 1]! - x, y - (cy - ry), cy + ry - y);
-              const facet = (x - cx) * -0.55 + (y - cy) * -0.85;
-              rocks[y * w + x] = edge < 1.6 ? 12 : Math.max(50, Math.min(250, base + facet));
+              const nx = (x - cx) / rx, ny = (y - cy) / ry;
+              const facet = ny < -.35 + nx * .25 ? 38 : nx < ny * .48 ? 12 : -32;
+              const brush = (broad[y * w + x] - 128) * .1;
+              rocks[y * w + x] = edge < 1.6 ? 12 : Math.max(50, Math.min(250, base + facet + brush));
             }
           }
         }
@@ -1120,10 +1082,10 @@ function makeTufts(w: number, seed: number, amount: number): Uint8Array {
   let x = 0;
   while (x < w) {
     if (rng.next() < amount) {
-      const bw = 1 + (rng.next() < 0.35 ? 1 : 0);
+      const bw = 4 + rng.int(0, 5);
       const hgt = 2 + ((rng.next() * (TUFT_MAX - 1)) | 0);
-      for (let k = 0; k < bw && x + k < w; k++) out[x + k] = hgt;
-      x += bw + 2 + ((rng.next() * 5) | 0);
+      for (let k = 0; k < bw && x + k < w; k++) out[x + k] = Math.round(hgt * (1 - Math.abs(k / (bw - 1) * 2 - 1)));
+      x += bw + 6 + ((rng.next() * 12) | 0);
     } else {
       x += 1 + ((rng.next() * 3) | 0);
     }

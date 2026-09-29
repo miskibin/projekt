@@ -551,6 +551,7 @@ export class GameClient {
       this.renderer.draw(this.ctx, {
         state,
         terrainTex: tex,
+        terrainBackTex: this.terrainTex?.backCanvas,
         theme: this.config.theme,
         camera: this.camera,
         particles: this.particles,
@@ -1091,7 +1092,8 @@ export class GameClient {
   private resize(): void {
     this.pixelRatio = window.devicePixelRatio || 1;
     const toolsTop = document.querySelector<HTMLElement>(".game-tools");
-    this.hudTop = toolsTop ? Number.parseFloat(getComputedStyle(toolsTop).top) || 8 : 8;
+    const toolsOffset = window.innerWidth < 600 ? 49 : 0;
+    this.hudTop = toolsTop ? (Number.parseFloat(getComputedStyle(toolsTop).top) || 8) - toolsOffset : 8;
     const w = this.els.canvas.clientWidth || window.innerWidth;
     const h = this.els.canvas.clientHeight || window.innerHeight;
     const resolution = canvasResolution(w, h, this.pixelRatio, this.touchEnabled);

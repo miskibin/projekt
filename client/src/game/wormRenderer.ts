@@ -182,7 +182,7 @@ interface Entry {
   pose: WormPose;
 }
 
-function blankPose(): WormPose {
+export function blankPose(): WormPose {
   return {
     state: "idle",
     ox: 0,
@@ -757,7 +757,7 @@ export function isLowHp(hp: number): boolean {
 // ============================================================================
 
 /** Sylwetka jest większa od hitboxu; środek fizyczny pozostaje w tym samym miejscu. */
-export const WORM_RX = 17;
+export const WORM_RX = 11.5;
 export const WORM_RY = 20;
 /** Stopy kończą się na dolnej granicy fizycznego hitboxu, czyli na gruncie. */
 export const WORM_GROUND_OFFSET = 8;
@@ -773,8 +773,8 @@ export function hatForWorm(seed: number, id: number): WormHat {
   return (["none", "none", "cap", "none", "bucket", "none", "party", "none", "crown", "none", "none"] as const)[slot % 11];
 }
 
-const EYE_RX = 4.4;
-const EYE_RY = 5;
+const EYE_RX = 4.1;
+const EYE_RY = 5.4;
 
 export interface WormSkin {
   base: string;
@@ -800,10 +800,10 @@ export class WormSkins {
     if (s) return s;
     s = {
       base: color,
-      light: lighten(color, 0.5),
+      light: lighten(color, 0.3),
       mid: lighten(color, 0.16),
-      dark: darken(color, 0.3),
-      line: darken(color, 0.6),
+      dark: darken(color, 0.2),
+      line: "#253443",
       belly: lighten(color, 0.66),
       bodyGrad: null,
     };
@@ -853,7 +853,7 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   const back = armGeom(p, o, -1, rx);
   const front = armGeom(p, o, 1, rx);
   drawLimb(ctx, o, back);
-  drawFeet(ctx, p, o, rx, ry);
+
 
   ctx.save();
   if (p.lean !== 0) ctx.rotate(p.lean);
@@ -866,10 +866,10 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   // jasny brzuszek
   ctx.save();
   ctx.clip();
-  ctx.globalAlpha = 0.5;
+  ctx.globalAlpha = 0.24;
   ctx.fillStyle = skin.belly;
   ctx.beginPath();
-  ctx.ellipse(facing * 0.6, ry * 0.5, rx * 0.66, ry * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(facing * 1.8, ry * 0.48, rx * 0.6, ry * 0.46, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
@@ -898,34 +898,19 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   // kontur
   bodyPath(ctx, rx, ry);
   ctx.strokeStyle = skin.line;
-  ctx.lineWidth = 1.55;
+  ctx.lineWidth = 1.9;
   ctx.lineJoin = "round";
   ctx.stroke();
 
-  // połysk
-  ctx.globalAlpha = 0.34;
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.ellipse(-facing * 3.6, -ry * 0.62, 2.8, 1.9, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
   if (o.hat && o.hat !== "none") drawHat(ctx, o.hat, o);
-  else {
-    // czułek dla robaków bez czapki
-    const wig = p.tuft;
-    ctx.strokeStyle = skin.line;
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(-facing * 0.4, -ry + 0.6);
-    ctx.quadraticCurveTo(-facing * 1.4, -ry - 3.6, -facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25);
-    ctx.stroke();
-    ctx.fillStyle = skin.line;
-    ctx.beginPath();
-    ctx.arc(-facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25, 1.35, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // A short folded tuft; the face and silhouette carry the character.
+  ctx.strokeStyle = skin.line;
+  ctx.lineWidth = 1.45;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-facing * 2, -ry + 1);
+  ctx.quadraticCurveTo(-facing * 4, -ry - 3, -facing * 6 + p.tuft * .2, -ry - 2);
+  ctx.stroke();
 
   drawFace(ctx, p, o, rx, ry);
   ctx.restore(); // skala ciała
@@ -935,7 +920,7 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
     ctx.translate(facing * rx * 0.5, 3.2);
     ctx.scale(facing, 1);
     ctx.rotate(p.hold);
-    ctx.scale(1.25, 1.25);
+    ctx.scale(1.3, 1.3);
     drawHeldWeapon(ctx, o.weapon);
     ctx.restore();
   }
@@ -1002,38 +987,12 @@ function drawHat(ctx: CanvasRenderingContext2D, hat: Exclude<WormHat, "none">, o
   ctx.restore();
 }
 
-/** Dwie krótkie stopki wystające na boki u dołu sylwetki. */
-function drawFeet(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, rx: number, ry: number): void {
-  const squish = 1 - 0.4 * p.squat;
-  const airborne = p.state === "jump" || p.state === "fall" || p.state === "jetpack";
-  for (let i = 0; i < 2; i++) {
-    const s = i === 0 ? -1 : 1;
-    let fx = s * rx * 0.6 * p.sx;
-    let fy = ry * 0.92 * p.sy;
-    if (p.state === "walk") {
-      const a = p.step * Math.PI * 2 + (i === 0 ? 0 : Math.PI);
-      fx += Math.cos(a) * 2 * o.facing;
-      fy -= Math.max(0, Math.sin(a)) * 2.4;
-    } else if (airborne) {
-      fx += s * 0.8;
-      fy -= 0.8;
-    }
-    ctx.fillStyle = o.skin.dark;
-    ctx.beginPath();
-    ctx.ellipse(fx, fy, 3.5, 2.5 * squish, s * 0.15, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = o.skin.line;
-    ctx.lineWidth = 1.1;
-    ctx.stroke();
-  }
-}
-
 /** Twarz: oczy, brwi, usta, policzki. Rysowane w układzie przeskalowanego ciała. */
 function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, rx: number, ry: number): void {
   const facing = o.facing;
-  const eyeY = -ry * 0.28;
-  const cx = facing * 1.7;
-  const gap = 4.1;
+  const eyeY = -ry * 0.51;
+  const cx = facing * 2.4;
+  const gap = 3.6;
 
   // Krótki pyszczek przed oczami nadaje postaci czytelny profil również
   // przy małym powiększeniu telefonu.
@@ -1041,7 +1000,7 @@ function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, r
   ctx.strokeStyle = o.skin.line;
   ctx.lineWidth = 0.95;
   ctx.beginPath();
-  ctx.ellipse(facing * rx * 0.77, eyeY + 6.1, 3.4, 2.3, facing * -0.16, 0, Math.PI * 2);
+  ctx.ellipse(facing * rx * 0.83, eyeY + 6.9, 3.2, 2.2, facing * -0.16, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
@@ -1307,7 +1266,7 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
     case "bazooka":
     case "homing": {
       const homing = weapon === "homing";
-      ctx.fillStyle = homing ? "#b1263f" : "#4d5563";
+      ctx.fillStyle = homing ? "#963d40" : "#5a683a";
       roundRect(ctx, -2, homing ? -2.2 : -1.8, homing ? 17 : 14, homing ? 4.4 : 3.6, 1.8);
       ctx.fill();
       ctx.strokeStyle = "rgba(10,14,20,0.6)";
@@ -1316,7 +1275,7 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
       ctx.fillStyle = "#2c333d";
       roundRect(ctx, homing ? 12.5 : 10.5, homing ? -2.8 : -2.2, 2.4, homing ? 5.6 : 4.4, 1);
       ctx.fill();
-      ctx.fillStyle = homing ? "#7cecff" : "#9aa6b8";
+      ctx.fillStyle = homing ? "#b8cfce" : "#b3b98c";
       roundRect(ctx, 2, -3.2, 3.6, 1.6, 0.7);
       ctx.fill();
       if (homing) {
@@ -1324,7 +1283,7 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
         ctx.beginPath();
         ctx.arc(15.2, 0, 1.7, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = "#66eaff";
+        ctx.strokeStyle = "#769a99";
         ctx.lineWidth = 0.8;
         ctx.beginPath();
         ctx.moveTo(5, -2.2); ctx.lineTo(2, -5.3);
@@ -1457,7 +1416,7 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
       ctx.fillStyle = "#2f3742";
       roundRect(ctx, 1, -3.5, 6, 7, 1.4);
       ctx.fill();
-      ctx.strokeStyle = "#9aa6b8";
+      ctx.strokeStyle = "#b3b98c";
       ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.moveTo(5, -3.5);
@@ -1545,11 +1504,12 @@ function drawSweat(ctx: CanvasRenderingContext2D, facing: number, rx: number, ry
 /** Duża głowa, zwężona szyja i cięższy dół – rozpoznawalna sylwetka robaka. */
 export function bodyPath(ctx: CanvasRenderingContext2D, rx: number, ry: number): void {
   ctx.beginPath();
-  ctx.moveTo(0, -ry);
-  ctx.bezierCurveTo(rx * 0.92, -ry * 1.04, rx * 1.16, -ry * 0.22, rx * 0.68, ry * 0.18);
-  ctx.bezierCurveTo(rx * 0.99, ry * 0.43, rx * 0.87, ry * 1.06, 0, ry * 1.06);
-  ctx.bezierCurveTo(-rx * 0.87, ry * 1.06, -rx * 0.99, ry * 0.43, -rx * 0.68, ry * 0.18);
-  ctx.bezierCurveTo(-rx * 1.16, -ry * 0.22, -rx * 0.92, -ry * 1.04, 0, -ry);
+  ctx.moveTo(-rx * .1, -ry);
+  ctx.bezierCurveTo(rx * .9, -ry * 1.02, rx * 1.02, -ry * .48, rx * .72, -ry * .12);
+  ctx.bezierCurveTo(rx * .46, ry * .26, rx * .98, ry * .74, rx * .45, ry * .94);
+  ctx.bezierCurveTo(rx * .08, ry * 1.1, -rx * .95, ry * 1.04, -rx * .95, ry * .77);
+  ctx.bezierCurveTo(-rx * .8, ry * .22, -rx * .99, -ry * .29, -rx * .83, -ry * .64);
+  ctx.bezierCurveTo(-rx * .7, -ry * .94, -rx * .45, -ry, -rx * .1, -ry);
   ctx.closePath();
 }
 

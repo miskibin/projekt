@@ -36,5 +36,5 @@ export const MAX_WIND = 120; // px/s^2 poziomej siły dla pocisków wrażliwych 
 export const MAX_SHOT_POWER = 700; // px/s
 export const CHARGE_TIME = 2; // s do pełnej mocy — przytrzymaj, aby precyzyjnie dobrać siłę
 
-export const TEAM_COLORS = ["#ff4d4d", "#4da6ff", "#66e066", "#ffd24d"] as const;
+export const TEAM_COLORS = ["#ed6265", "#64b3ed", "#83ba62", "#e7bd58"] as const;
 export const TEAM_NAMES = ["Czerwoni", "Niebiescy", "Zieloni", "Żółci"] as const;
