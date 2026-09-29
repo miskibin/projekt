@@ -757,7 +757,7 @@ export function isLowHp(hp: number): boolean {
 // ============================================================================
 
 /** Sylwetka jest większa od hitboxu; środek fizyczny pozostaje w tym samym miejscu. */
-export const WORM_RX = 17;
+export const WORM_RX = 13.2;
 export const WORM_RY = 20;
 /** Stopy kończą się na dolnej granicy fizycznego hitboxu, czyli na gruncie. */
 export const WORM_GROUND_OFFSET = 8;
@@ -773,47 +773,46 @@ export function hatForWorm(seed: number, id: number): WormHat {
   return (["none", "none", "cap", "none", "bucket", "none", "party", "none", "crown", "none", "none"] as const)[slot % 11];
 }
 
-const EYE_RX = 4.4;
-const EYE_RY = 5;
+const EYE_RX = 3.75;
+const EYE_RY = 4.4;
+/** Wspólny atrament konturu rekwizytów i broni (ciepła, prawie czarna kreska z makiety). */
+export const INK = "#1c1519";
+const HAND = "#cf9c5e";
+const HAIR = "#3d2617";
 
 export interface WormSkin {
+  /** kolor ciała (przygaszony kolor drużyny) */
   base: string;
-  light: string;
-  mid: string;
-  dark: string;
-  line: string;
+  /** pas cienia po stronie odwróconej od światła */
+  shade: string;
+  /** jaśniejszy brzuszek */
   belly: string;
-  bodyGrad: CanvasGradient | null;
+  /** nóżki */
+  foot: string;
+  /** kontur w odcieniu drużyny, prawie czarny */
+  ink: string;
 }
 
-/** Cache barw i gradientów per kolor drużyny (bez alokacji co klatkę). */
+/** Cache barw per kolor drużyny (bez alokacji co klatkę). */
 export class WormSkins {
   private map = new Map<string, WormSkin>();
-  private ctx: CanvasRenderingContext2D | null = null;
 
-  get(ctx: CanvasRenderingContext2D, color: string): WormSkin {
-    if (this.ctx !== ctx) {
-      this.ctx = ctx;
-      this.map.clear();
-    }
+  get(_ctx: CanvasRenderingContext2D, color: string): WormSkin {
     let s = this.map.get(color);
     if (s) return s;
+    const [r, g, b] = hexToRgb(color);
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const soft = (v: number): number => mix(mix(v, lum, 0.16), 255, 0.08);
+    const body: [number, number, number] = [soft(r), soft(g), soft(b)];
+    const toward = (to: number, t: number): string =>
+      `rgb(${mix(body[0], to, t)},${mix(body[1], to, t)},${mix(body[2], to, t)})`;
     s = {
-      base: color,
-      light: lighten(color, 0.5),
-      mid: lighten(color, 0.16),
-      dark: darken(color, 0.3),
-      line: darken(color, 0.6),
-      belly: lighten(color, 0.66),
-      bodyGrad: null,
+      base: `rgb(${body[0]},${body[1]},${body[2]})`,
+      shade: toward(0, 0.14),
+      belly: toward(255, 0.3),
+      foot: toward(0, 0.22),
+      ink: darken(color, 0.8),
     };
-    // gradient w lokalnym układzie robaka – ważny jest transform w chwili malowania,
-    // więc jeden obiekt obsługuje wszystkie robaki tej drużyny
-    const g = ctx.createLinearGradient(0, -WORM_RY, 0, WORM_RY);
-    g.addColorStop(0, s.light);
-    g.addColorStop(0.45, s.mid);
-    g.addColorStop(1, s.dark);
-    s.bodyGrad = g;
     this.map.set(color, s);
     return s;
   }
@@ -834,6 +833,27 @@ export interface WormDrawOpts {
   hat?: WormHat;
 }
 
+/** Pozycje dłoni w układzie broni: [tylna x, y, przednia x, y]. */
+const HANDS: Partial<Record<WeaponId, [number, number, number, number]>> = {
+  bazooka: [-6, 1.5, 6, 1.5],
+  homing: [-6, 1.5, 6, 1.5],
+  shotgun: [-9, 3, 6, 2],
+  uzi: [-2, 4, 5, 1],
+  grenade: [2, 1, 6, 1],
+  cluster: [2, 1, 6, 1],
+  holy: [2, 1, 6, 1],
+  banana: [2, 1, 6, 1],
+  dynamite: [3, 1, 5, 1],
+  mine: [0, 2, 7, 2],
+  spring: [0, 2, 7, 2],
+  drill: [-6, 2, 4, 2],
+  axe: [1, 4, 5, -2],
+  airstrike: [1, 3, 5, 3],
+  teleport: [1, 2, 6, 2],
+  girder: [1, 2, 10, 2],
+};
+const DEFAULT_HANDS: [number, number, number, number] = [-3, 2, 5, 2];
+
 /**
  * Rysuje postać w lokalnym układzie (0,0 = środek fizyczny robaka).
  * Wywołujący ustawia translate na pozycję robaka.
@@ -849,97 +869,83 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
 
   if (o.jetpack) drawJetpack(ctx, facing, ry, o.time);
 
-  // kolejność: tylna ręka -> nóżki -> ciało z twarzą -> broń -> przednia ręka
-  const back = armGeom(p, o, -1, rx);
-  const front = armGeom(p, o, 1, rx);
-  drawLimb(ctx, o, back);
   drawFeet(ctx, p, o, rx, ry);
 
   ctx.save();
   if (p.lean !== 0) ctx.rotate(p.lean);
   ctx.scale(p.sx, p.sy);
 
+  // ciało: kolor główny + pas cienia z prawej (światło pada z lewej góry) + brzuszek
   bodyPath(ctx, rx, ry);
-  ctx.fillStyle = skin.bodyGrad ?? skin.base;
+  ctx.fillStyle = skin.shade;
   ctx.fill();
-
-  // jasny brzuszek
   ctx.save();
+  bodyPath(ctx, rx, ry);
   ctx.clip();
-  ctx.globalAlpha = 0.5;
+  ctx.save();
+  ctx.translate(-3.6, -0.6);
+  bodyPath(ctx, rx, ry);
+  ctx.fillStyle = skin.base;
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = p.alpha < 1 ? p.alpha * 0.6 : 0.6;
   ctx.fillStyle = skin.belly;
   ctx.beginPath();
-  ctx.ellipse(facing * 0.6, ry * 0.5, rx * 0.66, ry * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(-facing * 0.9 - 1.2, ry * 0.46, 7.4, 7.6, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = p.alpha < 1 ? p.alpha : 1;
 
-  // bandaż przy niskim hp
   if (isLowHp(o.hp)) {
-    ctx.fillStyle = "#f2ece0";
     ctx.save();
-    ctx.translate(0, 2.4);
-    ctx.rotate(-0.42);
-    ctx.fillRect(-rx - 4, -2.5, (rx + 4) * 2, 5);
-    ctx.strokeStyle = "rgba(0,0,0,0.13)";
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(-rx - 4, -2.5, (rx + 4) * 2, 5);
+    ctx.translate(0, 3.4);
+    ctx.rotate(-0.34);
+    ctx.fillStyle = "#efe6d0";
+    ctx.fillRect(-rx - 4, -2.6, (rx + 4) * 2, 5.2);
+    ctx.strokeStyle = skin.ink;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(-rx - 4, -2.6);
+    ctx.lineTo(rx + 4, -2.6);
+    ctx.moveTo(-rx - 4, 2.6);
+    ctx.lineTo(rx + 4, 2.6);
+    ctx.stroke();
     ctx.restore();
   }
 
-  // błysk po trafieniu
   if (p.flash > 0.001) {
     ctx.globalAlpha = 0.85 * p.flash;
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(-rx - 2, -ry - 2, (rx + 2) * 2, (ry + 2) * 2);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = p.alpha < 1 ? p.alpha : 1;
   }
   ctx.restore(); // clip
 
-  // kontur
   bodyPath(ctx, rx, ry);
-  ctx.strokeStyle = skin.line;
-  ctx.lineWidth = 1.55;
+  ctx.strokeStyle = skin.ink;
+  ctx.lineWidth = 2.5;
   ctx.lineJoin = "round";
   ctx.stroke();
 
-  // połysk
-  ctx.globalAlpha = 0.34;
-  ctx.fillStyle = "#ffffff";
-  ctx.beginPath();
-  ctx.ellipse(-facing * 3.6, -ry * 0.62, 2.8, 1.9, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-
   if (o.hat && o.hat !== "none") drawHat(ctx, o.hat, o);
-  else {
-    // czułek dla robaków bez czapki
-    const wig = p.tuft;
-    ctx.strokeStyle = skin.line;
-    ctx.lineWidth = 1.5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(-facing * 0.4, -ry + 0.6);
-    ctx.quadraticCurveTo(-facing * 1.4, -ry - 3.6, -facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25);
-    ctx.stroke();
-    ctx.fillStyle = skin.line;
-    ctx.beginPath();
-    ctx.arc(-facing * 3.2 + wig * 0.5, -ry - 6 + wig * 0.25, 1.35, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  else drawSprout(ctx, facing, ry, p.tuft);
 
   drawFace(ctx, p, o, rx, ry);
   ctx.restore(); // skala ciała
 
   if (p.hold !== null && o.weapon) {
     ctx.save();
-    ctx.translate(facing * rx * 0.5, 3.2);
+    ctx.translate(facing * 5, 8.5);
     ctx.scale(facing, 1);
     ctx.rotate(p.hold);
-    ctx.scale(1.25, 1.25);
+    const hands = HANDS[o.weapon] ?? DEFAULT_HANDS;
+    drawHand(ctx, hands[0], hands[1]);
     drawHeldWeapon(ctx, o.weapon);
+    drawHand(ctx, hands[2], hands[3]);
     ctx.restore();
+  } else if (p.armsUp > 0.12) {
+    const lift = p.armsUp;
+    for (const s of [-1, 1]) drawHand(ctx, s * (rx + 2.5 + lift * 2), 3 - lift * 17);
   }
-  drawLimb(ctx, o, front);
 
   if (o.bat) drawBat(ctx, facing, o.time);
   if (p.sweat > 0.5) drawSweat(ctx, facing, rx, ry, o.time);
@@ -947,38 +953,62 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   ctx.restore();
 }
 
+function drawSprout(ctx: CanvasRenderingContext2D, facing: number, ry: number, sway: number): void {
+  ctx.save();
+  ctx.strokeStyle = HAIR;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(facing * 0.6, -ry + 0.8);
+  ctx.quadraticCurveTo(facing * (1 + sway * 2.4), -ry - 4.2, facing * (3.4 + sway * 3), -ry - 6);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Tania, kremowa mitenka bez ramienia – unosi się przy broni, jak na makiecie. */
+function drawHand(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = HAND;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.7;
+  ctx.beginPath();
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+}
+
 /** Lekkie kształty Canvas, tylko dla części robaków; mieszczą się nad oczami i pod etykietą. */
 function drawHat(ctx: CanvasRenderingContext2D, hat: Exclude<WormHat, "none">, o: WormDrawOpts): void {
   ctx.save();
   // Czapki są narysowane w pierwotnych lokalnych współrzędnych: skalowanie
-  // trzyma ich rondo tuż nad większą głową.
+  // trzyma ich rondo tuż nad głową.
   ctx.scale(WORM_RY / 15.9, WORM_RY / 15.9);
-  ctx.lineWidth = 1.2;
-  ctx.strokeStyle = "#29313d";
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = INK;
+  ctx.lineJoin = "round";
   switch (hat) {
     case "cap": {
-      ctx.fillStyle = "#334c83";
+      ctx.fillStyle = "#4a6aa8";
       ctx.beginPath();
       ctx.moveTo(-10, -15); ctx.quadraticCurveTo(-8, -23, 1, -23);
       ctx.quadraticCurveTo(10, -22, 11, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#f5b459";
+      ctx.fillStyle = "#e8b25a";
       ctx.fillRect(-6, -17, 12, 2);
-      ctx.fillStyle = "#263c69";
-      ctx.beginPath(); ctx.ellipse(o.facing * 9, -14.5, 7, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#34508a";
+      ctx.beginPath(); ctx.ellipse(o.facing * 9, -14.5, 7, 1.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       break;
     }
     case "bucket": {
-      ctx.fillStyle = "#a79368";
+      ctx.fillStyle = "#b09a6c";
       ctx.beginPath(); ctx.moveTo(-9, -21); ctx.lineTo(9, -21);
       ctx.lineTo(11, -15); ctx.lineTo(-11, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#596d5c";
+      ctx.fillStyle = "#5f7462";
       ctx.fillRect(-10, -18, 20, 2);
-      ctx.fillStyle = "#a79368";
+      ctx.fillStyle = "#b09a6c";
       ctx.beginPath(); ctx.ellipse(0, -14, 13, 2.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       break;
     }
     case "party": {
-      ctx.fillStyle = "#ad638d";
+      ctx.fillStyle = "#b8689a";
       ctx.beginPath(); ctx.moveTo(-9, -15); ctx.lineTo(1, -26);
       ctx.lineTo(9, -15); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.strokeStyle = "#ffdf9a";
@@ -1002,28 +1032,28 @@ function drawHat(ctx: CanvasRenderingContext2D, hat: Exclude<WormHat, "none">, o
   ctx.restore();
 }
 
-/** Dwie krótkie stopki wystające na boki u dołu sylwetki. */
+/** Dwie krótkie nóżki-guziczki u dołu sylwetki, ciemniejsze od ciała, z konturem. */
 function drawFeet(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, rx: number, ry: number): void {
   const squish = 1 - 0.4 * p.squat;
   const airborne = p.state === "jump" || p.state === "fall" || p.state === "jetpack";
   for (let i = 0; i < 2; i++) {
     const s = i === 0 ? -1 : 1;
-    let fx = s * rx * 0.6 * p.sx;
-    let fy = ry * 0.92 * p.sy;
+    let fx = s * rx * 0.58 * p.sx;
+    let fy = (ry - 0.8) * p.sy;
     if (p.state === "walk") {
       const a = p.step * Math.PI * 2 + (i === 0 ? 0 : Math.PI);
-      fx += Math.cos(a) * 2 * o.facing;
-      fy -= Math.max(0, Math.sin(a)) * 2.4;
+      fx += Math.cos(a) * 2.2 * o.facing;
+      fy -= Math.max(0, Math.sin(a)) * 2.6;
     } else if (airborne) {
       fx += s * 0.8;
       fy -= 0.8;
     }
-    ctx.fillStyle = o.skin.dark;
+    ctx.fillStyle = o.skin.foot;
     ctx.beginPath();
-    ctx.ellipse(fx, fy, 3.5, 2.5 * squish, s * 0.15, 0, Math.PI * 2);
+    ctx.ellipse(fx, fy, 5.4, 3.3 * squish, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = o.skin.line;
-    ctx.lineWidth = 1.1;
+    ctx.strokeStyle = o.skin.ink;
+    ctx.lineWidth = 2.1;
     ctx.stroke();
   }
 }
@@ -1031,36 +1061,24 @@ function drawFeet(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, r
 /** Twarz: oczy, brwi, usta, policzki. Rysowane w układzie przeskalowanego ciała. */
 function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, rx: number, ry: number): void {
   const facing = o.facing;
-  const eyeY = -ry * 0.28;
-  const cx = facing * 1.7;
-  const gap = 4.1;
+  const eyeY = -ry * 0.33;
+  const cx = facing * 2.3;
+  const gap = EYE_RX + 0.9;
 
-  // Krótki pyszczek przed oczami nadaje postaci czytelny profil również
-  // przy małym powiększeniu telefonu.
-  ctx.fillStyle = o.skin.light;
-  ctx.strokeStyle = o.skin.line;
-  ctx.lineWidth = 0.95;
-  ctx.beginPath();
-  ctx.ellipse(facing * rx * 0.77, eyeY + 6.1, 3.4, 2.3, facing * -0.16, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  // oczy
   drawEye(ctx, cx - gap, eyeY, p.eyeL, p, o);
   drawEye(ctx, cx + gap, eyeY, p.eyeR, p, o);
 
-  // brwi
-  if (p.happyEyes < 0.5 && p.xEyes < 0.5) {
-    ctx.strokeStyle = o.skin.line;
-    ctx.lineWidth = 1.15;
+  if (p.brow !== 0 && p.happyEyes < 0.5 && p.xEyes < 0.5) {
+    ctx.strokeStyle = o.skin.ink;
+    ctx.lineWidth = 1.9;
     ctx.lineCap = "round";
-    const browY = eyeY - EYE_RY - 1.1;
+    const browY = eyeY - EYE_RY - 1.3;
     for (let i = 0; i < 2; i++) {
       const s = i === 0 ? -1 : 1;
       // brow: -1 groźne (wewnętrzny koniec niżej), +1 zmartwione (wewnętrzny wyżej)
-      const inner = s * (gap - 1.9);
-      const outer = s * (gap + 1.9);
-      const tilt = 1.3 * p.brow;
+      const inner = s * (gap - 2.6);
+      const outer = s * (gap + 2.6);
+      const tilt = 1.7 * p.brow;
       ctx.beginPath();
       ctx.moveTo(cx + inner, browY - tilt);
       ctx.lineTo(cx + outer, browY + tilt);
@@ -1068,22 +1086,20 @@ function drawFace(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, r
     }
   }
 
-  // policzki (naładowanie / radość)
   if (p.cheeks > 0.05 || p.happyEyes > 0.5) {
-    const a = p.happyEyes > 0.5 ? 0.4 : 0.28 + 0.32 * p.cheeks;
-    const r = 1.7 + 0.9 * p.cheeks;
+    const a = p.happyEyes > 0.5 ? 0.42 : 0.28 + 0.32 * p.cheeks;
+    const r = 2 + 1 * p.cheeks;
     ctx.globalAlpha = a;
     ctx.fillStyle = "#ff8a8a";
-    ctx.beginPath();
-    ctx.ellipse(cx - gap - 2.2, eyeY + 3.2, r, r * 0.75, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(cx + gap + 2.2, eyeY + 3.2, r, r * 0.75, 0, 0, Math.PI * 2);
-    ctx.fill();
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(cx + s * (gap + 4.2), eyeY + 5.2, r, r * 0.75, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
   }
 
-  drawMouth(ctx, p, o, cx, eyeY + 6.5);
+  drawMouth(ctx, p, o, cx, eyeY + 10);
 }
 
 function drawEye(
@@ -1094,17 +1110,14 @@ function drawEye(
   p: WormPose,
   o: WormDrawOpts,
 ): void {
-  const line = o.skin.line;
+  const ink = o.skin.ink;
   if (p.xEyes > 0.5) {
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.ellipse(x, y, EYE_RX, EYE_RY * 0.9, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgba(20,24,32,0.32)";
-    ctx.lineWidth = 0.6;
-    ctx.stroke();
-    ctx.strokeStyle = "#141a24";
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.7;
     ctx.lineCap = "round";
     const r = 2.1;
     ctx.beginPath();
@@ -1116,26 +1129,26 @@ function drawEye(
     return;
   }
   if (p.happyEyes > 0.5) {
-    ctx.strokeStyle = "#141a24";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.9;
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.arc(x, y + 1.4, 2.6, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.arc(x, y + 1.6, 2.8, Math.PI * 1.15, Math.PI * 1.85);
     ctx.stroke();
     return;
   }
   if (open < 0.1) {
-    ctx.strokeStyle = "#141a24";
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.7;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(x - EYE_RX * 0.85, y);
-    ctx.quadraticCurveTo(x, y + 1.1, x + EYE_RX * 0.85, y);
+    ctx.quadraticCurveTo(x, y + 1.2, x + EYE_RX * 0.85, y);
     ctx.stroke();
     return;
   }
 
-  const ry = EYE_RY * Math.min(open, 1.35);
+  const ry = EYE_RY * Math.min(open, 1.3);
   ctx.fillStyle = "#ffffff";
   ctx.beginPath();
   ctx.ellipse(x, y, EYE_RX, ry, 0, 0, Math.PI * 2);
@@ -1143,350 +1156,309 @@ function drawEye(
 
   ctx.save();
   ctx.clip();
-  const px = x + p.pupilX * (EYE_RX - 1.5);
-  const py = y + p.pupilY * Math.max(0.2, ry - 1.6);
-  ctx.fillStyle = "#141a24";
+  const px = x + p.pupilX * (EYE_RX - 1.8);
+  const py = y + p.pupilY * Math.max(0.2, ry - 2.1);
+  ctx.fillStyle = "#1b1216";
   ctx.beginPath();
-  ctx.arc(px, py, 1.8, 0, Math.PI * 2);
+  ctx.ellipse(px, py, 2.05, 2.45, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.beginPath();
-  ctx.arc(px - 0.6, py - 0.7, 0.62, 0, Math.PI * 2);
-  ctx.fill();
-  // powieka
   if (p.lid > 0.02) {
-    ctx.fillStyle = line;
+    ctx.fillStyle = o.skin.shade;
     ctx.fillRect(x - EYE_RX - 0.5, y - ry - 0.5, EYE_RX * 2 + 1, (ry * 2 + 1) * p.lid * 0.55);
   }
   ctx.restore();
 
-  ctx.strokeStyle = "rgba(20,24,32,0.32)";
-  ctx.lineWidth = 0.6;
+  ctx.strokeStyle = ink;
+  ctx.globalAlpha = 0.55;
+  ctx.lineWidth = 0.9;
   ctx.beginPath();
   ctx.ellipse(x, y, EYE_RX, ry, 0, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 function drawMouth(ctx: CanvasRenderingContext2D, p: WormPose, o: WormDrawOpts, cx: number, my: number): void {
-  const line = o.skin.line;
-  ctx.strokeStyle = line;
-  ctx.lineWidth = 1.15;
+  const ink = o.skin.ink;
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = 1.6;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   switch (p.mouth) {
     case "bigSmile": {
-      ctx.fillStyle = "#3a1f24";
+      ctx.fillStyle = "#3a1c22";
       ctx.beginPath();
-      ctx.moveTo(cx - 3.1, my - 0.6);
-      ctx.quadraticCurveTo(cx, my + 3.4 + p.mouthOpen * 1.4, cx + 3.1, my - 0.6);
+      ctx.moveTo(cx - 3.6, my - 1);
+      ctx.quadraticCurveTo(cx, my + 4.2 + p.mouthOpen * 1.6, cx + 3.6, my - 1);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = "#ff9aa2";
+      ctx.fillStyle = "#f08a94";
       ctx.beginPath();
-      ctx.ellipse(cx, my + 1.9 + p.mouthOpen * 0.6, 1.5, 0.9, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, my + 2.1 + p.mouthOpen * 0.6, 1.6, 1, 0, 0, Math.PI * 2);
       ctx.fill();
       break;
     }
     case "open": {
-      ctx.fillStyle = "#3a1f24";
+      ctx.fillStyle = "#3a1c22";
       ctx.beginPath();
-      ctx.ellipse(cx, my + 0.3, 1.5 + p.mouthOpen * 0.6, 1.2 + p.mouthOpen * 1.6, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, my + 0.6, 1.7 + p.mouthOpen * 0.7, 1.4 + p.mouthOpen * 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       break;
     }
     case "grit": {
       ctx.fillStyle = "#f4f1ea";
-      roundRect(ctx, cx - 3, my - 1, 6, 2.4, 0.8);
+      roundRect(ctx, cx - 3.4, my - 1.3, 6.8, 2.8, 0.9);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.moveTo(cx - 1, my - 1);
-      ctx.lineTo(cx - 1, my + 1.4);
-      ctx.moveTo(cx + 1, my - 1);
-      ctx.lineTo(cx + 1, my + 1.4);
-      ctx.lineWidth = 0.7;
+      ctx.moveTo(cx - 1.1, my - 1.3);
+      ctx.lineTo(cx - 1.1, my + 1.5);
+      ctx.moveTo(cx + 1.1, my - 1.3);
+      ctx.lineTo(cx + 1.1, my + 1.5);
+      ctx.lineWidth = 0.8;
       ctx.stroke();
       break;
     }
     case "wave": {
       ctx.beginPath();
-      ctx.moveTo(cx - 3, my);
-      ctx.quadraticCurveTo(cx - 1.5, my - 1.6, cx, my);
-      ctx.quadraticCurveTo(cx + 1.5, my + 1.6, cx + 3, my);
+      ctx.moveTo(cx - 3.2, my);
+      ctx.quadraticCurveTo(cx - 1.6, my - 1.8, cx, my);
+      ctx.quadraticCurveTo(cx + 1.6, my + 1.8, cx + 3.2, my);
       ctx.stroke();
       break;
     }
     case "frown": {
       ctx.beginPath();
-      ctx.arc(cx, my + 2.6, 2.2, Math.PI * 1.25, Math.PI * 1.75);
+      ctx.arc(cx, my + 3, 2.6, Math.PI * 1.22, Math.PI * 1.78);
       ctx.stroke();
       break;
     }
     case "flat": {
       ctx.beginPath();
-      ctx.moveTo(cx - 2.2, my);
-      ctx.lineTo(cx + 2.2, my);
+      ctx.moveTo(cx - 2.4, my);
+      ctx.lineTo(cx + 2.4, my);
       ctx.stroke();
       break;
     }
     default: {
       ctx.beginPath();
-      ctx.arc(cx, my - 0.5, 2.3, 0.32, Math.PI - 0.32);
+      ctx.arc(cx, my - 1, 2.7, 0.3, Math.PI - 0.3);
       ctx.stroke();
     }
   }
 }
 
-interface ArmGeom {
-  sx: number;
-  sy: number;
-  hx: number;
-  hy: number;
-}
-
-/** Punkt barku i dłoni. `side` -1 = tylna ręka, 1 = przednia. */
-function armGeom(p: WormPose, o: WormDrawOpts, side: -1 | 1, rx: number): ArmGeom {
-  const f = o.facing;
-  const sx = f * side * rx * 0.72 * p.sx;
-  const sy = 2.4 * p.sy;
-  if (p.hold !== null) {
-    // obie ręce na broni – punkt chwytu przed ciałem
-    const grip = side > 0 ? 6.5 : 3.2;
-    const gx = f * rx * 0.5;
-    const gy = 3.2;
-    return { sx, sy, hx: gx + f * Math.cos(p.hold) * grip, hy: gy + Math.sin(p.hold) * grip };
-  }
-  const a = 1.35 - p.armsUp * 2.7;
-  const len = 5.2;
-  return { sx, sy, hx: sx + f * side * Math.cos(a) * len, hy: sy + Math.sin(a) * len };
-}
-
-function drawLimb(ctx: CanvasRenderingContext2D, o: WormDrawOpts, g: ArmGeom): void {
-  const mx = (g.sx + g.hx) / 2;
-  const my = (g.sy + g.hy) / 2 - 0.8;
-  // ciemny obrys pod spodem – rączka czytelna na tle ciała
-  ctx.lineCap = "round";
-  ctx.strokeStyle = o.skin.line;
-  ctx.lineWidth = 4.2;
-  ctx.beginPath();
-  ctx.moveTo(g.sx, g.sy);
-  ctx.quadraticCurveTo(mx, my, g.hx, g.hy);
-  ctx.stroke();
-  ctx.strokeStyle = o.skin.mid;
-  ctx.lineWidth = 2.4;
-  ctx.beginPath();
-  ctx.moveTo(g.sx, g.sy);
-  ctx.quadraticCurveTo(mx, my, g.hx, g.hy);
-  ctx.stroke();
-  // dłoń
-  ctx.fillStyle = o.skin.light;
-  ctx.beginPath();
-  ctx.arc(g.hx, g.hy, 2.1, 0, Math.PI * 2);
+/** Zarys kształtu, potem wypełnienie – wspólna kreska wszystkich rekwizytów i broni. */
+function inked(ctx: CanvasRenderingContext2D, fill: string, lw = 2): void {
+  ctx.fillStyle = fill;
   ctx.fill();
-  ctx.strokeStyle = o.skin.line;
-  ctx.lineWidth = 0.9;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = lw;
+  ctx.lineJoin = "round";
   ctx.stroke();
 }
 
-/** Sylwetka broni: lufa wzdłuż +x, chwyt w (0,0). */
+/** Sylwetka broni: lufa wzdłuż +x, chwyt w (0,0). Gruby kontur i płaskie plamy koloru. */
 export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId): void {
   ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   switch (weapon) {
     case "drill": {
-      ctx.fillStyle = "#276b83";
-      roundRect(ctx, -2, -2.8, 13, 5.6, 1.5);
-      ctx.fill();
-      ctx.fillStyle = "#a4e9f4";
-      ctx.fillRect(4, -2.8, 2, 5.6);
-      ctx.fillStyle = "#effcff";
-      ctx.beginPath(); ctx.moveTo(11, -3.5); ctx.lineTo(17, 0); ctx.lineTo(11, 3.5); ctx.closePath(); ctx.fill();
+      roundRect(ctx, -9, -4.4, 20, 8.8, 3);
+      inked(ctx, "#3f8aa3");
+      ctx.fillStyle = "#9fe0ee";
+      ctx.fillRect(-3, -2.6, 10, 1.8);
+      ctx.beginPath(); ctx.moveTo(11, -5); ctx.lineTo(22, 0); ctx.lineTo(11, 5); ctx.closePath();
+      inked(ctx, "#d7e5ea");
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(13, -3); ctx.lineTo(16, 3); ctx.moveTo(16.5, -1.6); ctx.lineTo(18.5, 1.6); ctx.stroke();
       break;
     }
     case "bazooka":
     case "homing": {
       const homing = weapon === "homing";
-      ctx.fillStyle = homing ? "#b1263f" : "#4d5563";
-      roundRect(ctx, -2, homing ? -2.2 : -1.8, homing ? 17 : 14, homing ? 4.4 : 3.6, 1.8);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(10,14,20,0.6)";
-      ctx.lineWidth = 0.9;
-      ctx.stroke();
-      ctx.fillStyle = "#2c333d";
-      roundRect(ctx, homing ? 12.5 : 10.5, homing ? -2.8 : -2.2, 2.4, homing ? 5.6 : 4.4, 1);
-      ctx.fill();
-      ctx.fillStyle = homing ? "#7cecff" : "#9aa6b8";
-      roundRect(ctx, 2, -3.2, 3.6, 1.6, 0.7);
-      ctx.fill();
+      const body = homing ? "#a3402c" : "#7d8b3e";
+      const band = homing ? "#7b2e20" : "#5c6a2b";
+      const lite = homing ? "#d4694a" : "#a5b559";
+      roundRect(ctx, -13, -4.6, 31, 9.2, 3.4);
+      inked(ctx, body);
+      ctx.fillStyle = lite;
+      ctx.fillRect(-9, -3, 21, 1.7);
+      // pierścienie na wylocie i z tyłu
+      roundRect(ctx, -12.5, -5.6, 4.6, 11.2, 1.6);
+      inked(ctx, band, 1.8);
+      roundRect(ctx, 11.5, -5.6, 4.6, 11.2, 1.6);
+      inked(ctx, band, 1.8);
+      // czarny wylot
+      ctx.beginPath();
+      ctx.ellipse(18, 0, 2.4, 4.6, 0, 0, Math.PI * 2);
+      inked(ctx, INK, 1.4);
+      // szczerbinka
+      roundRect(ctx, -1, -8, 5, 3.6, 1);
+      inked(ctx, "#666b76", 1.6);
       if (homing) {
-        ctx.fillStyle = "#eafdff";
         ctx.beginPath();
-        ctx.arc(15.2, 0, 1.7, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#66eaff";
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(5, -2.2); ctx.lineTo(2, -5.3);
-        ctx.moveTo(5, 2.2); ctx.lineTo(2, 5.3);
-        ctx.stroke();
+        ctx.arc(-1, -8.6, 2.2, 0, Math.PI * 2);
+        inked(ctx, "#7cecff", 1.4);
       }
       break;
     }
     case "shotgun": {
-      ctx.fillStyle = "#3d444f";
-      roundRect(ctx, 1, -1.5, 14, 3, 1.2);
-      ctx.fill();
-      ctx.fillStyle = "#7a4a24";
-      roundRect(ctx, -3.5, -1.2, 5.5, 3.4, 1.2);
-      ctx.fill();
-      ctx.fillStyle = "#5e3616";
-      roundRect(ctx, 4, 1.2, 4.5, 2.2, 0.9);
-      ctx.fill();
+      // kolba
+      ctx.beginPath();
+      ctx.moveTo(1.5, -2.8); ctx.lineTo(-6, -3.8); ctx.lineTo(-15, -1);
+      ctx.lineTo(-15, 5.8); ctx.lineTo(-8, 4.8); ctx.lineTo(1.5, 3.2);
+      ctx.closePath();
+      inked(ctx, "#8b5430");
+      ctx.strokeStyle = "#b67c4c";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.moveTo(-13, 0); ctx.lineTo(-5, -1.6); ctx.stroke();
+      // lufa
+      roundRect(ctx, 0, -2.9, 25, 5.8, 2);
+      inked(ctx, "#3b3d45");
+      ctx.fillStyle = "#6f7480";
+      ctx.fillRect(3, -1.8, 19, 1.3);
+      // łoże
+      roundRect(ctx, 6.5, -3.4, 10, 7.2, 2);
+      inked(ctx, "#8b5430", 1.9);
+      // kabłąk
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(-2.5, 4.3, 3, 0.1, Math.PI - 0.1); ctx.stroke();
       break;
     }
     case "uzi": {
-      ctx.fillStyle = "#2f353f";
-      roundRect(ctx, 0, -2, 9, 3.6, 1.2);
-      ctx.fill();
-      roundRect(ctx, 9, -1, 4.5, 1.8, 0.8);
-      ctx.fill();
-      ctx.fillStyle = "#454c58";
-      roundRect(ctx, 2, 1.4, 2.6, 5, 0.8);
-      ctx.fill();
+      roundRect(ctx, -6, -4, 19, 7.6, 2);
+      inked(ctx, "#454952");
+      ctx.fillStyle = "#7a7f8b";
+      ctx.fillRect(-3, -2.6, 13, 1.4);
+      roundRect(ctx, 12, -2, 7, 3.6, 1.4);
+      inked(ctx, "#2f3239", 1.8);
+      roundRect(ctx, 0.5, 3, 4.6, 10, 1.4);
+      inked(ctx, "#33363e", 1.8);
+      roundRect(ctx, -7, 2.4, 4, 6.5, 1.4);
+      inked(ctx, "#33363e", 1.8);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-12, -1); ctx.lineTo(-12, 3); ctx.lineTo(-6, 1); ctx.stroke();
       break;
     }
     case "grenade":
-    case "cluster": {
-      if (weapon === "cluster") {
-        ctx.fillStyle = "#168c86";
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-          const a = i * Math.PI / 3;
-          const x = 4 + Math.cos(a) * 4.6;
-          const y = Math.sin(a) * 4.6;
-          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = "#8effe9";
-        ctx.lineWidth = 0.9;
-        ctx.stroke();
-        ctx.fillStyle = "#ffe65c";
-        ctx.fillRect(0, -0.8, 8, 1.6);
-      } else {
-        ctx.fillStyle = "#3f7a3a";
-        ctx.beginPath();
-        ctx.arc(4, 0, 3.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#1e3a24";
-        ctx.lineWidth = 0.8;
-        ctx.stroke();
+    case "cluster":
+    case "holy": {
+      const fill = weapon === "grenade" ? "#5e7c34" : weapon === "cluster" ? "#c99a2e" : "#eccb62";
+      ctx.beginPath();
+      ctx.arc(4, 0.5, 6.4, 0, Math.PI * 2);
+      inked(ctx, fill);
+      ctx.strokeStyle = "rgba(28,21,25,0.7)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-1.6, -1.8); ctx.lineTo(9.6, -1.8);
+      ctx.moveTo(-1.6, 3.4); ctx.lineTo(9.6, 3.4);
+      ctx.stroke();
+      if (weapon === "holy") {
+        ctx.fillStyle = INK;
+        ctx.fillRect(3.2, -4.6, 1.8, 10);
+        ctx.fillRect(0.8, -1.6, 6.6, 1.8);
       }
-      ctx.fillStyle = "#9aa0a8";
-      roundRect(ctx, 3, -6, 2, 3, 0.6);
-      ctx.fill();
+      roundRect(ctx, 2.2, -9, 4.4, 3.8, 1);
+      inked(ctx, "#9aa0a8", 1.6);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(8.6, -7, 2.1, 0, Math.PI * 2); ctx.stroke();
       break;
     }
     case "banana": {
-      ctx.strokeStyle = "#e0b52a";
-      ctx.lineWidth = 4;
-      ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.arc(4, 1, 4.4, -Math.PI * 0.9, -Math.PI * 0.1);
-      ctx.stroke();
-      break;
-    }
-    case "holy": {
-      ctx.fillStyle = "#f0d070";
-      ctx.beginPath();
-      ctx.arc(4.5, 0, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#8a6a12";
-      ctx.lineWidth = 0.9;
-      ctx.stroke();
-      ctx.fillStyle = "#8a6a12";
-      ctx.fillRect(4, -3.4, 1.1, 5);
-      ctx.fillRect(2.6, -1.6, 3.8, 1.1);
+      ctx.moveTo(-3, 2);
+      ctx.quadraticCurveTo(4, 9, 12, -3);
+      ctx.quadraticCurveTo(6, 3, -3, -2.4);
+      ctx.closePath();
+      inked(ctx, "#f0d03c");
+      ctx.fillStyle = "#6b4a1a";
+      ctx.fillRect(11.2, -4.4, 2.2, 2.4);
       break;
     }
     case "dynamite": {
-      ctx.fillStyle = "#c8382a";
-      roundRect(ctx, 2, -5, 4, 10, 1.4);
-      ctx.fill();
-      ctx.fillStyle = "#f2e2c2";
-      ctx.fillRect(2, -1.4, 4, 2.2);
-      ctx.strokeStyle = "#c9a24a";
-      ctx.lineWidth = 1;
+      for (const dx of [-2.6, 2.6, 0]) {
+        roundRect(ctx, 1.6 + dx, dx === 0 ? -6.4 : -5.4, 4.6, 12, 1.6);
+        inked(ctx, "#c4382e", 1.8);
+      }
+      ctx.fillStyle = "#efe2c0";
+      ctx.fillRect(1.2, -0.6, 10.6, 2.6);
+      ctx.strokeStyle = "#d8b45a";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.moveTo(4, -5);
-      ctx.quadraticCurveTo(7, -8, 5.5, -9.5);
+      ctx.moveTo(5.4, -6.4);
+      ctx.quadraticCurveTo(8.6, -10, 6.6, -12);
       ctx.stroke();
+      ctx.fillStyle = "#ffb12b";
+      ctx.beginPath(); ctx.arc(6.6, -12.2, 1.5, 0, Math.PI * 2); ctx.fill();
       break;
     }
     case "mine": {
-      ctx.fillStyle = "#6b7280";
-      roundRect(ctx, 1, -3, 8, 6, 2);
-      ctx.fill();
-      ctx.fillStyle = "#ff3b30";
       ctx.beginPath();
-      ctx.arc(5, -1, 1.1, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(-2, 4.4);
+      ctx.quadraticCurveTo(-2, -3, 5, -3.4);
+      ctx.quadraticCurveTo(12, -3, 12, 4.4);
+      ctx.closePath();
+      inked(ctx, "#7c828e");
+      ctx.beginPath(); ctx.arc(5, -3.6, 2.4, 0, Math.PI * 2);
+      inked(ctx, "#e5382e", 1.5);
       break;
     }
     case "spring": {
-      ctx.fillStyle = "#e1ac4e";
-      roundRect(ctx, 0, -2, 9, 3, 1);
-      ctx.fill();
-      ctx.strokeStyle = "#d9f2ff";
-      ctx.lineWidth = 1;
+      roundRect(ctx, -1, 0, 14, 4.8, 1.6);
+      inked(ctx, "#d9a43e");
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(1, 1); ctx.lineTo(3, 3); ctx.lineTo(5, 1); ctx.lineTo(7, 3);
+      ctx.moveTo(0.5, 0); ctx.lineTo(3, -5); ctx.lineTo(5.6, 0); ctx.lineTo(8.2, -5); ctx.lineTo(10.8, 0);
       ctx.stroke();
       break;
     }
     case "axe": {
-      ctx.strokeStyle = "#804d2e";
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 4.4;
+      ctx.beginPath(); ctx.moveTo(-2, 6); ctx.lineTo(10, -8); ctx.stroke();
+      ctx.strokeStyle = "#9a6238";
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(1, 4); ctx.lineTo(10, -7); ctx.stroke();
-      ctx.fillStyle = "#bbdbe5";
-      ctx.beginPath(); ctx.moveTo(8, -8); ctx.lineTo(15, -9); ctx.lineTo(14, -3); ctx.lineTo(10, -5); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-2, 6); ctx.lineTo(10, -8); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(6.4, -10.4); ctx.lineTo(16, -12.6); ctx.lineTo(15, -3.2); ctx.lineTo(9.6, -5.6);
+      ctx.closePath();
+      inked(ctx, "#b9c6cf");
       break;
     }
     case "airstrike": {
-      ctx.fillStyle = "#2f3742";
-      roundRect(ctx, 1, -3.5, 6, 7, 1.4);
-      ctx.fill();
-      ctx.strokeStyle = "#9aa6b8";
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.moveTo(5, -3.5);
-      ctx.lineTo(8, -9);
-      ctx.stroke();
-      ctx.fillStyle = "#ff5f56";
-      ctx.beginPath();
-      ctx.arc(8, -9.4, 1.1, 0, Math.PI * 2);
-      ctx.fill();
+      roundRect(ctx, -1, -4, 12, 9, 2);
+      inked(ctx, "#40454f");
+      ctx.fillStyle = "#95e08a";
+      ctx.fillRect(1, -2.2, 6, 3);
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.moveTo(8.5, -4); ctx.lineTo(11, -11); ctx.stroke();
+      ctx.beginPath(); ctx.arc(11.2, -11.6, 1.9, 0, Math.PI * 2);
+      inked(ctx, "#ff5f56", 1.3);
       break;
     }
     case "teleport": {
-      ctx.fillStyle = "rgba(150,110,255,0.85)";
-      ctx.beginPath();
-      ctx.arc(4.5, 0, 3.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(230,215,255,0.9)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(4.5, 0, 5, 2, 0.5, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(5, 0, 5.4, 0, Math.PI * 2);
+      inked(ctx, "#a58bf0");
+      ctx.strokeStyle = "#efe7ff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(5, 0, 7.4, 2.6, 0.5, 0, Math.PI * 2); ctx.stroke();
       break;
     }
     case "girder": {
-      ctx.fillStyle = "#c4713a";
-      roundRect(ctx, 1, -1.8, 13, 3.6, 1);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(60,30,10,0.5)";
-      ctx.lineWidth = 0.8;
+      roundRect(ctx, -1, -3.2, 22, 6.4, 1.4);
+      inked(ctx, "#c8703a");
+      ctx.strokeStyle = "rgba(28,21,25,0.7)";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      for (let x = 2; x < 19; x += 4.4) { ctx.moveTo(x, -3); ctx.lineTo(x + 2.2, 3); }
       ctx.stroke();
       break;
     }
@@ -1508,48 +1480,57 @@ function drawJetpack(ctx: CanvasRenderingContext2D, facing: number, ry: number, 
   ctx.arc(0, ry + 3.5, 5, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
-  ctx.fillStyle = "#4b5563";
-  roundRect(ctx, -facing * 12, -6, 5, 12, 2);
-  ctx.fill();
-  ctx.fillStyle = "#2f3742";
-  roundRect(ctx, -facing * 12, -1, 5, 3, 1);
-  ctx.fill();
+  roundRect(ctx, -facing * 15 - 3.5, -7, 7, 14, 2.6);
+  inked(ctx, "#5a6270", 2);
+  roundRect(ctx, -facing * 15 - 3.5, -1.5, 7, 3.6, 1);
+  inked(ctx, "#343a45", 1.6);
 }
 
 function drawBat(ctx: CanvasRenderingContext2D, facing: number, time: number): void {
   ctx.save();
   ctx.rotate(facing * (-0.9 + Math.sin(time * 22) * 0.7));
-  ctx.fillStyle = "#b5793a";
-  roundRect(ctx, 0, -2, facing * 20, 4, 2);
-  ctx.fill();
-  ctx.fillStyle = "#8a5a28";
-  roundRect(ctx, 0, -1.6, facing * 6, 3.2, 1.5);
-  ctx.fill();
+  roundRect(ctx, 0, -2.6, facing * 24, 5.2, 2.6);
+  inked(ctx, "#c58a48", 1.9);
+  roundRect(ctx, 0, -2.2, facing * 7, 4.4, 2);
+  inked(ctx, "#8b5a2b", 1.6);
   ctx.restore();
 }
 
 function drawSweat(ctx: CanvasRenderingContext2D, facing: number, rx: number, ry: number, time: number): void {
   const t = (time * 0.9) % 1;
-  const x = -facing * (rx * 0.72);
+  const x = -facing * (rx * 0.9);
   const y = -ry * 0.35 + t * 8;
-  ctx.globalAlpha = 0.8 * (1 - t);
+  ctx.globalAlpha = 0.85 * (1 - t);
   ctx.fillStyle = "#9fd8ff";
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 0.9;
   ctx.beginPath();
-  ctx.moveTo(x, y - 2.4);
-  ctx.quadraticCurveTo(x + 1.7, y + 0.6, x, y + 1.8);
-  ctx.quadraticCurveTo(x - 1.7, y + 0.6, x, y - 2.4);
+  ctx.moveTo(x, y - 2.8);
+  ctx.quadraticCurveTo(x + 2, y + 0.7, x, y + 2.2);
+  ctx.quadraticCurveTo(x - 2, y + 0.7, x, y - 2.8);
   ctx.fill();
+  ctx.stroke();
   ctx.globalAlpha = 1;
 }
 
-/** Duża głowa, zwężona szyja i cięższy dół – rozpoznawalna sylwetka robaka. */
+/**
+ * Sylwetka z makiety: kopuła głowy o promieniu połowy szerokości, proste,
+ * lekko wypukłe boki, płaski spód z zaokrąglonymi rogami. Bez szyi i wcięć.
+ */
 export function bodyPath(ctx: CanvasRenderingContext2D, rx: number, ry: number): void {
+  const top = -ry;
+  const bot = ry;
+  const cy = top + rx * 1.02;
+  const bulge = 0.8;
+  const cr = 6.4;
   ctx.beginPath();
-  ctx.moveTo(0, -ry);
-  ctx.bezierCurveTo(rx * 0.92, -ry * 1.04, rx * 1.16, -ry * 0.22, rx * 0.68, ry * 0.18);
-  ctx.bezierCurveTo(rx * 0.99, ry * 0.43, rx * 0.87, ry * 1.06, 0, ry * 1.06);
-  ctx.bezierCurveTo(-rx * 0.87, ry * 1.06, -rx * 0.99, ry * 0.43, -rx * 0.68, ry * 0.18);
-  ctx.bezierCurveTo(-rx * 1.16, -ry * 0.22, -rx * 0.92, -ry * 1.04, 0, -ry);
+  ctx.moveTo(-rx, cy);
+  ctx.arc(0, cy, rx, Math.PI, 0, false);
+  ctx.bezierCurveTo(rx + bulge, cy + (bot - cy) * 0.35, rx + bulge * 0.7, bot - cr * 1.7, rx - 0.3, bot - cr);
+  ctx.quadraticCurveTo(rx - 0.5, bot, rx - cr, bot);
+  ctx.lineTo(-rx + cr, bot);
+  ctx.quadraticCurveTo(-rx + 0.5, bot, -rx + 0.3, bot - cr);
+  ctx.bezierCurveTo(-rx - bulge * 0.7, bot - cr * 1.7, -rx - bulge, cy + (bot - cy) * 0.35, -rx, cy);
   ctx.closePath();
 }
 
