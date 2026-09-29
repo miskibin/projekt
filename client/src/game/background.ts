@@ -26,7 +26,7 @@ const imagePath = (name: string) => typeof document === "undefined"
   : new URL(`assets/${name}`, document.baseURI).href;
 
 export const LANDSCAPE_ASSETS: Record<BgStyle, string> = {
-  mountains: imagePath("meadow-hd.webp"),
+  mountains: imagePath("alpine-valley.webp"),
   dunes: imagePath("desert-hd.webp"),
   peaks: imagePath("winter-hd.webp"),
   spires: imagePath("volcano-hd.webp"),
@@ -413,8 +413,8 @@ export class Background {
     // Terrain and worms need legibility against the detailed lower half.
     const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
     depth.addColorStop(0, "rgba(4,12,24,0)");
-    depth.addColorStop(0.72, "rgba(4,12,24,0.08)");
-    depth.addColorStop(1, "rgba(2,8,17,0.27)");
+    depth.addColorStop(0.72, "rgba(4,12,24,0.04)");
+    depth.addColorStop(1, "rgba(2,8,17,0.16)");
     ctx.fillStyle = depth;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
