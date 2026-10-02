@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { GameConfig, WormSnapshot } from "@shared/protocol";
-import { soloArena, soloStageInfo } from "./solo";
+import { soloArena, soloStageInfo, readSoloRun, saveSoloRun, soloBest, soloRewards, type SoloRun } from "./solo";
 import { chooseComputerWeapon, DemoDriver, selectComputerTarget } from "./demo";
 
 const base: GameConfig = { wormsPerTeam: 2, turnTime: 45, suddenDeathAfterRounds: 10,
   seed: 26, terrainDensity: 1, theme: "grass" };
 
 describe("wyprawa solo", () => {
-  it("losuje kolejne areny i podnosi wyzwanie bez zapisywania postępu", () => {
+  it("losuje kolejne areny i podnosi wyzwanie", () => {
     const first = soloArena(base, 91, 1);
     const next = soloArena(base, 91, 2);
     const far = soloArena(base, 91, 10);
@@ -69,5 +69,46 @@ describe("wyprawa solo", () => {
       for (const event of match.update().events) if (event.t === "shot") fired.push(event.weapon);
     }
     expect(fired).toContain("grenade");
+  });
+});
+
+describe("expedition checkpoints and loadouts",()=>{
+  const run:SoloRun={stage:5,seed:91,base,route:"armory",perks:{vitality:2,railgun:1},awaitingReward:true};
+  const memory=()=>{
+    const data=new Map<string,string>();
+    return {data,getItem:(key:string)=>data.get(key)??null,setItem:(key:string,value:string)=>{data.set(key,value);},removeItem:(key:string)=>{data.delete(key);}};
+  };
+  it("restores the same arena, upgrades and pending reward after a fresh session",()=>{
+    const storage=memory();
+    expect(saveSoloRun(run,storage)).toBe(true);
+    const restored=readSoloRun(base,storage)!;
+    expect(restored).toEqual(run);
+    expect(soloArena(base,restored.seed,restored.stage,restored.route)).toEqual(soloArena(base,run.seed,run.stage,run.route));
+    expect(soloRewards(restored)).toEqual(soloRewards(run));
+    saveSoloRun(null,storage);expect(readSoloRun(base,storage)).toBeNull();
+  });
+  it("persists the best arena independently from an ended run",()=>{
+    const storage=memory();
+    expect(soloBest(7,storage)).toBe(7);expect(soloBest(3,storage)).toBe(7);
+    saveSoloRun(run,storage);saveSoloRun(null,storage);expect(soloBest(0,storage)).toBe(7);
+  });
+  it("rejects corrupt saves and survives unavailable browser storage",()=>{
+    const storage=memory();
+    storage.setItem("wormsy.expedition.v1","broken");expect(readSoloRun(base,storage)).toBeNull();
+    for(const stage of [-1,0,1e20,"5"]) {
+      storage.setItem("wormsy.expedition.v1",JSON.stringify({...run,stage}));expect(readSoloRun(base,storage)).toBeNull();
+    }
+    const denied={getItem:()=>{throw new Error("denied");},setItem:()=>{throw new Error("quota");},removeItem:()=>{throw new Error("denied");}};
+    expect(readSoloRun(base,denied)).toBeNull();expect(saveSoloRun(run,denied)).toBe(false);
+  });
+  it("grants upgrades only to the human team and caps each perk at three",()=>{
+    const arena=soloArena(base,run.seed,run.stage,"armory");
+    const game=new DemoDriver(arena,"gauntlet",run.stage,run.perks);
+    expect(game.snapshot.worms.filter(w=>w.team===0).every(w=>w.hp===116 && w.maxHp===116)).toBe(true);
+    expect(game.snapshot.worms.filter(w=>w.team===1).every(w=>w.hp===100)).toBe(true);
+    expect(game.snapshot.teams[0]!.ammo.railgun).toBe(3);
+    expect(game.snapshot.teams[1]!.ammo.railgun).toBe(2);
+    expect(soloRewards({...run,perks:{vitality:3}})).not.toContain("vitality");
+    expect(new Set(soloRewards(run)).size).toBe(3);
   });
 });

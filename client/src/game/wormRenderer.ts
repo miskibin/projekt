@@ -894,6 +894,15 @@ export function drawWormCharacter(ctx: CanvasRenderingContext2D, p: WormPose, o:
   ctx.ellipse(-facing * 0.9 - 1.2, ry * 0.46, 7.4, 7.6, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = p.alpha < 1 ? p.alpha : 1;
+  // Three soft segment creases and a rim highlight give the body volume at phone scale.
+  ctx.strokeStyle = skin.shade;
+  ctx.lineWidth = 1;
+  for (const y of [ry*0.32,ry*0.55,ry*0.76]) {
+    ctx.beginPath(); ctx.moveTo(-rx*0.72,y); ctx.quadraticCurveTo(0,y+2.5,rx*0.72,y); ctx.stroke();
+  }
+  ctx.strokeStyle = skin.belly;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.moveTo(-rx+3,-ry*0.45); ctx.quadraticCurveTo(-rx+2,-ry*0.8,-rx*0.35,-ry+3); ctx.stroke();
 
   if (isLowHp(o.hp)) {
     ctx.save();
@@ -1264,6 +1273,20 @@ export function drawHeldWeapon(ctx: CanvasRenderingContext2D, weapon: WeaponId):
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
   switch (weapon) {
+    case "sticky": {
+      roundRect(ctx,-5,-6,16,12,3); inked(ctx,"#d7668a");
+      ctx.fillStyle="#fff0d8"; ctx.fillRect(0,-2,6,4);
+      break;
+    }
+    case "mortar":
+    case "railgun":
+    case "repulsor": {
+      roundRect(ctx,-10,-5,29,10,3); inked(ctx,weapon === "mortar" ? "#6a765c" : "#44526a");
+      ctx.fillStyle=weapon === "mortar" ? "#edba79" : weapon === "railgun" ? "#98e8ff" : "#c3adff";
+      for (let i=0;i<3;i++) ctx.fillRect(3+i*5,-6,2,12);
+      roundRect(ctx,-4,4,6,8,2); inked(ctx,"#364355");
+      break;
+    }
     case "drill": {
       roundRect(ctx, -9, -4.4, 20, 8.8, 3);
       inked(ctx, "#3f8aa3");

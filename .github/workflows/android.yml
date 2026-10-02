@@ -1,6 +1,14 @@
 name: Android APK
 
 on:
+  pull_request:
+    paths:
+      - "android/**"
+      - "client/**"
+      - "shared/**"
+      - "package*.json"
+      - "vite.config.ts"
+      - ".github/workflows/android.yml"
   push:
     branches: [main]
     paths:

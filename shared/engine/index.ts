@@ -14,6 +14,8 @@ export interface TeamSetup {
   team: number; // 0..3
   playerId: string;
   name: string;
+  /** Trusted local expedition setup; not accepted in multiplayer lobby messages. */
+  loadout?: { hpBonus?: number; ammo?: Partial<Record<import("../protocol").WeaponId, number>> };
 }
 
 export interface Game {

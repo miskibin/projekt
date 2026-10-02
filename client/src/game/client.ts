@@ -1,5 +1,5 @@
 import { FIXED_DT, TEAM_NAMES, WATER_LEVEL_START, WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
-import { generateTerrain, Terrain } from "@shared/engine/terrain";
+import { generateTerrain, Terrain, TERRAIN_LABELS, resolveTerrainStyle } from "@shared/engine/terrain";
 import type {
   ClientMessage,
   GameConfig,
@@ -12,7 +12,7 @@ import type {
 } from "@shared/protocol";
 import { Camera } from "./camera";
 import { DemoDriver, type LocalMode } from "./demo";
-import { soloArena, soloStageInfo, type SoloRoute } from "./solo";
+import { soloArena, soloStageInfo, readSoloRun, saveSoloRun, soloBest, soloRewards, SOLO_PERKS, type SoloRun, type SoloPerk } from "./solo";
 import { Hud } from "./hud";
 import { InputController } from "./input";
 import { Particles } from "./particles";
@@ -86,7 +86,9 @@ export class GameClient {
   private time = 0;
   private running = false;
   private demo: DemoDriver | null = null;
-  private soloRun: { stage: number; seed: number; base: GameConfig; route: SoloRoute } | null = null;
+  private soloRun: SoloRun | null = null;
+  private selectedSoloPerk: SoloPerk | null = null;
+  private soloSaveWarned = false;
   private demoAcc = 0;
   private waterShown = WATER_LEVEL_START;
   private selectedWeapon: WeaponId = "bazooka";
@@ -205,8 +207,10 @@ export class GameClient {
 
   start(config: GameConfig, players: PlayerInfo[], myTeam: number, localMode: LocalMode | false = false): void {
     if (localMode === "gauntlet") {
-      this.soloRun ??= { stage: 1, seed: config.seed, base: config, route: "supplies" };
+      this.soloRun ??= readSoloRun(config) ?? { stage: 1, seed: config.seed, base: config,
+        route: "supplies", perks: {}, awaitingReward: false };
       config = soloArena(this.soloRun.base, this.soloRun.seed, this.soloRun.stage, this.soloRun.route);
+      this.persistSolo();
     } else this.soloRun = null;
     this.config = config;
     this.players = players;
@@ -239,7 +243,7 @@ export class GameClient {
     byId("btn-map").setAttribute("aria-pressed", "false");
     // Pierwsza klatka nowego meczu przywróci etykiety CEL po obronie w poprzednim meczu.
     delete byId("screen-game").dataset.defending;
-    this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
+    this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity, config.terrainStyle);
     this.terrainTex = new TerrainRenderer(this.terrain, config.theme, config.seed);
     this.renderer.regen(config.seed);
     this.renderer.setTheme(config.theme);
@@ -251,7 +255,7 @@ export class GameClient {
     this.setEsc(false);
     this.els.volume.value = String(Math.round(this.sound.volume * 100));
 
-    this.demo = localMode ? new DemoDriver(config, localMode, this.soloRun?.stage ?? 0) : null;
+    this.demo = localMode ? new DemoDriver(config, localMode, this.soloRun?.stage ?? 0, this.soloRun?.perks) : null;
     this.demoAcc = 0;
     this.els.demoControls.hidden = !localMode;
     byId("btn-back-lobby").textContent = localMode ? "Wróć do menu" : "Wróć do lobby";
@@ -262,7 +266,9 @@ export class GameClient {
       this.onSnapshot(this.demo.snapshot);
       if (this.soloRun) {
         const stage = soloStageInfo(this.soloRun.stage);
-        this.hud.banner(`Arena ${this.soloRun.stage} · ${stage.name}: ${stage.description}`, 3.6);
+        const arena = TERRAIN_LABELS[resolveTerrainStyle(config.seed,config.terrainStyle)];
+        this.hud.banner(`Arena ${this.soloRun.stage} · ${stage.name} · ${arena}`, 3.6);
+        if (this.soloRun.awaitingReward) this.onGameOver(0,"Ty",{});
       }
     }
 
@@ -275,6 +281,12 @@ export class GameClient {
       this.last = performance.now();
       this.raf = requestAnimationFrame(this.frame);
     }
+  }
+
+  private persistSolo(): void {
+    if (saveSoloRun(this.soloRun) || this.soloSaveWarned) return;
+    this.soloSaveWarned = true;
+    this.cb.toast("Zapis wyprawy jest niedostępny w tej przeglądarce.", "info");
   }
 
   stop(): void {
@@ -386,6 +398,14 @@ export class GameClient {
     next.hidden = !this.soloRun || winnerTeam === 0;
     if (this.soloRun) next.textContent = "Nowa wyprawa";
     byId("solo-routes").hidden = !this.soloRun || winnerTeam !== 0;
+    if (this.soloRun) {
+      if (winnerTeam === 0) {
+        this.soloRun.awaitingReward = true;
+        soloBest(this.soloRun.stage);
+        this.persistSolo();
+        this.showSoloRewards();
+      } else saveSoloRun(null);
+    }
     this.syncControls();
     const title = this.els.goTitle;
     if (winnerTeam === null) {
@@ -395,9 +415,13 @@ export class GameClient {
       title.textContent = `Wygrywa: ${winnerName ?? TEAM_NAMES[winnerTeam % TEAM_NAMES.length]}`;
       title.style.color = teamColor(winnerTeam);
     }
-    const st = this.buffer.latest;
+    const st = this.demo?.isOver === false && this.soloRun?.awaitingReward ? null : this.buffer.latest;
     const rows: string[] = [];
-    if (this.soloRun) rows.push(`<div class="go-row"><span class="grow">Wyprawa solo · ${escapeHtml(soloStageInfo(this.soloRun.stage).name)}</span><b>Arena ${this.soloRun.stage}</b></div>`);
+    if (this.soloRun) {
+      rows.push(`<div class="go-row"><span class="grow">${escapeHtml(soloStageInfo(this.soloRun.stage).name)}</span><b>Arena ${this.soloRun.stage} · rekord ${soloBest()}</b></div>`);
+      const perks = (Object.keys(this.soloRun.perks) as SoloPerk[]).filter((id) => this.soloRun!.perks[id]);
+      if (perks.length) rows.push(`<div class="solo-loadout">${perks.map((id) => `${SOLO_PERKS[id].label} ${this.soloRun!.perks[id]}/3`).join(" · ")}</div>`);
+    }
     if (st) {
       for (const t of st.teams) {
         rows.push(
@@ -425,6 +449,28 @@ export class GameClient {
     this.els.goStats.innerHTML = rows.join("");
     this.setOverlay(this.els.gameover, true);
     this.sound.play("hallelujah");
+  }
+
+  private showSoloRewards(): void {
+    const run = this.soloRun;
+    if (!run) return;
+    const offers = soloRewards(run);
+    this.selectedSoloPerk = offers[0] ?? null;
+    const holder = byId("solo-rewards");
+    holder.replaceChildren();
+    byId("solo-reward-label").hidden = !offers.length;
+    for (const id of offers) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "solo-reward";
+      button.setAttribute("aria-pressed", String(id === this.selectedSoloPerk));
+      button.innerHTML = `<b>${SOLO_PERKS[id].label} ${(run.perks[id] ?? 0)+1}/3</b><span>${SOLO_PERKS[id].detail}</span>`;
+      button.addEventListener("click", () => {
+        this.selectedSoloPerk = id;
+        for (const item of holder.children) item.setAttribute("aria-pressed", String(item === button));
+      });
+      holder.append(button);
+    }
   }
 
   // ---------------- pętla ----------------
@@ -701,6 +747,11 @@ export class GameClient {
         this.particles.bulletTrace(ev.x0, ev.y0, ev.x, ev.y, ev.weapon, ev.hit);
         break;
       }
+      case "pulse": {
+        this.particles.pulse(ev.x, ev.y, ev.r);
+        this.camera.shake(5);
+        break;
+      }
       case "batHit": {
         this.particles.batHit(ev.x, ev.y, ev.dx, ev.dy);
         this.camera.shake(5);
@@ -924,14 +975,19 @@ export class GameClient {
       run.stage = 1;
       run.seed = Math.floor(Math.random() * 0x7fffffff);
       run.route = "supplies";
+      run.perks = {};
+      run.awaitingReward = false;
       this.start(run.base, [], 0, "gauntlet");
     });
     for (const route of ["supplies", "armory"] as const) {
       byId(`btn-solo-${route}`).addEventListener("click", () => {
         const run = this.soloRun;
-        if (!run || this.demo?.winner.team !== 0) return;
+        if (!run?.awaitingReward) return;
+        if (this.selectedSoloPerk && soloRewards(run).includes(this.selectedSoloPerk))
+          run.perks[this.selectedSoloPerk] = (run.perks[this.selectedSoloPerk] ?? 0) + 1;
         run.stage++;
         run.route = route;
+        run.awaitingReward = false;
         this.start(run.base, [], 0, "gauntlet");
       });
     }
@@ -1114,6 +1170,10 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
 
 function weaponFireEffect(weapon: WeaponId): { color: string; sparks: number; kick: number } {
   switch (weapon) {
+    case "sticky": return { color: "#f4a6c1", sparks: 6, kick: 0.7 };
+    case "mortar": return { color: "#ffd095", sparks: 12, kick: 2.4 };
+    case "railgun": return { color: "#b2eeff", sparks: 10, kick: 3 };
+    case "repulsor": return { color: "#d6c5ff", sparks: 8, kick: 1.4 };
     case "homing": return { color: "#79efff", sparks: 12, kick: 1.8 };
     case "cluster": return { color: "#66ffd3", sparks: 13, kick: 1.4 };
     case "drill": return { color: "#a2eefb", sparks: 12, kick: 1.7 };

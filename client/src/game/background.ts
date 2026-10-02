@@ -185,6 +185,8 @@ export class Background {
   private builtFor: ThemePalette | null = null;
   private glow: { key: string; grad: CanvasGradient } | null = null;
   private landscapes = new Map<BgStyle, { image: HTMLImageElement; ready: boolean }>();
+  private depthPlates: { style: BgStyle; mid: HTMLCanvasElement; near: HTMLCanvasElement } | null = null;
+  private depthWash: { key: string; gradient: CanvasGradient } | null = null;
 
   constructor(seed = 1) {
     this.regen(seed);
@@ -404,18 +406,41 @@ export class Background {
     const nx = Math.max(-1, Math.min(1, (camX - WORLD_WIDTH / 2) / (WORLD_WIDTH / 2)));
     const ny = Math.max(-1, Math.min(1, (camY - WORLD_HEIGHT / 2) / (WORLD_HEIGHT / 2)));
 
-    const back = coverPlacement(image.naturalWidth, image.naturalHeight, W, H, nx * 0.28, ny * 0.18);
+    const back = coverPlacement(image.naturalWidth, image.naturalHeight, W, H, nx * 0.12, ny * 0.1,1.16);
     ctx.save();
     ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "medium";
+    ctx.imageSmoothingQuality = "high";
     ctx.drawImage(image, back.x, back.y, back.width, back.height);
+    if (this.depthPlates?.style !== style) {
+      const plate = (start: number, end: number): HTMLCanvasElement => {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.min(1024,image.naturalWidth);
+        canvas.height = Math.round(canvas.width*image.naturalHeight/image.naturalWidth);
+        const painter = canvas.getContext("2d")!;
+        painter.drawImage(image,0,0,canvas.width,canvas.height);
+        painter.globalCompositeOperation = "destination-in";
+        const fade = painter.createLinearGradient(0,canvas.height*start,0,canvas.height*end);
+        fade.addColorStop(0,"rgba(0,0,0,0)"); fade.addColorStop(1,"rgba(0,0,0,1)");
+        painter.fillStyle=fade; painter.fillRect(0,0,canvas.width,canvas.height);
+        return canvas;
+      };
+      this.depthPlates={style,mid:plate(0.42,0.7),near:plate(0.67,0.94)};
+    }
+    for (const [plane,depth] of [[this.depthPlates.mid,0.38],[this.depthPlates.near,0.78]] as const) {
+      const placement=coverPlacement(image.naturalWidth,image.naturalHeight,W,H,nx*depth,ny*depth*0.5,1.16);
+      ctx.drawImage(plane,placement.x,placement.y,placement.width,placement.height);
+    }
 
     // Terrain and worms need legibility against the detailed lower half.
-    const depth = ctx.createLinearGradient(0, H * 0.48, 0, H);
-    depth.addColorStop(0, "rgba(4,12,24,0)");
-    depth.addColorStop(0.72, "rgba(4,12,24,0.04)");
-    depth.addColorStop(1, "rgba(2,8,17,0.16)");
-    ctx.fillStyle = depth;
+    const washKey=`${W}x${H}`;
+    if (this.depthWash?.key!==washKey) {
+      const depth=ctx.createLinearGradient(0,H*0.3,0,H);
+      depth.addColorStop(0,"rgba(165,192,215,0.04)");
+      depth.addColorStop(0.55,"rgba(142,173,198,0.17)");
+      depth.addColorStop(1,"rgba(28,49,67,0.24)");
+      this.depthWash={key:washKey,gradient:depth};
+    }
+    ctx.fillStyle = this.depthWash.gradient;
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 

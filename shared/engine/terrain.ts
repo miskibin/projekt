@@ -1,4 +1,14 @@
 import { Rng } from "./rng";
+import type { GameConfig } from "../protocol";
+
+export type TerrainStyle = NonNullable<GameConfig["terrainStyle"]>;
+export const TERRAIN_STYLES = ["ridges", "islands", "fortress", "terraces"] as const;
+export const TERRAIN_LABELS: Record<TerrainStyle, string> = {
+  random: "Losowa arena", ridges: "Grzbiety", islands: "Archipelag", fortress: "Twierdza", terraces: "Tarasy",
+};
+export function resolveTerrainStyle(seed: number, style: TerrainStyle = "ridges"): Exclude<TerrainStyle, "random"> {
+  return style === "random" ? TERRAIN_STYLES[((Math.imul(seed >>> 0, 2654435761) >>> 0) % 4)]! : style;
+}
 
 /**
  * Bitmapa terenu: 1 = ziemia, 0 = powietrze. Wszystkie operacje niszczące działają na liczbach
@@ -118,9 +128,10 @@ export class Terrain {
 }
 
 /** Proceduralny teren: wzgórza z szumu + jaskinie/wyspy. Deterministyczny dla seeda. */
-export function generateTerrain(seed: number, width: number, height: number, density = 1): Terrain {
+export function generateTerrain(seed: number, width: number, height: number, density = 1, requestedStyle?: TerrainStyle): Terrain {
   const rng = new Rng(seed);
   const t = new Terrain(width, height);
+  const style = resolveTerrainStyle(seed, requestedStyle);
 
   // Dwa szerokie grzbiety i dolina dają wyraźną różnicę wysokości bez pionowych
   // ścian, na których robaki blokowałyby się podczas chodzenia.
@@ -162,6 +173,14 @@ export function generateTerrain(seed: number, width: number, height: number, den
       y -= plateau.rise * (left - right) * 0.5;
     }
     for (const w of waves) y += Math.sin(x * w.freq + w.phase) * w.amp;
+    if (style === "fortress") {
+      const crown = (Math.tanh((x - width * 0.34) / 40) - Math.tanh((x - width * 0.66) / 40)) / 2;
+      y = base + Math.sin(x * 0.012) * 12 - crown * height * 0.25;
+    } else if (style === "terraces") {
+      y = base + Math.sin(x * 0.014) * 7;
+      for (let tier = 1; tier <= 4; tier++)
+        y -= height * 0.045 * (Math.tanh((x - width * tier / 6) / 30) + 1) / 2;
+    }
     rawSurface[x] = y;
   }
   const surface = new Int32Array(width);
@@ -180,7 +199,7 @@ export function generateTerrain(seed: number, width: number, height: number, den
     for (let x = 0; x < width; x++) if (y >= surface[x]) t.data[y * width + x] = 1;
 
   // 2) unoszące się wyspy / platformy
-  const islands = rng.int(2, 5);
+  const islands = style === "fortress" ? 0 : style === "islands" ? 5 : rng.int(2, 5);
   for (let i = 0; i < islands; i++) {
     const cx = rng.int(120, width - 120);
     const cy = rng.int(Math.round(height * 0.16), Math.max(Math.round(height * 0.2), base - 120));
@@ -216,9 +235,11 @@ export function generateTerrain(seed: number, width: number, height: number, den
   // ale nie przecinają unoszących się wysp ani nie tworzą zamkniętych pułapek.
   // Są robione po jaskiniach, żeby przypadkowy tunel nie zmostkował szczeliny.
   if (width >= 900) {
-    for (const fraction of [rng.range(0.29, 0.39), rng.range(0.62, 0.72)]) {
+    const gaps = style === "islands" ? [0.24, 0.5, 0.76] :
+      style === "fortress" ? [0.25, 0.75] : [rng.range(0.29, 0.39), rng.range(0.62, 0.72)];
+    for (const fraction of gaps) {
       const cx = Math.round(width * fraction);
-      const half = Math.round(rng.range(37, 53) * Math.min(1, width / 1920));
+      const half = Math.round((style === "islands" ? rng.range(70, 92) : rng.range(37, 53)) * Math.min(1, width / 1920));
       for (let x = cx - half; x <= cx + half; x++) {
         if (x < 0 || x >= width) continue;
         // Pod powierzchnią wyspy zostawiamy ją nietkniętą. Wycinamy tylko
@@ -227,6 +248,12 @@ export function generateTerrain(seed: number, width: number, height: number, den
         for (let y = top; y < height - 30; y++) t.data[y * width + x] = 0;
       }
     }
+  }
+  if (style === "fortress") {
+    // A vaulted passage beneath the high ground leaves a destructible roof.
+    const cy = Math.round(base + height * 0.05);
+    for (let x = Math.round(width * 0.32); x < width * 0.68; x += 18)
+      t.carveCircle(x, cy, Math.round(height * 0.055));
   }
   t.version = 0;
   return t;

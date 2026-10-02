@@ -150,7 +150,7 @@ export function stepCrates(ctx: EngineCtx, dt: number): void {
 function applyCrate(ctx: EngineCtx, c: Crate, wormId: number, team: number): void {
   const worm = ctx.worms.find((w) => w.id === wormId);
   if (c.kind === "health") {
-    if (worm) worm.hp = Math.min(WORM_MAX_HP, worm.hp + 25);
+    if (worm) worm.hp = Math.min(worm.maxHp ?? WORM_MAX_HP, worm.hp + 25);
     ctx.emit({ t: "cratePickup", wormId, kind: "health", amount: 25 });
     ctx.emit({ t: "message", text: `${worm ? worm.name : "Robak"} podniósł apteczkę (+25 hp)` });
   } else {

@@ -69,6 +69,7 @@ export interface RenderInput {
 const teamColor = (t: number): string => TEAM_COLORS[((t % TEAM_COLORS.length) + TEAM_COLORS.length) % TEAM_COLORS.length];
 
 const DEFAULT_PREVIEW_POWER = 0.6;
+const CHARACTER_SCALE = 1.18;
 
 /** Rysowanie świata gry: tło, teren, woda, encje, celownik. */
 export class Renderer {
@@ -327,7 +328,7 @@ export class Renderer {
     const col = teamColor(w.team);
     const skin = this.skins.get(ctx, col);
     const ry = WORM_RY;
-    const visualLift = ry - WORM_GROUND_OFFSET;
+    const visualLift = ry * CHARACTER_SCALE - WORM_GROUND_OFFSET;
     const jet = w.anim === "jetpack";
 
     // cień na podłożu (nie skaluje się razem z ciałem)
@@ -351,6 +352,7 @@ export class Renderer {
 
     ctx.save();
     ctx.translate(w.x, w.y - visualLift);
+    ctx.scale(CHARACTER_SCALE, CHARACTER_SCALE);
     drawWormCharacter(ctx, pose, {
       skin,
       facing: w.facing,
@@ -380,11 +382,11 @@ export class Renderer {
     const t = inp.time;
     const s = 1 / inp.camera.zoom;
     ctx.save();
-    ctx.translate(w.x, w.y - ry - visualLift - 14);
+    ctx.translate(w.x, w.y - ry * CHARACTER_SCALE - visualLift - 14);
     ctx.scale(s, s);
     const barW = 46;
     const barH = 9;
-    const hp = Math.max(0, Math.min(1, w.hp / WORM_MAX_HP));
+    const hp = Math.max(0, Math.min(1, w.hp / (w.maxHp ?? WORM_MAX_HP)));
     ctx.textAlign = "center";
     ctx.lineJoin = "round";
     ctx.lineCap = "round";
@@ -412,6 +414,12 @@ export class Renderer {
       roundRect(ctx, -barW / 2 + 2, -barH + 1.4, Math.max(2, fw - 4), 2.4, 1.2);
       ctx.fill();
     }
+    ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 3;
+    ctx.strokeText(String(Math.ceil(w.hp)),0,-barH/2);
+    ctx.fillStyle="#fff";
+    ctx.fillText(String(Math.ceil(w.hp)),0,-barH/2);
     ctx.restore();
 
     // ------- strzałka nad aktywnym robakiem -------
@@ -419,7 +427,7 @@ export class Renderer {
       const bounce = Math.abs(Math.sin(t * 3.2)) * 4;
       // pozycja w skali ekranu, żeby strzałka trzymała się etykiety przy każdym zoomie
       ctx.save();
-      ctx.translate(w.x, w.y - ry - visualLift - 12 - (30 + bounce) * s);
+      ctx.translate(w.x, w.y - ry * CHARACTER_SCALE - visualLift - 12 - (30 + bounce) * s);
       ctx.scale(s, s);
       ctx.beginPath();
       ctx.moveTo(0, 11);
@@ -626,6 +634,22 @@ export class Renderer {
     ctx.translate(p.x, p.y);
 
     switch (p.kind) {
+      case "sticky": {
+        ctx.rotate(ang);
+        ctx.fillStyle = "#d7668a"; ctx.strokeStyle = INK; ctx.lineWidth = 1.8;
+        roundRect(ctx,-7,-5,14,10,3); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = Math.sin(inp.time * 12) > 0 ? "#fff0d0" : "#76324a";
+        ctx.fillRect(-2,-2,4,4);
+        break;
+      }
+      case "repulsor": {
+        ctx.strokeStyle = "#ded5ff"; ctx.lineWidth = 2;
+        ctx.fillStyle = "#7660b0";
+        ctx.beginPath(); ctx.arc(0,0,6,0,Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0,0,10,-inp.time*7,Math.PI-inp.time*7); ctx.stroke();
+        if (this.emitTrail(p.id, inp.time, 18)) inp.particles.sparks(p.x,p.y,1,"#c5b5ff");
+        break;
+      }
       case "drill": {
         ctx.rotate(ang);
         if (this.emitTrail(p.id, inp.time, 16)) inp.particles.sparks(p.x - Math.cos(ang) * 5, p.y - Math.sin(ang) * 5, 2, "#8aeaff");
@@ -914,6 +938,8 @@ export class Renderer {
         ctx.fill();
         break;
       }
+      case "mortar":
+      case "mortarShell":
       case "airstrikeBomb": {
         if (this.emitTrail(p.id, inp.time, 30)) inp.particles.smokeTrail(p.x, p.y - 6, 0.7, "rgba(90,76,78,0.82)");
         ctx.rotate(ang + Math.PI / 2);
@@ -927,7 +953,7 @@ export class Renderer {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = "#59616f";
+        ctx.fillStyle = p.kind === "airstrikeBomb" ? "#59616f" : "#b88a4e";
         ctx.beginPath();
         ctx.ellipse(0, 0, 4.2, 9, 0, 0, Math.PI * 2);
         ctx.fill();

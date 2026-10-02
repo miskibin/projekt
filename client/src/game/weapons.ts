@@ -4,7 +4,7 @@ import { INK } from "./wormRenderer";
 export const WEAPON_ORDER: WeaponId[] = [
   "bazooka", "grenade", "cluster", "banana",
   "shotgun", "uzi", "holy", "dynamite",
-  "mine", "spring", "airstrike", "homing", "drill", "bat", "axe",
+  "mine", "spring", "airstrike", "homing", "drill", "sticky", "mortar", "railgun", "repulsor", "bat", "axe",
   "teleport", "girder", "jetpack", "skip",
 ];
 
@@ -20,6 +20,7 @@ export const WEAPON_NAMES: Record<WeaponId, string> = {
   airstrike: "Nalot",
   homing: "Rakieta nakierowana",
   drill: "Wiertło",
+  sticky: "Ładunek przylepny", mortar: "Moździerz", railgun: "Railgun", repulsor: "Impuls",
   banana: "Banan",
   bat: "Kij bejsbolowy",
   axe: "Siekiera",
@@ -36,6 +37,7 @@ export const WEAPON_COLORS: Record<WeaponId, string> = {
   shotgun: "#f6cb96", uzi: "#b9dbff", holy: "#ffecaa", dynamite: "#ff7368",
   mine: "#aab8c7", airstrike: "#ff8c75", homing: "#71e8ff", drill: "#a2eefb", bat: "#d9a274",
   axe: "#d5e5ed", spring: "#ffca64",
+  sticky: "#ef9bb4", mortar: "#ffc477", railgun: "#a8e9fa", repulsor: "#bfa9ff",
   teleport: "#c99dff", girder: "#e3a471", jetpack: "#85d9ff", skip: "#bdc4d1",
 };
 
@@ -53,6 +55,10 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
   airstrike: "Wskaż miejsce na mapie; sześć bomb spadnie po kolei przez cały obszar.",
   homing: "Wskaż cel; rakieta skoryguje lot.",
   drill: "Wierci tunel na 145 px i wybucha pod ziemią. Celuj w grunt pod rywalem.",
+  sticky: "Przykleja się do gruntu. Ustaw zapalnik 1–5 s i wysadź osłonę.",
+  mortar: "W szczycie lotu rozdziela się na pięć bomb. Ostrzelaj rywali za wzgórzem.",
+  railgun: "Przebija wszystkich robaków w jednej linii. Ziemia zatrzymuje strzał.",
+  repulsor: "Odrzuca robaki szerokim impulsem. Zepchnij ich do wody; nie niszczy gruntu.",
   bat: "Mocny cios z bliska – zepchnij rywala do wody.",
   axe: "Tnie robaka z bliska albo przewraca drzewo w kierunku uderzenia.",
   spring: "Jedna na drużynę w meczu. Ukryta katapulta wyrzuca rywala, gdy na nią wejdzie.",
@@ -64,7 +70,7 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
 
 /** Bronie strzelające natychmiast (bez ładowania mocy). */
 export const NO_CHARGE: ReadonlySet<WeaponId> = new Set<WeaponId>([
-  "shotgun", "uzi", "bat", "axe", "spring", "dynamite", "mine", "jetpack", "skip",
+  "shotgun", "uzi", "railgun", "bat", "axe", "spring", "dynamite", "mine", "jetpack", "skip",
 ]);
 
 /** Bronie wymagające wskazania celu na mapie. */
@@ -74,7 +80,7 @@ export const TARGETED: ReadonlySet<WeaponId> = new Set<WeaponId>([
 
 /** Bronie, dla których zapalnik (1–5 s) ma znaczenie. */
 export const TIMED: ReadonlySet<WeaponId> = new Set<WeaponId>([
-  "grenade", "cluster", "banana", "dynamite", "mine", "holy",
+  "grenade", "cluster", "banana", "dynamite", "mine", "holy", "sticky",
 ]);
 
 /** Ikona broni rysowana proceduralnie w kwadracie s×s (kontekst już wyśrodkowany w 0,0). */
@@ -85,6 +91,40 @@ export function drawWeaponIcon(ctx: CanvasRenderingContext2D, id: WeaponId, s: n
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
   switch (id) {
+    case "sticky": {
+      ctx.fillStyle = "#d35b80";
+      rrect(ctx, -10*u, -7*u, 20*u, 16*u, 4*u);
+      ctx.fillStyle = "#fff0dd";
+      rrect(ctx, -5*u, -3*u, 10*u, 6*u, 1*u);
+      ctx.strokeStyle = "#f7bc7e";
+      ctx.lineWidth = 2*u;
+      ctx.beginPath(); ctx.moveTo(0,-7*u); ctx.lineTo(5*u,-13*u); ctx.stroke();
+      break;
+    }
+    case "mortar": {
+      ctx.rotate(-0.7);
+      ctx.fillStyle = "#65705a";
+      rrect(ctx, -11*u,-6*u,24*u,12*u,3*u);
+      ctx.fillStyle = "#edb269";
+      rrect(ctx, 8*u,-7*u,5*u,14*u,2*u);
+      ctx.fillStyle = "#4b5360";
+      rrect(ctx, -9*u,7*u,18*u,4*u,1*u);
+      break;
+    }
+    case "railgun": {
+      ctx.rotate(-0.3);
+      ctx.fillStyle = "#39485c";
+      rrect(ctx,-13*u,-5*u,25*u,10*u,2*u);
+      ctx.fillStyle = "#90e5ff";
+      for (let i=0;i<3;i++) rrect(ctx,(-3+i*5)*u,-7*u,2*u,14*u,1*u);
+      break;
+    }
+    case "repulsor": {
+      ctx.strokeStyle = "#b4a2ff"; ctx.lineWidth = 3*u;
+      for (const radius of [5,10,15]) { ctx.beginPath(); ctx.arc(0,0,radius*u,-1.2,1.2); ctx.stroke(); }
+      ctx.fillStyle = "#424459"; rrect(ctx,-13*u,-5*u,10*u,10*u,3*u);
+      break;
+    }
     case "bazooka": {
       ctx.rotate(-0.5);
       ctx.fillStyle = "#707c40";

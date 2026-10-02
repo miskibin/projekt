@@ -104,6 +104,14 @@
                   <option value="snow">Śnieg</option>
                   <option value="hell">Piekło</option>
                 </select><b></b></label>
+              <label class="set"><span>Układ areny</span>
+                <select id="set-terrain-style">
+                  <option value="random">Losowa arena</option>
+                  <option value="ridges">Grzbiety</option>
+                  <option value="islands">Archipelag</option>
+                  <option value="fortress">Twierdza</option>
+                  <option value="terraces">Tarasy</option>
+                </select><b></b></label>
             </div>
             <div class="preview-wrap">
               <canvas id="map-preview" width="320" height="180"></canvas>
@@ -196,9 +204,12 @@
           <h2 id="go-title">Koniec gry</h2>
           <div id="go-stats" class="go-stats"></div>
           <div id="solo-routes" class="solo-routes" hidden>
-            <p>Wybierz zasady następnej areny:</p>
-            <button id="btn-solo-supplies" class="btn btn-go" type="button">Dostawy · losowy arsenał i więcej skrzynek</button>
-            <button id="btn-solo-armory" class="btn btn-go" type="button">Zbrojownia · pełny arsenał od początku</button>
+            <p id="solo-reward-label">Wybierz ulepszenie na resztę wyprawy</p>
+            <div id="solo-rewards" class="solo-rewards"></div>
+            <div class="solo-paths">
+              <button id="btn-solo-supplies" class="btn btn-go" type="button">Dalej · losowy arsenał</button>
+              <button id="btn-solo-armory" class="btn btn-go" type="button">Dalej · pełny arsenał</button>
+            </div>
           </div>
           <div class="dlg-actions">
             <button id="btn-back-lobby" class="btn btn-primary">Wróć do lobby</button>

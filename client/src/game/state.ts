@@ -164,6 +164,7 @@ function toRender(a: GameSnapshot, b: GameSnapshot, t: number): RenderState {
       y: lerp(o.y, w.y, t),
       aim: lerpAngle(o.aim, w.aim, t),
       hp: w.hp,
+      maxHp: w.maxHp,
     };
   });
 

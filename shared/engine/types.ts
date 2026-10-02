@@ -6,7 +6,7 @@ import type { Rng } from "./rng";
 
 export type DeathReason = "explosion" | "drown" | "fall" | "surrender";
 
-export type ProjectileKind = WeaponId | "clusterlet" | "bananalet" | "airstrikeBomb" | "bullet";
+export type ProjectileKind = WeaponId | "clusterlet" | "bananalet" | "airstrikeBomb" | "mortarShell" | "bullet";
 
 export interface Worm {
   id: number;
@@ -17,6 +17,7 @@ export interface Worm {
   vx: number;
   vy: number;
   hp: number;
+  maxHp?: number;
   alive: boolean;
   facing: 1 | -1;
   /** kąt względem kierunku patrzenia, [-PI/2, PI/2] */
@@ -71,6 +72,7 @@ export interface Projectile {
   lastCarveY?: number;
   /** Łączna długość tunelu wywierconego w gruncie. */
   drillDistance?: number;
+  stuck?: boolean;
 }
 
 export interface Crate {

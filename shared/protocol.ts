@@ -13,6 +13,10 @@ export type WeaponId =
   | "airstrike"
   | "homing"
   | "drill"
+  | "sticky"
+  | "mortar"
+  | "railgun"
+  | "repulsor"
   | "banana"
   | "bat"
   | "axe"
@@ -32,6 +36,7 @@ export interface GameConfig {
   theme: "grass" | "desert" | "snow" | "hell";
   /** Arsenał losowany na czas jednego meczu lub wszystkie bronie od początku. */
   mode?: "arsenal" | "classic";
+  terrainStyle?: "random" | "ridges" | "islands" | "fortress" | "terraces";
 }
 
 export interface PlayerInfo {
@@ -98,6 +103,7 @@ export interface WormSnapshot {
   vx: number;
   vy: number;
   hp: number;
+  maxHp?: number;
   alive: boolean;
   facing: 1 | -1;
   aim: number;
@@ -108,7 +114,7 @@ export interface WormSnapshot {
 
 export interface ProjectileSnapshot {
   id: number;
-  kind: WeaponId | "clusterlet" | "bananalet" | "airstrikeBomb" | "bullet";
+  kind: WeaponId | "clusterlet" | "bananalet" | "airstrikeBomb" | "mortarShell" | "bullet";
   x: number;
   y: number;
   vx: number;
@@ -220,6 +226,8 @@ export type ExplosionStyle =
   | "bazooka"
   | "homing"
   | "drill"
+  | "sticky"
+  | "mortar"
   | "grenade"
   | "cluster"
   | "clusterlet"
@@ -239,8 +247,9 @@ export type GameEvent =
   | { t: "damage"; wormId: number; amount: number; x: number; y: number }
   | { t: "wormDied"; wormId: number; reason: "explosion" | "drown" | "fall" | "surrender" }
   | { t: "shot"; weapon: WeaponId; x: number; y: number }
-  | { t: "split"; weapon: "cluster" | "banana"; x: number; y: number }
-  | { t: "bulletTrace"; weapon: "shotgun" | "uzi"; x0: number; y0: number; x: number; y: number; hit: boolean }
+  | { t: "split"; weapon: "cluster" | "banana" | "mortar"; x: number; y: number }
+  | { t: "bulletTrace"; weapon: "shotgun" | "uzi" | "railgun"; x0: number; y0: number; x: number; y: number; hit: boolean }
+  | { t: "pulse"; x: number; y: number; r: number }
   | { t: "batHit"; x: number; y: number; dx: number; dy: number }
   | { t: "teleport"; fromX: number; fromY: number; toX: number; toY: number }
   | { t: "crateSpawn"; crate: CrateSnapshot }

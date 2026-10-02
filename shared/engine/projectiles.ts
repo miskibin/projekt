@@ -50,6 +50,33 @@ export function makeProjectile(ctx: EngineCtx, init: Partial<Projectile> & { kin
 export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
   if (p.dead) return;
   p.dead = true;
+  if (p.kind === "repulsor") {
+    // The pulse moves worms, but never carves the terrain or directly removes HP.
+    for (const w of ctx.worms) {
+      if (!w.alive) continue;
+      const dx = w.x - p.x, dy = w.y - p.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance > p.radius) continue;
+      const strength = p.power * (0.35 + 0.65 * (1 - distance / p.radius));
+      w.vx += (distance > 1 ? dx / distance : 0) * strength;
+      w.vy += Math.min(-0.32, distance > 1 ? dy / distance : -1) * strength;
+      w.onGround = false;
+    }
+    ctx.emit({ t: "pulse", x: Math.round(p.x), y: Math.round(p.y), r: p.radius });
+    ctx.emit({ t: "sound", name: "teleport", x: p.x, y: p.y });
+    return;
+  }
+  if (p.kind === "mortar") {
+    ctx.emit({ t: "split", weapon: "mortar", x: p.x, y: p.y });
+    for (let i = -2; i <= 2; i++) makeProjectile(ctx, {
+      kind: "mortarShell", x: p.x + i * 3, y: p.y,
+      vx: p.vx * 0.3 + i * 115, vy: 100 + Math.abs(i) * 25,
+      radius: p.radius, damage: p.damage, power: p.power,
+      gravityScale: 1.15, windAffected: true, fuse: 4,
+      ownerWorm: p.ownerWorm, ownerTeam: p.ownerTeam,
+    });
+    return;
+  }
   ctx.explode(p.x, p.y, p.radius, p.damage, p.power, projectileExplosionStyle(p.kind));
   if (p.shards > 0 && p.shardKind) {
     ctx.emit({ t: "split", weapon: p.shardKind === "bananalet" ? "banana" : "cluster", x: p.x, y: p.y });
@@ -88,12 +115,13 @@ export function detonateProjectile(ctx: EngineCtx, p: Projectile): void {
 }
 
 function projectileExplosionStyle(kind: ProjectileKind): ExplosionStyle | undefined {
+  if (kind === "mortarShell") return "mortar";
   if (kind === "clusterlet") return "clusterlet";
   if (kind === "bananalet") return "banana";
   if (kind === "airstrikeBomb") return "airstrike";
   if (
     kind === "bazooka" || kind === "homing" || kind === "grenade" || kind === "cluster" ||
-    kind === "banana" || kind === "holy" || kind === "dynamite" || kind === "drill"
+    kind === "banana" || kind === "holy" || kind === "dynamite" || kind === "drill" || kind === "sticky"
   ) return kind;
   return undefined;
 }
@@ -122,6 +150,11 @@ export function stepProjectiles(ctx: EngineCtx, dt: number): void {
         detonateProjectile(ctx, p);
         continue;
       }
+    }
+    if (p.stuck) continue;
+    if (p.kind === "mortar" && p.age > 0.18 && p.vy >= 0) {
+      detonateProjectile(ctx, p);
+      continue;
     }
 
     const speed = Math.hypot(p.vx, p.vy);
@@ -194,6 +227,13 @@ export function stepProjectiles(ctx: EngineCtx, dt: number): void {
       }
 
       if (terrainHit || wormHit) {
+        if (p.kind === "sticky" && terrainHit) {
+          p.vx = 0;
+          p.vy = 0;
+          p.stuck = true;
+          ctx.emit({ t: "sound", name: "place", x: p.x, y: p.y });
+          break;
+        }
         if (p.explodeOnContact) {
           p.x = nx;
           p.y = ny;

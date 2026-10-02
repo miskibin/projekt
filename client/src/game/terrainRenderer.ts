@@ -302,10 +302,12 @@ export class TerrainRenderer {
   private seed: number;
   private lastVersion = -1;
   private dirty: DirtyRect[] = [];
+  private strataOffsets = new Float32Array(0);
 
   constructor(terrain: Terrain, theme: ThemeId, seed: number) {
     this.terrain = terrain;
     this.seed = seed >>> 0;
+    this.bakeStrata(terrain.width);
     this.pal = THEMES[theme] ?? THEMES.grass;
     this.canvas = document.createElement("canvas");
     this.canvas.width = terrain.width;
@@ -343,6 +345,7 @@ export class TerrainRenderer {
     const resized = terrain.width !== this.canvas.width || terrain.height !== this.canvas.height;
     this.terrain = terrain;
     if (resized) {
+      this.bakeStrata(terrain.width);
       this.canvas.width = terrain.width;
       this.canvas.height = terrain.height;
       this.img = this.ctx.createImageData(terrain.width, terrain.height);
@@ -355,6 +358,11 @@ export class TerrainRenderer {
       this.bake();
     }
     this.rebuildAll();
+  }
+
+  private bakeStrata(width: number): void {
+    this.strataOffsets = Float32Array.from({length:width},(_,x)=>
+      Math.sin(x*0.011+(this.seed%31))*10 + Math.sin(x*0.004)*17);
   }
 
   /** Zgłoś obszar zmieniony przez eksplozję / belkę – przerysujemy tylko go. */
@@ -906,12 +914,12 @@ export class TerrainRenderer {
           } else {
             const o2 = blot[i] - 128;
             if (o2 < 0) {
-              const k = Math.min(1.7, -o2 / 24);
+              const k = Math.min(0.7, -o2 / 55);
               r = soR + (sdR - soR) * k;
               g = soG + (sdG - soG) * k;
               b = soB + (sdB - soB) * k;
             } else if (o2 > 0) {
-              const k = Math.min(1.2, o2 / 24);
+              const k = Math.min(0.55, o2 / 55);
               r = soR + (slR - soR) * k;
               g = soG + (slG - soG) * k;
               b = soB + (slB - soB) * k;
@@ -923,6 +931,12 @@ export class TerrainRenderer {
             r *= depthShade;
             g *= depthShade;
             b *= depthShade;
+            // Sedimentary seams reveal the cross-section without adding per-frame work.
+            const layer = (y + this.strataOffsets[x] + 100) % 62;
+            const seam = layer < 2.5 ? 0.22 : layer < 6 ? 0.07 : layer > 36 ? -0.055 : 0;
+            r += (seam > 0 ? slR-r : r-sdR)*seam;
+            g += (seam > 0 ? slG-g : g-sdG)*seam;
+            b += (seam > 0 ? slB-b : b-sdB)*seam;
           }
 
           if (uy > -0.5) {

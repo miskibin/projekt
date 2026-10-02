@@ -380,6 +380,27 @@ select { background: #0d1220; border: 1px solid var(--line); border-radius: 8px;
 .solo-routes:not([hidden]) { display: grid; gap: 8px; margin: 14px 0; }
 .solo-routes p { margin: 0 0 2px; color: var(--muted); font-size: 13px; }
 .solo-routes .btn { white-space: normal; text-align: left; }
+.solo-rewards { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.solo-reward { appearance: none; display: flex; flex-direction: column; gap: 7px; padding: 13px;
+  border: 1px solid rgba(168,190,216,.2); border-radius: 10px; background: rgba(5,13,23,.35);
+  color: #f3f6fa; text-align: left; cursor: pointer; font: inherit; }
+.solo-reward b { font-size: 14px; }
+.solo-reward span { color: #afbdd0; font-size: 13px; line-height: 1.45; }
+.solo-reward[aria-pressed="true"] { border-color: #92cabe; background: rgba(90,169,148,.13); }
+.solo-reward:focus-visible { outline: 2px solid #c1e6ff; outline-offset: 2px; }
+.solo-paths { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.solo-loadout { color: #afbdd0; font-size: 13px; line-height: 1.6; padding: 3px 0; }
+@media (max-width: 540px) {
+  .solo-rewards { grid-template-columns: 1fr; }
+  .solo-reward { padding: 11px; gap: 4px; }
+}
+@media (max-height: 500px) and (min-width: 541px) {
+  #gameover .dialog { width: min(740px,calc(100vw - 24px)); padding: 14px; }
+  #gameover .dialog h2 { margin-bottom: 10px; font-size: 19px; }
+  #gameover .go-stats { max-height: 82px; }
+  .solo-routes:not([hidden]) { margin: 10px 0; }
+  #gameover .dlg-actions { margin-top: 10px; }
+}
 
 .weapon-panel {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);

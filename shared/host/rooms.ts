@@ -68,6 +68,7 @@ export function defaultConfig(): GameConfig {
     terrainDensity: 1,
     theme: THEMES[Math.floor(Math.random() * THEMES.length)]!,
     mode: "arsenal",
+    terrainStyle: "random",
   };
 }
 
@@ -121,6 +122,11 @@ export function validateConfigPatch(raw: unknown): ConfigValidation {
       return { ok: false, error: "Tryb: wybierz Losowany arsenał lub Klasyk." };
     }
     patch.mode = input.mode;
+  }
+  if (input.terrainStyle !== undefined) {
+    if (!["random", "ridges", "islands", "fortress", "terraces"].includes(input.terrainStyle as string))
+      return { ok: false, error: "Nieprawidłowy układ areny." };
+    patch.terrainStyle = input.terrainStyle as GameConfig["terrainStyle"];
   }
 
   if (input.seed !== undefined) {

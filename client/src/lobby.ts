@@ -38,6 +38,7 @@ export class Lobby {
     sd: byId<HTMLInputElement>("set-sd"),
     density: byId<HTMLInputElement>("set-density"),
     theme: byId<HTMLSelectElement>("set-theme"),
+    terrainStyle: byId<HTMLSelectElement>("set-terrain-style"),
     vWorms: byId("val-worms"),
     vTurn: byId("val-turntime"),
     vSd: byId("val-sd"),
@@ -92,6 +93,7 @@ export class Lobby {
     this.el.sd.addEventListener("input", () => push({ suddenDeathAfterRounds: Number(this.el.sd.value) }));
     this.el.density.addEventListener("input", () => push({ terrainDensity: Number(this.el.density.value) }));
     this.el.theme.addEventListener("change", () => push({ theme: this.el.theme.value as ThemeId }));
+    this.el.terrainStyle.addEventListener("change", () => push({ terrainStyle: this.el.terrainStyle.value as GameConfig["terrainStyle"] }));
 
   }
 
@@ -172,7 +174,8 @@ export class Lobby {
     this.el.sd.value = String(c.suddenDeathAfterRounds);
     this.el.density.value = String(c.terrainDensity);
     this.el.theme.value = c.theme;
-    for (const inp of [this.el.mode, this.el.worms, this.el.turnTime, this.el.sd, this.el.density, this.el.theme]) {
+    this.el.terrainStyle.value = c.terrainStyle ?? "ridges";
+    for (const inp of [this.el.mode, this.el.worms, this.el.turnTime, this.el.sd, this.el.density, this.el.theme, this.el.terrainStyle]) {
       inp.disabled = !host;
     }
     this.el.reroll.disabled = !host;
@@ -195,7 +198,7 @@ export class Lobby {
   private schedulePreview(): void {
     const c = this.room?.config;
     if (!c) return;
-    const key = `${c.seed}|${c.terrainDensity}|${c.theme}`;
+    const key = `${c.seed}|${c.terrainDensity}|${c.theme}|${c.terrainStyle}`;
     if (key === this.lastPreviewKey) return;
     if (this.previewTimer !== null) clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
@@ -203,7 +206,7 @@ export class Lobby {
       this.lastPreviewKey = key;
       const ctx = this.el.preview.getContext("2d");
       if (!ctx) return;
-      const terrain = generateTerrain(c.seed, WORLD_WIDTH, WORLD_HEIGHT, c.terrainDensity);
+      const terrain = generateTerrain(c.seed, WORLD_WIDTH, WORLD_HEIGHT, c.terrainDensity, c.terrainStyle);
       renderTerrainPreview(terrain, ctx, c.theme);
     }, 180);
   }

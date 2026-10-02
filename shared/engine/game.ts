@@ -164,18 +164,24 @@ export class GameImpl implements Game, EngineCtx {
 
   constructor(config: GameConfig, setups: TeamSetup[]) {
     this.config = { ...config };
-    this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity);
+    this.terrain = generateTerrain(config.seed, WORLD_WIDTH, WORLD_HEIGHT, config.terrainDensity, config.terrainStyle);
     this.rng = new Rng((Math.imul(config.seed >>> 0, 747796405) + 2891336453) >>> 0);
     this.spawnSites = this.findSpawnSites(setups.length * config.wormsPerTeam > 8);
     const draft = config.mode === "arsenal" ? matchArsenal(this.rng) : null;
     this.matchFeature = draft ? this.rng.pick<MatchFeature>(["regular", "barrels", "supplies"]) : "regular";
 
     for (const s of setups) {
+      const ammo = draft ? { ...draft.ammo } : startingAmmo();
+      for (const id of Object.keys(WEAPONS) as WeaponId[]) {
+        const extra = s.loadout?.ammo?.[id];
+        if (ammo[id] >= 0 && typeof extra === "number" && Number.isFinite(extra))
+          ammo[id] += clamp(Math.floor(extra), 0, 6);
+      }
       this.teams.push({
         team: s.team,
         playerId: s.playerId,
         name: s.name,
-        ammo: draft ? { ...draft.ammo } : startingAmmo(),
+        ammo,
         removed: false,
         selectedWeapon: "bazooka",
         weaponTimer: 3,
@@ -196,7 +202,12 @@ export class GameImpl implements Game, EngineCtx {
     const perTeam = Math.max(1, Math.floor(this.config.wormsPerTeam));
     for (let i = 0; i < perTeam; i++) {
       for (const ts of this.teams) {
-        this.spawnWorm(ts.team, pool[nameIdx % pool.length]);
+        const worm = this.spawnWorm(ts.team, pool[nameIdx % pool.length]);
+        const bonus = setups.find((s) => s.team === ts.team)?.loadout?.hpBonus;
+        if (typeof bonus === "number" && Number.isFinite(bonus)) {
+          worm.hp += clamp(Math.floor(bonus), 0, 64);
+          worm.maxHp = worm.hp;
+        }
         nameIdx++;
       }
     }
@@ -1142,6 +1153,41 @@ export class GameImpl implements Game, EngineCtx {
     if (id !== "jetpack" && w.jetpackActive) this.deactivateJetpack(w);
 
     switch (id) {
+      case "sticky":
+      case "mortar":
+      case "repulsor": {
+        this.emitShot(id, w);
+        makeProjectile(this, {
+          kind: id, x: mx, y: my, vx: dirX * speed * 0.85, vy: dirY * speed * 0.85,
+          radius: def.radius, damage: def.damage, power: def.power,
+          fuse: id === "sticky" ? ts.weaponTimer : 4,
+          explodeOnContact: id !== "sticky", collidesWorms: id !== "sticky",
+          windAffected: id === "mortar", gravityScale: id === "repulsor" ? 0.6 : 1,
+          ownerWorm: w.id, ownerTeam: w.team,
+        });
+        break;
+      }
+      case "railgun": {
+        this.emitShot(id, w);
+        const victims = new Set<number>();
+        let px = mx, py = my;
+        for (let distance = 0; distance < 1200; distance += 2) {
+          px += dirX * 2;
+          py += dirY * 2;
+          if (px < 0 || px >= WORLD_WIDTH || py > this.waterLevel || this.terrain.isSolid(px, py)) break;
+          for (const other of this.worms) {
+            if (!other.alive || other.id === w.id || victims.has(other.id) ||
+                Math.hypot(other.x - px, other.y - py) > WORM_RADIUS + 2) continue;
+            victims.add(other.id);
+            this.damageWorm(other, def.damage, "explosion");
+            other.vx += dirX * def.power;
+            other.vy += dirY * def.power - 35;
+            other.onGround = false;
+          }
+        }
+        this.emit({ t: "bulletTrace", weapon: "railgun", x0: r2(mx), y0: r2(my), x: r2(px), y: r2(py), hit: victims.size > 0 });
+        break;
+      }
       case "bazooka": {
         this.emitShot(id, w);
         makeProjectile(this, {
@@ -1569,6 +1615,7 @@ export class GameImpl implements Game, EngineCtx {
         vx: r2(w.vx),
         vy: r2(w.vy),
         hp: w.hp,
+        maxHp: w.maxHp,
         alive: w.alive,
         facing: w.facing,
         aim: r3(w.aim),

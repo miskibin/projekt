@@ -3,6 +3,7 @@ import type { ClientMessage, GameConfig, ServerMessage } from "@shared/protocol"
 import { NetClient, WebSocketTransport, wsUrl, type ConnStatus, type Transport } from "./net";
 import { GameClient } from "./game/client";
 import { demoRoom } from "./game/demo";
+import { readSoloRun, soloBest } from "./game/solo";
 import { Sound } from "./game/sound";
 import { Lobby } from "./lobby";
 
@@ -380,8 +381,18 @@ const DEMO_CONFIG: GameConfig = {
   suddenDeathAfterRounds: 10,
   seed: 20240917,
   terrainDensity: 1,
+  mode: "classic",
+  terrainStyle: "random",
   theme: (params.get("theme") as GameConfig["theme"]) || "grass",
 };
+
+function refreshSoloLink(): void {
+  const saved = readSoloRun(DEMO_CONFIG);
+  const best = soloBest();
+  byId("btn-solo").textContent = saved ? `Wznów wyprawę · arena ${saved.stage}` :
+    best ? `Wyprawa solo · rekord ${best}` : "Wyprawa solo";
+}
+refreshSoloLink();
 
 byId("btn-demo").addEventListener("click", (event) => {
   event.preventDefault();

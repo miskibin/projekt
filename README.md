@@ -40,6 +40,10 @@ broker. Oba telefony muszą mieć internet; link zaproszenia zapisuje wybrany tr
 Ten wariant zależy od połączenia i działania telefonu hosta. Przełączenie trybu
 po stworzeniu pokoju wymaga założenia nowego pokoju.
 
+W lobby można wybrać **Grzbiety**, **Archipelag**, **Twierdzę** lub **Tarasy**, albo
+losować układ każdej areny. Archipelag wymaga pokonywania szerokich przerw,
+twierdza daje wysoki punkt nad podziemnym przejściem, a tarasy zmieniają linie ostrzału.
+
 Domyślny **Losowany arsenał** daje obu drużynom ten sam zestaw specjalnych broni
 na czas jednego meczu; skrzynki pod walką dodają nowe opcje. Niektóre mecze mają
 więcej wybuchowych beczek albo zrzutów, bez nowych przycisków i zasad. W lobby możesz wybrać
@@ -89,14 +93,35 @@ a komputer prowadzi Niebieskich: sam wybiera najbliższy cel, broń, kierunek i 
 z nalotu i rakiety naprowadzanej, gdy zwykły strzał nie ma dobrej drogi. Celowo ma niewielki błąd,
 więc może chybić.
 
-**Wyprawa solo** (`?gauntlet=1`) to seria kolejnych, losowanych pojedynków bez
-zapisu postępów między sesjami. Po zwycięstwie wybierz **Dostawy** (więcej skrzynek,
-losowy arsenał) albo **Zbrojownię** (pełny arsenał od początku), z tymi samymi
-zasadami dla obu drużyn. Kolejne areny zmieniają teren, motyw i przeciwnika;
-późniejsze mają więcej robaków i krótsze tury. Komputer ma siedem stylów gry
-i reaguje krokiem lub skokiem na atak.
-Po porażce **Nowa wyprawa** startuje od początku. Cała symulacja działa offline
-na telefonie, więc nie zależy od połączenia z serwerem.
+**Wyprawa solo** (`?gauntlet=1`) zapisuje bieżącą arenę, ulepszenia i rekord na tym
+urządzeniu. Po powrocie przycisk **Wznów wyprawę** uruchamia tę samą arenę od początku;
+gra nie zapisuje pozycji w środku trwającej walki. Zapis nie przechodzi między
+telefonem, aplikacją Android i inną przeglądarką.
+
+Po zwycięstwie wybierz jedno z trzech ulepszeń: dodatkowe HP, specjalną broń albo
+narzędzie otrzymywane na każdej kolejnej arenie. Każde ulepszenie ma trzy poziomy.
+Potem wybierz losowy albo pełny arsenał następnego starcia. Ulepszenia gracza
+trwają do końca wyprawy; porażka je zeruje, zachowując rekord. Zamknięcie gry na
+ekranie nagrody zachowuje ten sam wybór ulepszeń.
+
+Kolejne areny zmieniają układ, motyw i przeciwnika; późniejsze mają więcej robaków
+i krótsze tury. Boss pojawia się co siedem aren, a kolejne rozdziały wzmacniają
+przeciwników. Komputer ma siedem stylów gry, reaguje na atak, korzysta z nowych
+broni i liczy tor granatów z ich własną prędkością oraz grawitacją.
+Cała symulacja działa offline na telefonie.
+
+### Nowe bronie
+
+| Broń | Zastosowanie |
+|---|---|
+| Ładunek przylepny | Przykleja się do gruntu i wybucha po wybranym zapalniku 1–5 s. |
+| Moździerz | W szczycie lotu rozdziela się na pięć bomb, każda tworzy osobny krater. |
+| Railgun | Przebija robaki w jednej linii, także własne; ziemia zatrzymuje strzał. |
+| Impuls | Odrzuca pobliskie robaki bez bezpośrednich obrażeń i bez niszczenia terenu; upadek i woda nadal zabijają. |
+
+Grafika korzysta z trzech warstw parallaxu, spokojniejszych tekstur ziemi i
+większych postaci bez zmiany ich fizycznego promienia. Bronie mają własne ikony,
+modele trzymane przez robaki oraz efekty. W arsenale podpowiedź wyjaśnia ich obsługę.
 
 Celownik pokazuje kierunek oraz przybliżoną siłę strzału, ale nie rysuje pełnej trajektorii ani
 punktu uderzenia. Wpływ wiatru, grawitacji i terenu trzeba ocenić samodzielnie.

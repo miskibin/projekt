@@ -60,6 +60,10 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   airstrike: D("airstrike", 1, 21, 32, 250, { target: "required" }),
   homing: D("homing", 1, 40, 50, 330, { charge: true, target: "optional" }),
   drill: D("drill", 2, 34, 42, 260, { charge: true }),
+  sticky: D("sticky", 2, 49, 62, 390, { charge: true }),
+  mortar: D("mortar", 2, 23, 23, 215, { charge: true }),
+  railgun: D("railgun", 2, 0, 42, 110),
+  repulsor: D("repulsor", 2, 88, 0, 680, { charge: true }),
   bat: D("bat", 2, 0, 30, 500),
   axe: D("axe", -1, 0, 37, 360),
   spring: D("spring", 1, 0, 0, 700, { retreat: 0.7 }),
@@ -76,6 +80,7 @@ export const WEAPON_LABELS: Partial<Record<WeaponId, string>> = {
   cluster: "Odłamkowy", homing: "Rakieta", mine: "Mina", uzi: "Uzi", bat: "Kij",
   drill: "Wiertło", teleport: "Teleport", girder: "Belka", jetpack: "Plecak",
   axe: "Siekiera", spring: "Katapulta",
+  sticky: "Ładunek przylepny", mortar: "Moździerz", railgun: "Railgun", repulsor: "Impuls",
 };
 
 /** Bronie ze skończoną amunicją, które mogą wypaść ze skrzynki "weapon". */
@@ -88,6 +93,7 @@ export const CRATE_WEAPONS: readonly WeaponId[] = [
   "airstrike",
   "homing",
   "drill",
+  "sticky", "mortar", "railgun", "repulsor",
   "uzi",
   "bat",
 ];
@@ -112,7 +118,7 @@ export function matchArsenal(rng: Rng): { ammo: Record<WeaponId, number>; select
   ammo.spring = 1;
 
   const spectacular: WeaponId[] = ["banana", "holy", "dynamite", "airstrike"];
-  const tactical: WeaponId[] = ["cluster", "homing", "mine", "uzi", "bat", "drill"];
+  const tactical: WeaponId[] = ["cluster", "homing", "mine", "uzi", "bat", "drill", "sticky", "mortar", "railgun", "repulsor"];
   const utility: WeaponId[] = ["teleport", "girder", "jetpack"];
   const pick = <T>(pool: T[]): T => pool.splice(rng.int(0, pool.length - 1), 1)[0]!;
   const selected = [pick(spectacular), pick(tactical), pick(tactical), pick(utility)];

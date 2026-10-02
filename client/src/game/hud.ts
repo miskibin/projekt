@@ -195,7 +195,7 @@ export class Hud {
       roundRect(ctx, sx, barY, segW, barH, barH / 2.6);
       ctx.fillStyle = TRACK;
       ctx.fill();
-      const frac = wm && wm.alive ? Math.max(0, Math.min(1, wm.hp / WORM_MAX_HP)) : 0;
+      const frac = wm && wm.alive ? Math.max(0, Math.min(1, wm.hp / (wm.maxHp ?? WORM_MAX_HP))) : 0;
       if (frac > 0) {
         roundRect(ctx, sx, barY, Math.max(barH / 1.5, segW * frac), barH, barH / 2.6);
         ctx.fillStyle = col;

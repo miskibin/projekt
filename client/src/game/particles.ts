@@ -127,6 +127,8 @@ const DEFAULT_EXPLOSION: ExplosionVisual = {
 };
 
 const EXPLOSION_VISUALS: Record<ExplosionStyle, ExplosionVisual> = {
+  sticky: { ...DEFAULT_EXPLOSION, flash: "#ffe3ee", ring: "rgba(242,128,171,1)", fire: ["#fff6e9", "#ffbc98", "#e56987", "#81314a"], fireballs: 1 },
+  mortar: { ...DEFAULT_EXPLOSION, flash: "#fff0d6", ring: "rgba(255,195,106,1)", fireballs: 0, rays: 6 },
   bazooka: { ...DEFAULT_EXPLOSION, flash: "#fff0c4", ring: "rgba(255,176,76,1)", fire: ["#fff8d8", "#ffd05a", "#ff7a20", "#a9280c"] },
   homing: { ...DEFAULT_EXPLOSION, flash: "#c9f8ff", ring: "rgba(77,224,255,1)", embers: ["#edfdff", "#70eaff", "#ff557c"], fire: ["#effeff", "#82efff", "#2e9fff", "#7833b8"], extraRings: 1 },
   drill: { ...DEFAULT_EXPLOSION, flash: "#d9fbff", ring: "rgba(104,216,236,1)", embers: ["#ffffff", "#9de8f5", "#46718e"], fire: ["#efffff", "#9de8f5", "#42769e", "#244966"], fireballs: 0, rays: 8 },
@@ -182,19 +184,19 @@ export class Particles {
   // ---------------- publiczne efekty ----------------
 
   /** Rozpad widoczny jako pierścień i osobne smugi pocisków. */
-  split(x: number, y: number, weapon: "cluster" | "banana"): void {
+  split(x: number, y: number, weapon: "cluster" | "banana" | "mortar"): void {
     const banana = weapon === "banana";
-    const color = banana ? "#ffe64c" : "#74ffe1";
+    const color = banana ? "#ffe64c" : weapon === "mortar" ? "#ffce8a" : "#74ffe1";
     this.flash(x, y, banana ? 35 : 26, color, 0.2);
     this.pushRing({ x, y, r0: 7, r1: banana ? 66 : 56, life: 0,
       max: 0.32, color, width: 3, flat: false, additive: true });
     this.sparks(x, y, banana ? 28 : 22, color);
     // Short spokes reveal the number and direction of live child projectiles
     // immediately, before their network snapshot reaches the renderer.
-    const count = banana ? 8 : 10;
+    const count = banana ? 8 : weapon === "mortar" ? 5 : 10;
     for (let i = 0; i < count; i++) {
       if (this.tracers.length >= MAX_TRACERS) this.tracers.shift();
-      const angle = banana ? -Math.PI + (i + 0.5) / count * Math.PI * 2 :
+      const angle = weapon === "mortar" ? (i+0.5)/count*Math.PI : banana ? -Math.PI + (i + 0.5) / count * Math.PI * 2 :
         -Math.PI * 0.96 + (i + 0.5) / count * Math.PI * 0.92;
       const length = banana ? 30 : 24;
       this.tracers.push({ x0: x, y0: y,
@@ -205,11 +207,17 @@ export class Particles {
   }
 
   /** Ślad śruciny albo pocisku UZI nie modyfikuje terenu. */
-  bulletTrace(x0: number, y0: number, x: number, y: number, weapon: "shotgun" | "uzi", hit: boolean): void {
+  bulletTrace(x0: number, y0: number, x: number, y: number, weapon: "shotgun" | "uzi" | "railgun", hit: boolean): void {
     if (this.tracers.length >= MAX_TRACERS) this.tracers.shift();
     const color = weapon === "shotgun" ? "#ffe3a3" : "#a9edff";
-    this.tracers.push({ x0, y0, x, y, life: 0, max: weapon === "shotgun" ? 0.17 : 0.11, color });
+    this.tracers.push({ x0, y0, x, y, life: 0, max: weapon === "railgun" ? 0.32 : weapon === "shotgun" ? 0.17 : 0.11, color });
     if (hit) this.sparks(x, y, weapon === "shotgun" ? 3 : 2, color);
+  }
+
+  pulse(x: number, y: number, r: number): void {
+    for (let i = 0; i < 3; i++) this.pushRing({ x, y, r0: 5 + i*8, r1: r + i*12,
+      life: 0, max: 0.3 + i*0.1, color: "rgba(185,164,255,1)", width: 3-i*0.5, flat: false, additive: true });
+    this.sparks(x, y, 12, "#c9b9ff");
   }
 
   batHit(x: number, y: number, dx: number, dy: number): void {
