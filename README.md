@@ -41,8 +41,10 @@ Ten wariant zależy od połączenia i działania telefonu hosta. Przełączenie 
 po stworzeniu pokoju wymaga założenia nowego pokoju.
 
 W lobby można wybrać **Grzbiety**, **Archipelag**, **Twierdzę** lub **Tarasy**, albo
-losować układ każdej areny. Archipelag wymaga pokonywania szerokich przerw,
+losować układ każdej areny. Archipelag dodaje unoszące się platformy,
 twierdza daje wysoki punkt nad podziemnym przejściem, a tarasy zmieniają linie ostrzału.
+Główny ląd jest ciągły, bez losowych pionowych szczelin do wody. Jaskinie pozostają
+pod powierzchnią; przerwy w lądzie powstają dopiero wskutek wybuchów.
 
 Domyślny **Losowany arsenał** daje obu drużynom ten sam zestaw specjalnych broni
 na czas jednego meczu; skrzynki pod walką dodają nowe opcje. Niektóre mecze mają
@@ -72,6 +74,15 @@ celowania oraz **SKOK** i **◎ STRZAŁ**, więc można iść i skakać dwoma kc
 zwiększać moc, i puść, żeby strzelić. Pełna moc narasta przez 2 sekundy, po czym strzał pada automatycznie.
 Pasek przy robaku i pierścień przycisku pokazują moc. Przeciągnięcie przesuwa kamerę,
 a gest dwoma palcami zmienia zbliżenie. Przyciski dotykowe można też włączyć w menu.
+Karty drużyn z portretami i sumą HP są widoczne tylko na dużym polu gry
+(co najmniej 1100 × 600 pikseli CSS); telefon pokazuje HP bezpośrednio nad robakami.
+
+Na komputerze celuj myszą: robak obraca się w stronę kursora. Przytrzymaj lewy
+przycisk myszy, żeby ładować strzał, i puść, żeby strzelić. **A/D** sterują ruchem,
+**W** skacze, **Q** robi salto, a prawy przycisk myszy lub **E** otwiera bronie.
+Kamerę przeciąga się środkowym przyciskiem albo **Alt + LPM**. Kliknięcie celu
+nalotu, teleportu lub belki od razu uruchamia wybraną broń. Na telefonie dotknij
+miejsca na mapie. Dla rakiety naprowadzanej wskaż cel, następnie przytrzymaj strzał.
 
 Gdy gra druga osoba, panel pozwala wskazać własnego robaka. Gdy przeciwnik zacznie
 atak, masz **jedną odpowiedź na turę** przy użyciu zwykłych przycisków: lewo/prawo
@@ -179,18 +190,19 @@ Otwórz http://localhost:5173 w dwóch kartach, w jednej „Stwórz pokój”, w
 | Klawisz | Akcja |
 |---|---|
 | `A`/`D` lub `←`/`→` | chodzenie |
-| `W`/`S`, `↑`/`↓` lub mysz | celowanie |
-| `Enter` | skok do przodu |
-| `Backspace` | salto w tył |
-| `Spacja` (przytrzymaj) | ładowanie mocy, puszczenie = strzał (shotgun, uzi, kij, dynamit, mina, jetpack strzelają od razu) |
+| Mysz lub `↑`/`↓` | celowanie; mysz obraca robaka w stronę celu |
+| `W` lub `Enter` | skok do przodu |
+| `Q` lub `Backspace` | salto w tył |
+| LPM lub `Spacja` (przytrzymaj) | ładowanie mocy, puszczenie = strzał; broń bez ładowania działa po naciśnięciu |
 | `1`–`5` | zapalnik granatów (sekundy) |
-| `Tab` lub prawy przycisk myszy | panel broni |
-| Lewy przycisk myszy na mapie | cel dla nalotu, teleportu, belki i rakiety naprowadzanej |
+| `E`, `Tab` lub prawy przycisk myszy | panel broni |
+| Lewy przycisk myszy na mapie | wybór celu i użycie nalotu, teleportu lub belki; rakieta naprowadzana ładuje się po wskazaniu celu |
 | `R` | obrót belki (girder) |
 | `F1` | pomiń turę |
 | `F` / `M` | pełny ekran / mapa |
 | `Esc` | menu (poddanie, wyjście, głośność, pomoc) |
-| Kółko myszy, przeciąganie, `Shift`+strzałki | zoom i kamera |
+| Kółko myszy | przybliżenie / oddalenie |
+| Przeciąganie ŚPM lub `Alt`+LPM, `Shift`+strzałki | przesuwanie kamery |
 
 ## Bronie i mechaniki
 

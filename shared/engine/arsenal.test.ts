@@ -89,6 +89,22 @@ describe("new tactical weapons",()=>{
 });
 
 describe("arena archetypes",()=>{
+  it.each(TERRAIN_STYLES)("%s leaves continuous land above the water at every density", terrainStyle => {
+    for (const seed of [1,7,92,20240917]) for (const density of [0.3,1,1.5]) {
+      const terrain = generateTerrain(seed,WORLD_WIDTH,WORLD_HEIGHT,density,terrainStyle);
+      const row = terrain.data.subarray((WORLD_HEIGHT-40)*WORLD_WIDTH,(WORLD_HEIGHT-39)*WORLD_WIDTH);
+      expect(row.every(pixel=>pixel===1)).toBe(true);
+    }
+  });
+  it("turns toward a stationary mouse aim before an immediate shot", () => {
+    const game = flatGame();
+    const shooter = game.worms[0]!, victim = game.worms[1]!;
+    Object.assign(shooter,{x:700,facing:1});Object.assign(victim,{x:500,y:shooter.y-3});
+    game.applyInput(0,{left:false,right:false,aim:0,charge:false,facing:-1});
+    game.applyAction(0,{kind:"selectWeapon",weapon:"railgun"});
+    game.applyAction(0,{kind:"fire",power:1});
+    expect(shooter.x).toBe(700);expect(shooter.facing).toBe(-1);expect(victim.hp).toBe(58);
+  });
   it.each(TERRAIN_STYLES)("%s generates safely and identically on both peers",terrainStyle=>{
     for(const seed of [1,7,26,92,20240917]) {
       const game=new GameImpl({...config,seed,terrainStyle,wormsPerTeam:4},teams);

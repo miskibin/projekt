@@ -144,6 +144,9 @@ a.btn { color: var(--text); text-decoration: none; text-align: center; }
 .dot.ok { background: #3ddc84; }
 .dot.bad { background: var(--danger); }
 .hint { font-size: 11.5px; color: #6d7a92; text-align: center; margin: 12px 0 0; line-height: 1.6; }
+@media (pointer: coarse) {
+  .desktop-controls-hint { display: none; }
+}
 .transport-options { margin: 14px 0 0; padding: 8px 12px 10px; border: 1px solid var(--line); border-radius: 10px; color: #c6e8e5; }
 .transport-options legend { padding: 0 5px; color: var(--muted); font-size: 11px; }
 .transport-options label { display: block; padding: 5px 0; cursor: pointer; font-size: 12px; }

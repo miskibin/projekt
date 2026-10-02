@@ -373,6 +373,11 @@ describe("GameLoop – wejście gracza", () => {
 });
 
 describe("walidacja wejścia", () => {
+  it("preserves the optional mouse facing while rejecting other values", () => {
+    const base = { left:false, right:false, aim:-0.5, charge:false };
+    for (const facing of [-1,1]) expect(validateInputState({...base,facing})).toEqual({...base,facing});
+    for (const facing of [0,2,null,"left",NaN]) expect(validateInputState({...base,facing})).toBeNull();
+  });
   it("input wymaga booli i skończonego aim", () => {
     expect(validateInputState({ left: false, right: true, aim: 1.2, charge: true })).toEqual({
       left: false,

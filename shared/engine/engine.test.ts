@@ -982,19 +982,20 @@ describe("terrainSync", () => {
 });
 
 describe("mapa i balans", () => {
-  it("ma dwa rzeczywiste przejścia przez główny grunt, bez zamykania nieba", () => {
+  it("ma ciągły główny ląd, a niebo i dolna warstwa wody pozostają otwarte", () => {
     for (const seed of [1, 7, 26]) {
       const terrain = generateTerrain(seed, WORLD_WIDTH, WORLD_HEIGHT);
       const gaps: number[] = [];
       for (let x = 150; x < WORLD_WIDTH - 150; x++) {
+        expect(terrain.isSolid(x,0)).toBe(false);
+        expect(terrain.isSolid(x,WORLD_HEIGHT-1)).toBe(false);
         let empty = true;
         for (let y = 600; y < WORLD_HEIGHT - 30; y += 10) {
           if (terrain.isSolid(x, y)) { empty = false; break; }
         }
         if (empty) gaps.push(x);
       }
-      expect(gaps.some((x) => x > WORLD_WIDTH * 0.29 && x < WORLD_WIDTH * 0.4)).toBe(true);
-      expect(gaps.some((x) => x > WORLD_WIDTH * 0.62 && x < WORLD_WIDTH * 0.73)).toBe(true);
+      expect(gaps).toEqual([]);
     }
   });
 

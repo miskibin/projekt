@@ -459,7 +459,8 @@ export class GameImpl implements Game, EngineCtx {
     const w = this.activeWorm();
     if (!w || !w.alive) return;
     const inp = this.input;
-    if (inp.left && !inp.right) w.facing = -1;
+    if (inp.facing === -1 || inp.facing === 1) w.facing = inp.facing;
+    else if (inp.left && !inp.right) w.facing = -1;
     else if (inp.right && !inp.left) w.facing = 1;
 
     const dir = inp.left && !inp.right ? -1 : inp.right && !inp.left ? 1 : 0;
@@ -990,10 +991,14 @@ export class GameImpl implements Game, EngineCtx {
       right: !!state.right,
       aim,
       charge: !!state.charge,
+      ...(state.facing === -1 || state.facing === 1 ? { facing: state.facing } : {}),
     };
     this.inputAge = 0;
     const w = this.activeWorm();
-    if (w && w.alive) w.aim = aim;
+    if (w && w.alive) {
+      w.aim = aim;
+      if (this.input.facing !== undefined) w.facing = this.input.facing;
+    }
   }
 
   applyAction(team: number, action: InputAction): void {

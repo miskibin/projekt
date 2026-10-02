@@ -29,7 +29,9 @@ export function validateInputState(raw: unknown): InputState | null {
   const v = raw as Record<string, unknown>;
   if (typeof v.left !== "boolean" || typeof v.right !== "boolean" || typeof v.charge !== "boolean") return null;
   if (!isFiniteNumber(v.aim)) return null;
-  return { left: v.left, right: v.right, aim: v.aim, charge: v.charge };
+  if (v.facing !== undefined && v.facing !== -1 && v.facing !== 1) return null;
+  return { left: v.left, right: v.right, aim: v.aim, charge: v.charge,
+    ...(v.facing === -1 || v.facing === 1 ? { facing: v.facing } : {}) };
 }
 
 /** Waliduje akcję jednorazową. Zwraca znormalizowaną akcję albo null. */

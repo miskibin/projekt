@@ -221,7 +221,11 @@ export function generateTerrain(seed: number, width: number, height: number, den
     const steps = rng.int(8, 20);
     let ang = rng.range(0, Math.PI * 2);
     for (let s = 0; s < steps; s++) {
-      t.carveCircle(x, y, rng.int(10, 26));
+      const radius = rng.int(10, 26);
+      const cx = Math.max(radius, Math.min(width - radius - 1, Math.round(x)));
+      const top = surface[cx]! + radius + 28;
+      const bottom = height - 50 - radius;
+      if (top <= bottom) t.carveCircle(cx, Math.max(top, Math.min(bottom, y)), radius);
       ang += rng.range(-0.8, 0.8);
       x += Math.cos(ang) * 18;
       y += Math.sin(ang) * 18;
@@ -231,24 +235,6 @@ export function generateTerrain(seed: number, width: number, height: number, den
   // 4) dolna krawędź nie jest wypełniana do samego dna – zostaw miejsce na wodę
   for (let y = height - 30; y < height; y++) t.data.fill(0, y * width, (y + 1) * width);
 
-  // Dwie przerwy przecinają grzbiet. Wymuszają skok lub użycie narzędzia,
-  // ale nie przecinają unoszących się wysp ani nie tworzą zamkniętych pułapek.
-  // Są robione po jaskiniach, żeby przypadkowy tunel nie zmostkował szczeliny.
-  if (width >= 900) {
-    const gaps = style === "islands" ? [0.24, 0.5, 0.76] :
-      style === "fortress" ? [0.25, 0.75] : [rng.range(0.29, 0.39), rng.range(0.62, 0.72)];
-    for (const fraction of gaps) {
-      const cx = Math.round(width * fraction);
-      const half = Math.round((style === "islands" ? rng.range(70, 92) : rng.range(37, 53)) * Math.min(1, width / 1920));
-      for (let x = cx - half; x <= cx + half; x++) {
-        if (x < 0 || x >= width) continue;
-        // Pod powierzchnią wyspy zostawiamy ją nietkniętą. Wycinamy tylko
-        // główny grunt od jego lokalnej powierzchni aż do wody.
-        const top = Math.max(0, Math.round(surface[x] - 5));
-        for (let y = top; y < height - 30; y++) t.data[y * width + x] = 0;
-      }
-    }
-  }
   if (style === "fortress") {
     // A vaulted passage beneath the high ground leaves a destructible roof.
     const cy = Math.round(base + height * 0.05);

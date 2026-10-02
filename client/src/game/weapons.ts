@@ -70,7 +70,7 @@ export const WEAPON_HINTS: Record<WeaponId, string> = {
 
 /** Bronie strzelające natychmiast (bez ładowania mocy). */
 export const NO_CHARGE: ReadonlySet<WeaponId> = new Set<WeaponId>([
-  "shotgun", "uzi", "railgun", "bat", "axe", "spring", "dynamite", "mine", "jetpack", "skip",
+  "shotgun", "uzi", "railgun", "bat", "axe", "spring", "dynamite", "mine", "airstrike", "teleport", "girder", "jetpack", "skip",
 ]);
 
 /** Bronie wymagające wskazania celu na mapie. */

@@ -8,6 +8,11 @@ import { WORLD_HEIGHT, WORLD_WIDTH } from "@shared/constants";
  */
 const PORTRAIT_FILL = 0.75;
 
+/** Karty drużyn zajmują miejsce tylko wtedy, gdy pole gry ma rozmiar dużego ekranu. */
+export function showTeamCards(width: number, height: number): boolean {
+  return width >= 1100 && height >= 600;
+}
+
 /**
  * Zoom „przeglądowy” (overview): najmniejsze dopuszczalne zbliżenie.
  * Na ekranach poziomych = cała szerokość mapy mieści się na ekranie

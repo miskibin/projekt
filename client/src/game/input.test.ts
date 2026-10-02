@@ -13,6 +13,15 @@ describe("game controls", () => {
   let input: InputController;
   let callbacks: InputCallbacks;
   let now: number;
+  let canvas: HTMLCanvasElement;
+  let camera: Camera;
+
+  function pointer(type: string, x: number, y: number, button = 0, pointerType = "mouse") {
+    const screen = camera.worldToScreen(x, y);
+    canvas.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), {
+      clientX: screen.x, clientY: screen.y, pointerId: 1, pointerType, button, altKey: false,
+    }));
+  }
 
   beforeEach(() => {
     now = 0;
@@ -23,7 +32,11 @@ describe("game controls", () => {
       closeWeaponPanel: vi.fn(), toggleEscMenu: vi.fn(), gesture: vi.fn(),
       toggleMap: vi.fn(), fullscreen: vi.fn(),
     };
-    input = new InputController(new EventTarget() as HTMLCanvasElement, new Camera(), callbacks);
+    canvas = Object.assign(new EventTarget(), { focus: vi.fn(), setPointerCapture: vi.fn(),
+      getBoundingClientRect: () => ({ left: 0, top: 0 }) }) as unknown as HTMLCanvasElement;
+    camera = new Camera();
+    camera.setViewport(1000, 650);
+    input = new InputController(canvas, camera, callbacks);
     input.setContext({ myTurn: true, worm, weapon: "bazooka", blocked: false });
   });
 
@@ -124,5 +137,72 @@ describe("game controls", () => {
     expect(callbacks.selectDefense).toHaveBeenNthCalledWith(1, -1);
     expect(callbacks.selectDefense).toHaveBeenNthCalledWith(2, 1);
     expect(callbacks.sendAction).not.toHaveBeenCalled();
+  });
+
+  it("aims to either side of a stationary worm and charges with the left mouse button", () => {
+    const pan = vi.spyOn(camera, "panBy");
+    pointer("pointermove", 600, 320);
+    input.update(0.06);
+    expect(callbacks.sendInput).toHaveBeenLastCalledWith({ left: false, right: false,
+      facing: 1, aim: Math.atan2(-80, 100), charge: false });
+    pointer("pointerdown", 400, 320);
+    now = CHARGE_TIME * 1000 * 0.6;
+    pointer("pointermove", 380, 320);
+    input.update(0.06);
+    expect(input.currentState.facing).toBe(-1);
+    expect(callbacks.sendAction).not.toHaveBeenCalled();
+    pointer("pointerup", 380, 320);
+    expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
+    expect(callbacks.sendAction).toHaveBeenCalledWith({ kind: "fire", power: 0.6 });
+    expect(pan).not.toHaveBeenCalled();
+  });
+
+  it("uses the middle mouse button exclusively for panning", () => {
+    const pan = vi.spyOn(camera, "panBy");
+    pointer("pointerdown", 600, 320, 1);
+    pointer("pointermove", 650, 320, 1);
+    pointer("pointerup", 650, 320, 1);
+    expect(pan).toHaveBeenCalled();
+    expect(callbacks.sendAction).not.toHaveBeenCalled();
+    expect(input.isCharging).toBe(false);
+  });
+
+  it.each(["pointercancel", "lostpointercapture"])("cancels a mouse charge on %s without a shot", type => {
+    pointer("pointerdown", 600, 320);
+    now = 800;
+    pointer(type, 600, 320);
+    pointer("pointerup", 600, 320);
+    expect(callbacks.sendAction).not.toHaveBeenCalled();
+    expect(input.isCharging).toBe(false);
+  });
+
+  it("sends one target action for an instant targeted weapon without firing it twice", () => {
+    input.setContext({ myTurn: true, worm, weapon: "teleport", blocked: false });
+    pointer("pointerdown", 600, 320);
+    pointer("pointerup", 600, 320);
+    expect(callbacks.sendAction).toHaveBeenCalledWith({ kind: "target", x: 600, y: 320 });
+    expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps touch homing target selection separate from charging the rocket", () => {
+    input.setContext({ myTurn: true, worm, weapon: "homing", blocked: false });
+    pointer("pointerdown", 600, 320, 0, "touch");
+    pointer("pointerup", 600, 320, 0, "touch");
+    expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
+    expect(callbacks.sendAction).toHaveBeenCalledWith({ kind: "target", x: 600, y: 320 });
+    input.pressControl("fire");
+    expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
+    now = CHARGE_TIME * 1000 * 0.4;
+    input.releaseControl("fire");
+    expect(callbacks.sendAction).toHaveBeenLastCalledWith({ kind: "fire", power: 0.4 });
+  });
+
+  it("jumps with W once without changing the aim or repeating the jump", () => {
+    window.dispatchEvent(Object.assign(new Event("keydown"), { code: "KeyW", repeat: false }));
+    window.dispatchEvent(Object.assign(new Event("keydown"), { code: "KeyW", repeat: true }));
+    input.update(0.1);
+    expect(callbacks.sendAction).toHaveBeenCalledTimes(1);
+    expect(callbacks.sendAction).toHaveBeenCalledWith({ kind: "jump" });
+    expect(input.aimPitch).toBe(-0.5);
   });
 });

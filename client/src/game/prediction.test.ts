@@ -23,6 +23,17 @@ function setup() {
 }
 
 describe("lokalna predykcja", () => {
+  it("shows a mouse turn immediately without moving the worm", () => {
+    const {terrain,snapshot,state} = setup();
+    const predictor = new LocalPrediction();
+    predictor.onSnapshot(snapshot,1000);
+    const aimed = {...input,right:false,facing:1 as const};
+    predictor.onInputSent(1,aimed,1000);
+    const predicted = predictor.apply(state,terrain,aimed,0,1/60,1016);
+    expect(predicted.worms[0].facing).toBe(1);
+    expect(predicted.worms[0].x).toBe(80);
+    expect(predicted.worms[1]).toBe(state.worms[1]);
+  });
   it("pozwala od razu chodzić i celować, bez ruszania rywala lub wyniku", () => {
     const { terrain, snapshot, state } = setup();
     const predictor = new LocalPrediction();

@@ -62,8 +62,9 @@ export class InputController {
 
   private dragging = false;
   private dragMoved = 0;
-  private dragX = 0;
-  private dragY = 0;
+  private dragPointer: number | null = null;
+  private firePointer: number | null = null;
+  private mouseAim = false;
 
   private listeners: (() => void)[] = [];
 
@@ -95,7 +96,7 @@ export class InputController {
 
   setContext(c: InputContext): void {
     const turnStarted = c.myTurn && (!this.ctxInfo.myTurn || c.worm?.id !== this.ctxInfo.worm?.id);
-    if (turnStarted || !c.myTurn || c.blocked) this.cancelControls();
+    if (turnStarted || (this.ctxInfo.myTurn && !c.myTurn) || (!this.ctxInfo.blocked && c.blocked)) this.cancelControls();
     this.ctxInfo = c;
     if (turnStarted) {
       this.lastSent = null;
@@ -127,6 +128,11 @@ export class InputController {
     this.touchKeys.clear();
     this.charging = false;
     this.fireHeld = false;
+    this.firePointer = null;
+    this.dragPointer = null;
+    this.dragging = false;
+    this.mouseAim = false;
+    this.pointers.clear();
     const changed = this.state.left || this.state.right || this.state.charge;
     this.state = { left: false, right: false, aim: this.pitch, charge: false };
     if (changed) this.flushInput();
@@ -134,6 +140,7 @@ export class InputController {
 
   private beginFire(): void {
     if (this.fireHeld || this.ctxInfo.blocked || !this.ctxInfo.myTurn) return;
+    this.updateAim();
     this.fireHeld = true;
     if (this.jetpackOn()) {
       this.state.charge = true;
@@ -156,6 +163,7 @@ export class InputController {
     const shouldFire = this.charging && !cancelled && this.ctxInfo.myTurn && !this.ctxInfo.blocked;
     this.charging = false;
     this.fireHeld = false;
+    this.updateAim();
     this.state.charge = false;
     this.state.aim = this.pitch;
     this.flushInput();
@@ -214,6 +222,17 @@ export class InputController {
       this.dragging = false;
       this.cancelControls();
     });
+    this.on(this.canvas, "lostpointercapture", (e) => {
+      this.pointers.delete(e.pointerId);
+      if (this.firePointer === e.pointerId) {
+        this.firePointer = null;
+        this.endFire(true);
+      }
+      if (this.dragPointer === e.pointerId) {
+        this.dragPointer = null;
+        this.dragging = false;
+      }
+    });
     this.on(this.canvas, "mouseenter", () => (this.mouseOnCanvas = true));
     this.on(this.canvas, "mouseleave", () => {
       this.mouseOnCanvas = false;
@@ -221,6 +240,7 @@ export class InputController {
     });
     this.on(this.canvas, "wheel", (e) => {
       e.preventDefault();
+      this.updateMouseWorld(e);
       this.camera.zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15, this.mouseWX, this.mouseWY);
     }, { passive: false });
     this.on(this.canvas, "contextmenu", (e) => {
@@ -237,16 +257,17 @@ export class InputController {
     }
     const tag = (e.target as HTMLElement | null)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || tag === "A") return;
+    if ((e.target as HTMLElement | null)?.isContentEditable || e.ctrlKey || e.metaKey) return;
     this.cb.gesture();
 
-    if (e.code === "Tab") {
+    if (e.code === "Tab" || e.code === "KeyE") {
       e.preventDefault();
       if (!e.repeat) this.cb.toggleWeaponPanel();
       return;
     }
     if (e.code === "KeyF") { e.preventDefault(); this.cb.fullscreen(); return; }
     if (e.code === "KeyM") { e.preventDefault(); this.cb.toggleMap(); return; }
-    if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "F1"].includes(e.code)) {
+    if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Backspace", "F1", "KeyW", "KeyQ"].includes(e.code)) {
       e.preventDefault();
     }
     if (e.repeat) {
@@ -254,23 +275,26 @@ export class InputController {
       return;
     }
     this.keys.add(e.code);
+    if (e.code === "ArrowUp" || e.code === "ArrowDown") this.mouseAim = false;
     if (this.ctxInfo.blocked) return;
     if (!this.ctxInfo.myTurn) {
-      if (e.code === "ArrowUp" || e.code === "KeyW") this.cb.selectDefense(-1);
+      if (e.code === "ArrowUp") this.cb.selectDefense(-1);
       if (e.code === "ArrowDown" || e.code === "KeyS") this.cb.selectDefense(1);
       if (this.ctxInfo.defenseReady) {
         if (e.code === "ArrowLeft" || e.code === "KeyA") this.cb.sendDefense("left");
         if (e.code === "ArrowRight" || e.code === "KeyD") this.cb.sendDefense("right");
-        if (e.code === "Enter") this.cb.sendDefense("jump");
+        if (e.code === "Enter" || e.code === "KeyW") this.cb.sendDefense("jump");
       }
       return;
     }
 
     switch (e.code) {
       case "Enter":
+      case "KeyW":
         this.cb.sendAction({ kind: "jump" });
         break;
       case "Backspace":
+      case "KeyQ":
         this.cb.sendAction({ kind: "backflip" });
         break;
       case "F1":
@@ -314,7 +338,7 @@ export class InputController {
     this.mouseWY = w.y;
   }
 
-  private onMouseMove(e: MouseEvent): void {
+  private onMouseMove(e: PointerEvent): void {
     const prevSX = this.mouseSX;
     const prevSY = this.mouseSY;
     this.updateMouseWorld(e);
@@ -327,31 +351,73 @@ export class InputController {
       if (this.dragMoved > 4) this.camera.panBy(-dx / this.camera.zoom, -dy / this.camera.zoom);
       return;
     }
-    // celowanie myszą (nie zmienia facing – tylko pitch)
-    const worm = this.ctxInfo.worm;
-    if (worm && this.ctxInfo.myTurn && !this.ctxInfo.blocked) {
-      const a = Math.atan2(this.mouseWY - worm.y, this.mouseWX - worm.x);
-      let p = worm.facing === 1 ? a : Math.PI - a;
-      p = normalize(p);
-      this.pitch = clamp(p, -Math.PI / 2, Math.PI / 2);
-    }
+    if (e.pointerType === "touch") return;
+    this.mouseAim = true;
+    this.updateAim();
   }
 
-  private onMouseDown(e: MouseEvent): void {
+  private updateAim(): void {
+    const worm = this.ctxInfo.worm;
+    if (!this.mouseAim || !worm || !this.ctxInfo.myTurn || this.ctxInfo.blocked) {
+      delete this.state.facing;
+      return;
+    }
+    const world = this.camera.screenToWorld(this.mouseSX, this.mouseSY);
+    this.mouseWX = world.x;
+    this.mouseWY = world.y;
+    const dx = world.x - worm.x;
+    this.state.facing = Math.abs(dx) < 0.5 ? worm.facing : dx < 0 ? -1 : 1;
+    this.pitch = Math.atan2(world.y - worm.y, Math.abs(dx));
+  }
+
+  private onMouseDown(e: PointerEvent): void {
     this.cb.gesture();
     this.updateMouseWorld(e);
-    if (e.button === 0) {
+    if (e.pointerType === "touch" || e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault();
       this.dragging = true;
+      this.dragPointer = e.pointerId;
       this.dragMoved = 0;
-      this.dragX = this.mouseSX;
-      this.dragY = this.mouseSY;
+      if (e.pointerType !== "touch") this.mouseAim = false;
+      return;
+    }
+    if (e.button === 0 && !this.ctxInfo.blocked && this.ctxInfo.myTurn) {
+      e.preventDefault();
+      this.mouseAim = true;
+      this.updateAim();
+      if (TARGETED.has(this.ctxInfo.weapon)) {
+        this.setTarget();
+        // Nalot, teleport i belkę silnik uruchamia już przy wskazaniu celu.
+        if (NO_CHARGE.has(this.ctxInfo.weapon)) return;
+      }
+      this.firePointer = e.pointerId;
+      this.beginFire();
     }
   }
 
-  private onMouseUp(e: MouseEvent): void {
-    if (e.button !== 0) return;
+  private setTarget(): void {
+    this.cb.sendAction({ kind: "target", x: Math.round(this.mouseWX), y: Math.round(this.mouseWY) });
+  }
+
+  private onMouseUp(e: PointerEvent): void {
+    this.updateMouseWorld(e);
+    if (this.firePointer === e.pointerId && e.button === 0) {
+      this.firePointer = null;
+      this.endFire();
+      return;
+    }
+    if (e.pointerType !== "touch") {
+      if (this.dragPointer === e.pointerId) {
+        this.dragging = false;
+        this.dragPointer = null;
+      } else if (e.button === 0 && !this.ctxInfo.blocked && !this.ctxInfo.myTurn) {
+        this.cb.selectDefenseAt(this.mouseWX, this.mouseWY);
+      }
+      return;
+    }
     const wasDragging = this.dragging;
     this.dragging = false;
+    this.dragPointer = null;
     if (!wasDragging) return;
     if (this.dragMoved > 6) return; // to było przeciąganie kamery
     if (this.ctxInfo.blocked) return;
@@ -360,7 +426,7 @@ export class InputController {
       return;
     }
     if (TARGETED.has(this.ctxInfo.weapon)) {
-      this.cb.sendAction({ kind: "target", x: Math.round(this.mouseWX), y: Math.round(this.mouseWY) });
+      this.setTarget();
     }
   }
 
@@ -383,9 +449,10 @@ export class InputController {
 
     const left = !blocked && !shift && (this.keys.has("KeyA") || this.keys.has("ArrowLeft") || this.touchKeys.has("left"));
     const right = !blocked && !shift && (this.keys.has("KeyD") || this.keys.has("ArrowRight") || this.touchKeys.has("right"));
+    this.updateAim();
     if (!blocked && !shift) {
-      const up = this.keys.has("KeyW") || this.keys.has("ArrowUp") || this.touchKeys.has("aimUp");
-      const down = this.keys.has("KeyS") || this.keys.has("ArrowDown") || this.touchKeys.has("aimDown");
+      const up = this.keys.has("ArrowUp") || this.touchKeys.has("aimUp");
+      const down = this.keys.has("ArrowDown") || this.touchKeys.has("aimDown");
       const rate = 1.6 * dt;
       if (up) this.pitch = clamp(this.pitch - rate, -Math.PI / 2, Math.PI / 2);
       if (down) this.pitch = clamp(this.pitch + rate, -Math.PI / 2, Math.PI / 2);
@@ -429,7 +496,7 @@ export class InputController {
     }
     if (this.acc >= SEND_INTERVAL) {
       this.acc = 0;
-      const aimChanged = !this.lastSent || Math.abs(this.lastSent.aim - this.state.aim) > 0.01;
+      const aimChanged = !this.lastSent || this.lastSent.facing !== this.state.facing || Math.abs(this.lastSent.aim - this.state.aim) > 0.01;
       const heartbeat = this.state.left || this.state.right || this.state.charge
         ? ACTIVE_RESEND_INTERVAL : IDLE_RESEND_INTERVAL;
       if (aimChanged || this.sinceSend >= heartbeat) this.flushInput();
@@ -452,11 +519,4 @@ export class InputController {
 
 function clamp(v: number, a: number, b: number): number {
   return v < a ? a : v > b ? b : v;
-}
-
-function normalize(a: number): number {
-  let x = a;
-  while (x > Math.PI) x -= Math.PI * 2;
-  while (x <= -Math.PI) x += Math.PI * 2;
-  return x;
 }

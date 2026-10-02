@@ -110,7 +110,7 @@ export class LocalPrediction {
         this.y += Math.max(-maxStep, Math.min(maxStep, dy));
       }
     }
-    const facing = direction ? (direction as 1 | -1) : authoritative.facing;
+    const facing = input.facing ?? (direction ? (direction as 1 | -1) : authoritative.facing);
     return {
       ...state,
       worms: state.worms.map((worm) => worm.id === active.id

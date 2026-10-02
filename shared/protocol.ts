@@ -61,6 +61,8 @@ export interface InputState {
   right: boolean;
   /** Nachylenie względem kierunku robaka: -PI/2..PI/2, ujemny = w górę. */
   aim: number;
+  /** Kierunek celowania myszą, niezależny od chodzenia. Klawiatura/dotyk mogą go pominąć. */
+  facing?: -1 | 1;
   /** trzymanie przycisku ładowania mocy */
   charge: boolean;
 }

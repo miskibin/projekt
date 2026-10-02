@@ -166,7 +166,7 @@ export class GameClient {
       toggleEscMenu: () => this.toggleEsc(),
       gesture: () => {
         this.sound.unlock();
-        if (this.running && !this.autoFullscreenAttempted) void this.fullscreen(false);
+        if (this.running && this.touchEnabled && !this.autoFullscreenAttempted) void this.fullscreen(false);
       },
       toggleMap: () => this.toggleMap(),
       fullscreen: () => { void this.fullscreen(true); },

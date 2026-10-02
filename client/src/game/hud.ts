@@ -4,6 +4,7 @@ import type { Camera } from "./camera";
 import type { RenderState } from "./state";
 import { roundRect, teamColor } from "./renderer";
 import { INK } from "./wormRenderer";
+import { showTeamCards } from "./viewport";
 
 export interface HudInput {
   state: RenderState;
@@ -66,7 +67,8 @@ export class Hud {
     ctx.save();
     ctx.textBaseline = "middle";
     const timerBottom = this.drawClock(ctx, inp, W, H, narrow);
-    const stacks = this.drawTeams(ctx, inp, W, H, narrow);
+    const stacks = showTeamCards(W, H) ? this.drawTeams(ctx, inp, W, H, narrow)
+      : { leftBottom: inp.topInset, rightBottom: inp.topInset };
     this.placeWeaponPill(stacks.leftBottom);
     const clockBottom = Math.max(timerBottom, stacks.rightBottom);
     if (inp.showMap) this.drawMap(ctx, inp, W, H);
